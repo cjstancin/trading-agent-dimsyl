@@ -1,0 +1,52 @@
+{
+  "updated": "2026-06-12 (sample data — replaced by the agent on first run)",
+  "isSample": true,
+  "profile": "Aggressive · Paper",
+  "regime": "Risk-on",
+  "equity": 112480,
+  "cash": 11240,
+  "dayPnlPct": 3.2,
+  "monthPnlPct": 12.4,
+  "vsSpyPct": 9.8,
+  "stats": { "winRate": 61, "maxDrawdownPct": -14, "bestDayPct": 8.1, "sharpe": 1.3 },
+  "equityCurve": [
+    {"t":"06-02","v":100000},{"t":"06-03","v":101200},{"t":"06-04","v":99400},
+    {"t":"06-05","v":103100},{"t":"06-06","v":102200},{"t":"06-09","v":98800},
+    {"t":"06-10","v":104600},{"t":"06-11","v":108900},{"t":"06-12","v":112480}
+  ],
+  "spyCurve": [
+    {"t":"06-02","v":100000},{"t":"06-03","v":100300},{"t":"06-04","v":99700},
+    {"t":"06-05","v":100900},{"t":"06-06","v":100600},{"t":"06-09","v":99100},
+    {"t":"06-10","v":100800},{"t":"06-11","v":101900},{"t":"06-12","v":102600}
+  ],
+  "positions": [
+    {"ticker":"SOXL","name":"Direxion Daily Semiconductor 3x","type":"3x ETF","qty":120,"entry":42.10,"stop":"18% trail","last":45.30,"mktValue":5436,"pctEq":38,"pnl":386,"pnlPct":7.6,"days":3,"rr":"2.4:1","sector":"Semis (lev)","thesis":"Semis breakout, 3x leverage in a risk-on tape.","spark":[40.1,41.2,40.6,42.5,43.1,44.0,45.3]},
+    {"ticker":"NVDA","name":"NVIDIA Corp","type":null,"qty":60,"entry":203.0,"stop":"18% trail","last":211.4,"mktValue":12684,"pctEq":22,"pnl":504,"pnlPct":4.1,"days":6,"rr":"2.1:1","sector":"Semis","thesis":"AI demand; data-center revenue +92% YoY.","spark":[198,201,199,205,208,209,211.4]},
+    {"ticker":"BTC","name":"Bitcoin","type":"crypto","qty":0.22,"entry":72900,"stop":"18% trail","last":71240,"mktValue":15673,"pctEq":16,"pnl":-365,"pnlPct":-2.3,"days":9,"rr":"3.0:1","sector":"Crypto","thesis":"Macro liquidity proxy; 24/7 momentum.","spark":[71000,73000,72400,71800,70900,71500,71240]},
+    {"ticker":"TQQQ","name":"ProShares UltraPro QQQ 3x","type":"3x ETF","qty":180,"entry":76.6,"stop":"18% trail","last":78.1,"mktValue":14058,"pctEq":14,"pnl":270,"pnlPct":1.9,"days":4,"rr":"2.2:1","sector":"Index (lev)","thesis":"Nasdaq momentum, leveraged.","spark":[75.2,76.6,75.9,77.1,78.4,77.8,78.1]}
+  ],
+  "signals": [
+    {"ticker":"AVGO","dir":"LONG","score":86,"entry":"1,420-1,440","stop":"1,360","target":"1,560","size":"30%","catalyst":"pre-earnings drift","thesis":"AI networking + pre-earnings setup."},
+    {"ticker":"PLTR","dir":"LONG","score":78,"entry":"31-32","stop":"29","target":"37","size":"20%","catalyst":"breakout + volume","thesis":"Gov + commercial AI; breakout on volume."},
+    {"ticker":"SMH","dir":"LONG","score":71,"entry":"265-268","stop":"256","target":"285","size":"18%","catalyst":"sector inflows","thesis":"Clean semis relative strength."},
+    {"ticker":"ETH","dir":"LONG","score":64,"entry":"3,780-3,820","stop":"3,560","target":"4,300","size":"12%","catalyst":"momentum","thesis":"Crypto momentum alongside BTC."}
+  ],
+  "trades": [
+    {"date":"06-11","ticker":"SOXL","side":"buy","qty":120,"price":42.10,"status":"filled","realized":null,"grade":null,"note":"Semis breakout entry, 18% trail set."},
+    {"date":"06-10","ticker":"MARA","side":"sell","qty":300,"price":28.40,"status":"closed","realized":920,"grade":"A","note":"Crypto-miner momentum; trailed into strength."},
+    {"date":"06-09","ticker":"TSLA","side":"sell","qty":40,"price":238.0,"status":"closed","realized":-540,"grade":"C","note":"Stopped at −7%; entry chased, lesson logged."}
+  ],
+  "movers": {
+    "risers": [{"ticker":"SOXL","chgPct":9.4,"vol":"heavy"},{"ticker":"COIN","chgPct":6.8,"vol":"heavy"},{"ticker":"NVDA","chgPct":4.1,"vol":"high"}],
+    "fallers": [{"ticker":"BTC","chgPct":-2.3,"vol":"high"},{"ticker":"SMCI","chgPct":-5.1,"vol":"heavy"}],
+    "biggest": [{"ticker":"NVDA","chgPct":4.1,"vol":"high"},{"ticker":"MSFT","chgPct":1.2,"vol":"normal"},{"ticker":"AAPL","chgPct":0.6,"vol":"normal"}],
+    "unusualVol": [{"ticker":"SOXL","chgPct":9.4,"vol":"4.2x avg"},{"ticker":"PLTR","chgPct":5.2,"vol":"3.1x avg"}]
+  },
+  "tickers": {
+    "AVGO": {"name":"Broadcom","last":1442,"chgPct":2.1,"spark":[1402,1418,1410,1432,1445,1438,1442],"thesis":"Pre-earnings drift + AI networking."},
+    "PLTR": {"name":"Palantir","last":31.9,"chgPct":5.2,"spark":[30.1,30.8,30.4,31.2,31.7,31.5,31.9],"thesis":"Breakout on volume; gov + commercial AI."},
+    "SMH": {"name":"VanEck Semiconductor ETF","last":268,"chgPct":1.4,"spark":[262,265,263,266,269,267,268],"thesis":"Sector inflows; clean relative strength."},
+    "COIN": {"name":"Coinbase","last":214,"chgPct":6.8,"spark":[198,205,202,209,213,211,214],"thesis":"Crypto beta; volume spike."},
+    "MARA": {"name":"Marathon Digital","last":29.1,"chgPct":3.4,"spark":[27,28.4,28,28.9,29.3,29,29.1],"thesis":"Crypto-miner momentum."}
+  }
+}
