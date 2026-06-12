@@ -1,0 +1,9 @@
+# OS / cloud-sync artifacts
+desktop.ini
+.DS_Store
+Thumbs.db
+
+# Secrets — never commit real keys or webhooks
+.env
+.env.*
+*.local
