@@ -41,3 +41,23 @@ CJ's real money (~$80k) is at Fidelity: ~76% in AMD + MSFT, ~99% technology (see
 
 ## Accountability
 Daily journal + end-of-day summary. Weekly self-grade (A–F) vs the S&P. Propose (never silently apply) rule tweaks. CJ owns every trade. Educational, not financial advice.
+
+## Notifications & health checks (Discord) — REAL CODE, not a prose instruction
+Discord notifications are implemented in `scripts/notify-discord.mjs`. Never hand-roll a fetch.
+- **Send:** `import { sendDiscord } from './scripts/notify-discord.mjs'` → `await sendDiscord('text' | {embeds:[...]})`. Reads `DISCORD_WEBHOOK_URL` from env, returns `{ok, status?, skipped?, error?}`, and **never throws** — if the webhook is unset it returns `{skipped:true}` so a run never breaks on a missing notifier.
+- **CLI:** `node scripts/notify-discord.mjs "message"`.
+- Wherever a routine says "NOTIFY (Discord)", it means **call `sendDiscord(...)`** with the summary.
+- **Secret:** `DISCORD_WEBHOOK_URL` lives in env ONLY (Netlify env / run environment / a local user env var). Never commit it. If it leaks, delete the webhook in Discord → create a new one.
+  - *Why it didn't work before:* there was no sender code — only prose — and the routine that would call it was never running. Now it's a tested module.
+
+### Twice-daily health check (permanent)
+`node scripts/health-check.mjs` validates `dashboard/data/status.json` (parses, has `equity`/`positions`, not still `isSample`) and posts a 🟢/🟠 heartbeat to Discord. Exit 0 = healthy, 1 = attention. **Runs twice daily** via:
+- **Now (local):** Windows Scheduled Task `Bull-HealthCheck` at ~09:00 & ~16:30 (created for CJ; set user env var `DISCORD_WEBHOOK_URL` so it actually posts). Runs whenever the PC is on.
+- **24/7 (cloud):** a Netlify scheduled function (cron `0 13,21 * * *`) — ships with the auth/backend.
+
+### Testing convention (enterprise) — always 3 cases: SUCCESS / FAIL / NULL
+Every new capability gets a tiny test covering **a SUCCESS, a FAIL, and a NULL** path (template: `scripts/test-notify.mjs`):
+- **SUCCESS** — valid input → expected good result.
+- **FAIL** — bad/erroring input (e.g. invalid webhook) → handled error, never a crash.
+- **NULL** — missing/empty input (e.g. no webhook / empty message) → graceful skip.
+Run on demand: `node scripts/test-notify.mjs` (SUCCESS truly posts only if `DISCORD_WEBHOOK_URL` is set). This self-test + the health check are the twice-daily "is everything working" gate.
