@@ -2,10 +2,10 @@
 //   import { sendDiscord } from './notify-discord.mjs';
 //   const r = await sendDiscord('hello');                          // → DISCORD_WEBHOOK_BULL
 //   const r = await sendDiscord('hello', { channel: 'go' });      // → DISCORD_WEBHOOK_GO
-//   const r = await sendDiscord('hello', { channel: 'monopoly' });// → DISCORD_WEBHOOK_MONOPOLY
+//   const r = await sendDiscord('hello', { channel: 'atlas' });   // → DISCORD_WEBHOOK_ATLAS
 //   node scripts/notify-discord.mjs "your message"                // CLI (defaults to bull)
 //
-// Env vars: DISCORD_WEBHOOK_BULL, DISCORD_WEBHOOK_GO, DISCORD_WEBHOOK_MONOPOLY
+// Env vars: DISCORD_WEBHOOK_BULL, DISCORD_WEBHOOK_GO, DISCORD_WEBHOOK_ATLAS
 //   Legacy DISCORD_WEBHOOK_URL is checked as fallback if no channel-specific var is set.
 // sendDiscord NEVER throws: callers can fire-and-forget and keep running if Discord is down.
 import { pathToFileURL } from 'node:url';
@@ -13,9 +13,9 @@ import { pathToFileURL } from 'node:url';
 const WEBHOOK_RE = /^https:\/\/(?:[a-z]+\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+/i;
 
 const CHANNEL_DEFAULTS = {
-  bull:     { env: 'DISCORD_WEBHOOK_BULL',     username: 'Bull' },
-  go:       { env: 'DISCORD_WEBHOOK_GO',       username: 'Go' },
-  monopoly: { env: 'DISCORD_WEBHOOK_MONOPOLY', username: 'Mr Monopoly' },
+  bull:  { env: 'DISCORD_WEBHOOK_BULL',  username: 'Bull' },
+  go:    { env: 'DISCORD_WEBHOOK_GO',    username: 'Go' },
+  atlas: { env: 'DISCORD_WEBHOOK_ATLAS', username: 'Atlas' },
 };
 
 /**
