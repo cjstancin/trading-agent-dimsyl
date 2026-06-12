@@ -171,9 +171,9 @@ function renderTicker(t){const d=DATA;const p=(d.positions||[]).find(x=>x.t===t)
    name/tag — label + sub-label.  url — hub URL.  mark/color — brand glyph + accent. */
 const SITE_ID='bull';
 const SITES=[
-  {id:'atlas',name:'Atlas',tag:'Advisor & research',url:'https://atlas.cjstancin.com', mark:'✦',color:'#7c89c0'},
-  {id:'bull', name:'Bull', tag:'Trading console',    url:'https://trading.cjstancin.com',mark:'◆',color:'#b8932f'},
-  // {id:'NEW',name:'…',tag:'…',url:'https://….cjstancin.com',mark:'★',color:'#5a8'},
+  {id:'go',name:'Go',tag:'Advisor & research',url:'https://go.dimsylaisolutions.com', mark:'✦',color:'#7c89c0'},
+  {id:'bull', name:'Bull', tag:'Trading console',    url:'https://bull.dimsylaisolutions.com',mark:'◆',color:'#b8932f'},
+  // {id:'NEW',name:'…',tag:'…',url:'https://….dimsylaisolutions.com',mark:'★',color:'#5a8'},
 ];
 function buildSwitcher(){const m=$('#switchmenu');if(!m)return;
   m.innerHTML=SITES.map(s=>{const cur=s.id===SITE_ID;

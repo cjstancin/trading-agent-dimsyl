@@ -1,21 +1,32 @@
-// Discord webhook notifier for Bull. Stack-independent ESM module (Node 18+ global fetch).
+// Discord webhook notifier — supports per-channel routing. ESM module (Node 18+ global fetch).
 //   import { sendDiscord } from './notify-discord.mjs';
-//   const r = await sendDiscord('hello');            // -> { ok, status?, skipped?, error? }
-//   node scripts/notify-discord.mjs "your message"   // CLI
+//   const r = await sendDiscord('hello');                          // → DISCORD_WEBHOOK_BULL
+//   const r = await sendDiscord('hello', { channel: 'go' });      // → DISCORD_WEBHOOK_GO
+//   const r = await sendDiscord('hello', { channel: 'monopoly' });// → DISCORD_WEBHOOK_MONOPOLY
+//   node scripts/notify-discord.mjs "your message"                // CLI (defaults to bull)
 //
-// The webhook URL is read ONLY from env DISCORD_WEBHOOK_URL — never hard-code a secret.
+// Env vars: DISCORD_WEBHOOK_BULL, DISCORD_WEBHOOK_GO, DISCORD_WEBHOOK_MONOPOLY
+//   Legacy DISCORD_WEBHOOK_URL is checked as fallback if no channel-specific var is set.
 // sendDiscord NEVER throws: callers can fire-and-forget and keep running if Discord is down.
 import { pathToFileURL } from 'node:url';
 
 const WEBHOOK_RE = /^https:\/\/(?:[a-z]+\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+/i;
 
+const CHANNEL_DEFAULTS = {
+  bull:     { env: 'DISCORD_WEBHOOK_BULL',     username: 'Bull' },
+  go:       { env: 'DISCORD_WEBHOOK_GO',       username: 'Go' },
+  monopoly: { env: 'DISCORD_WEBHOOK_MONOPOLY', username: 'Mr Monopoly' },
+};
+
 /**
  * @param {string|object} message  Plain text, or a Discord JSON payload ({content}|{embeds}).
- * @param {{webhookUrl?:string, timeoutMs?:number, username?:string}} [opts]
+ * @param {{channel?:string, webhookUrl?:string, timeoutMs?:number, username?:string}} [opts]
  * @returns {Promise<{ok:boolean, status?:number, skipped?:boolean, error?:string}>}
  */
 export async function sendDiscord(message, opts = {}) {
-  const { webhookUrl = process.env.DISCORD_WEBHOOK_URL, timeoutMs = 8000, username = 'Bull' } = opts;
+  const ch = CHANNEL_DEFAULTS[(opts.channel || 'bull').toLowerCase()] || CHANNEL_DEFAULTS.bull;
+  const webhookUrl = opts.webhookUrl || process.env[ch.env] || process.env.DISCORD_WEBHOOK_URL;
+  const { timeoutMs = 8000, username = ch.username } = opts;
 
   // NULL case — webhook not configured / malformed: skip gracefully so the caller keeps running.
   if (!webhookUrl || !WEBHOOK_RE.test(webhookUrl)) {

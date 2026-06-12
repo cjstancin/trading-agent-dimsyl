@@ -6,13 +6,13 @@
 
 ## 1. What Bull is (goals)
 
-Bull is CJ's **paper-trading console** — the monitor for an aggressive, automated **Alpaca paper** trading agent. It is the loud, "what is the bot doing and is it within its risk limits" view. All trading lives here; the advisor side lives in `Atlas-Hub/` and the two are decoupled.
+Bull is CJ's **paper-trading console** — the monitor for an aggressive, automated **Alpaca paper** trading agent. It is the loud, "what is the bot doing and is it within its risk limits" view. All trading lives here; the advisor side lives in `Go-Hub/` and the two are decoupled.
 
 Design goals:
 
 1. **Make the bot legible.** Health/uptime, every position, every order and fill, a per-trade journal with grades + lessons, and live risk meters (daily-loss halt, monthly kill-switch, drawdown, exposure).
 2. **Paper-first, safety-first.** The bot trades Alpaca **paper** only. The **LIVE** profile is LOCKED behind CJ's written opt-in. The dashboard's "control panel" is a **UI preview only** — it never sends orders from the browser.
-3. **Static and cheap**, exactly like Atlas: one fetched JSON file, no framework, no secrets in the page.
+3. **Static and cheap**, exactly like Go: one fetched JSON file, no framework, no secrets in the page.
 4. **Theme: "Royal Chisel"** — alabaster marble background, `clip-path` 45°-cornered cards with a constant slow gold-gradient rim (`goldflow`, no white gleam), Cinzel (display) + Fraunces (numbers) + EB Garamond (body), emerald up / ruby down, faceted gemstone status dot. Keep it.
 
 ---
@@ -39,7 +39,7 @@ Trading-Agent/
 
 ## 3. Data architecture
 
-Identical rules to Atlas: `index.html` is a static shell that `fetch()`es `data/status.json` on load, every 5 minutes, and on Refresh. **No embedded sample data.** Preview by **serving** (`python -m http.server` in `dashboard/`, or Netlify) — `file://` blocks the fetch. The price charts on ticker-detail pages pull live daily history from **Stooq** (no key, free) with a `spark` fallback; everything else comes from the JSON.
+Identical rules to Go: `index.html` is a static shell that `fetch()`es `data/status.json` on load, every 5 minutes, and on Refresh. **No embedded sample data.** Preview by **serving** (`python -m http.server` in `dashboard/`, or Netlify) — `file://` blocks the fetch. The price charts on ticker-detail pages pull live daily history from **Stooq** (no key, free) with a `spark` fallback; everything else comes from the JSON.
 
 > **History note:** Bull's pages were empty before the June 2026 rebuild because `data/status.json` had been saved truncated (286 bytes, invalid JSON) and the fetch silently failed. If the console ever goes blank, **validate the JSON first.**
 
@@ -76,7 +76,7 @@ The renderer is defensive (`||` fallbacks); missing keys degrade gracefully.
 
 **Helpers** — `up/cls/pc/usd/usd2` formatting, `esc`, `go(route)`, `tk(t)` (clickable ticker; calls `event.stopPropagation()` so it works inside clickable table rows), `curve(arr,w,h,col)` (inline SVG area+line, accepts numbers or `{v}` objects), `card()/kpi()` builders.
 
-**Live chart** — same Stooq pattern as Atlas: `loadHistory(sym)` + `renderChart(host, sym, fallback)` with range tabs and a `spark` fallback.
+**Live chart** — same Stooq pattern as Go: `loadHistory(sym)` + `renderChart(host, sym, fallback)` with range tabs and a `spark` fallback.
 
 **State** — `DATA` (parsed JSON). No `localStorage` editor on Bull (the bot owns the book).
 
@@ -97,7 +97,7 @@ The renderer is defensive (`||` fallbacks); missing keys degrade gracefully.
 
 **Ticker detail** — `renderTicker(t)` shows the live chart, your position (if held), the bot's `thesis`, and the trade history on that name.
 
-**Site switcher + refresh** — `toggleSwitch()` (brand dropdown Bull ⇄ Atlas), `pull()` (fetch JSON), `#reload` manual Refresh, `chrome()` (topbar state + timestamp), `setInterval` 5-min auto-pull, `boot()`.
+**Site switcher + refresh** — `toggleSwitch()` (brand dropdown Bull ⇄ Go), `pull()` (fetch JSON), `#reload` manual Refresh, `chrome()` (topbar state + timestamp), `setInterval` 5-min auto-pull, `boot()`.
 
 ---
 
@@ -111,7 +111,7 @@ From `caps`: risk per trade **10%** of equity, max single position **40%**, max 
 
 1. Create the agent's **Claude Code routine** (claude.ai/code/routines): the `Trading-Agent/` repo + a cloud environment with `ALPACA_API_KEY` / `ALPACA_API_SECRET` (paper) in env vars, network access to Alpaca/Finnhub/FRED, and "allow unrestricted branch pushes."
 2. The routine (per `Trading-Agent/CLAUDE.md` + `routines/`) reads account/positions/quotes from the **Alpaca paper REST API** (`https://paper-api.alpaca.markets`, headers `APCA-API-KEY-ID` / `APCA-API-SECRET-KEY`; market data at `https://data.alpaca.markets`), applies the strategy within `caps`, places **paper** orders, journals each closed trade, and **overwrites `dashboard/data/status.json`** in this exact schema (`isSample:false`).
-3. The optional `atlas-data-refresh` scheduled task will also refresh Bull **if** the Alpaca env vars are present; otherwise it skips Bull.
+3. The optional `go-data-refresh` scheduled task will also refresh Bull **if** the Alpaca env vars are present; otherwise it skips Bull.
 
 **Security:** keys only in env / the routine's cloud environment — never in chat, files, or the repo. (CJ once pasted a live key → it was rotated.)
 
