@@ -1,52 +1,80 @@
 {
-  "updated": "2026-06-12 (sample data — replaced by the agent on first run)",
+  "updated": "2026-06-12 14:35 ET (sample — replaced by the Bull agent on first run)",
   "isSample": true,
   "profile": "Aggressive · Paper",
   "regime": "Risk-on",
   "equity": 112480,
   "cash": 11240,
+  "buyingPower": 22480,
   "dayPnlPct": 3.2,
+  "dayPnlUsd": 3490,
   "monthPnlPct": 12.4,
   "vsSpyPct": 9.8,
-  "stats": { "winRate": 61, "maxDrawdownPct": -14, "bestDayPct": 8.1, "sharpe": 1.3 },
-  "equityCurve": [
-    {"t":"06-02","v":100000},{"t":"06-03","v":101200},{"t":"06-04","v":99400},
-    {"t":"06-05","v":103100},{"t":"06-06","v":102200},{"t":"06-09","v":98800},
-    {"t":"06-10","v":104600},{"t":"06-11","v":108900},{"t":"06-12","v":112480}
-  ],
-  "spyCurve": [
-    {"t":"06-02","v":100000},{"t":"06-03","v":100300},{"t":"06-04","v":99700},
-    {"t":"06-05","v":100900},{"t":"06-06","v":100600},{"t":"06-09","v":99100},
-    {"t":"06-10","v":100800},{"t":"06-11","v":101900},{"t":"06-12","v":102600}
-  ],
+  "stats": {"winRate": 61, "trades": 38, "wins": 23, "losses": 15, "avgWin": 6.4, "avgLoss": -3.1, "profitFactor": 2.1, "sharpe": 1.8},
+  "bot": {
+    "status": "Running", "uptime": "11d 4h", "version": "v0.4.2-paper",
+    "lastRun": "Today 14:30 ET", "nextRun": "Today 14:45 ET",
+    "heartbeat": [0.4,0.7,0.5,0.9,0.6,0.8,1.0,0.7,0.85,0.6,0.9,0.75]
+  },
+  "equityCurve": [100000,99200,101500,103800,102600,105400,107900,106200,109100,110800,109600,112480],
+  "caps": {"riskPerTrade": 10, "maxPosition": 40, "sectorCap": 80, "trailingStop": 18, "dailyHalt": 10, "monthlyKill": 30},
   "positions": [
-    {"ticker":"SOXL","name":"Direxion Daily Semiconductor 3x","type":"3x ETF","qty":120,"entry":42.10,"stop":"18% trail","last":45.30,"mktValue":5436,"pctEq":38,"pnl":386,"pnlPct":7.6,"days":3,"rr":"2.4:1","sector":"Semis (lev)","thesis":"Semis breakout, 3x leverage in a risk-on tape.","spark":[40.1,41.2,40.6,42.5,43.1,44.0,45.3]},
-    {"ticker":"NVDA","name":"NVIDIA Corp","type":null,"qty":60,"entry":203.0,"stop":"18% trail","last":211.4,"mktValue":12684,"pctEq":22,"pnl":504,"pnlPct":4.1,"days":6,"rr":"2.1:1","sector":"Semis","thesis":"AI demand; data-center revenue +92% YoY.","spark":[198,201,199,205,208,209,211.4]},
-    {"ticker":"BTC","name":"Bitcoin","type":"crypto","qty":0.22,"entry":72900,"stop":"18% trail","last":71240,"mktValue":15673,"pctEq":16,"pnl":-365,"pnlPct":-2.3,"days":9,"rr":"3.0:1","sector":"Crypto","thesis":"Macro liquidity proxy; 24/7 momentum.","spark":[71000,73000,72400,71800,70900,71500,71240]},
-    {"ticker":"TQQQ","name":"ProShares UltraPro QQQ 3x","type":"3x ETF","qty":180,"entry":76.6,"stop":"18% trail","last":78.1,"mktValue":14058,"pctEq":14,"pnl":270,"pnlPct":1.9,"days":4,"rr":"2.2:1","sector":"Index (lev)","thesis":"Nasdaq momentum, leveraged.","spark":[75.2,76.6,75.9,77.1,78.4,77.8,78.1]}
+    {"t":"SOXL","name":"Direxion Semis Bull 3x","lev":"3x","qty":420,"price":45.3,"avg":38.10,"mktVal":19026,"unrealPct":18.9,"dayPct":9.4,"stop":37.1},
+    {"t":"NVDA","name":"NVIDIA","qty":74,"price":211.14,"avg":198.40,"mktVal":15624,"unrealPct":6.4,"dayPct":4.1,"stop":190.0},
+    {"t":"PLTR","name":"Palantir","qty":420,"price":31.9,"avg":28.20,"mktVal":13398,"unrealPct":13.1,"dayPct":5.2,"stop":27.5},
+    {"t":"COIN","name":"Coinbase","qty":58,"price":214,"avg":201.5,"mktVal":12412,"unrealPct":6.2,"dayPct":6.8,"stop":188.0},
+    {"t":"BITX","name":"2x Bitcoin Strategy ETF","lev":"2x","qty":190,"price":54.2,"avg":58.9,"mktVal":10298,"unrealPct":-8.0,"dayPct":-4.6,"stop":49.0},
+    {"t":"TSLA","name":"Tesla","qty":38,"price":238,"avg":252.4,"mktVal":9044,"unrealPct":-5.7,"dayPct":-2.4,"stop":225.0}
   ],
+  "openOrders": [
+    {"time":"14:31","t":"SMH","side":"Buy","type":"Limit","qty":40,"limit":265,"status":"Working"},
+    {"time":"14:28","t":"COIN","side":"Sell","type":"Trail","qty":58,"limit":null,"status":"Trailing 12%"}
+  ],
+  "fills": [
+    {"time":"14:12","t":"SOXL","side":"Buy","qty":120,"price":44.8,"value":5376},
+    {"time":"13:48","t":"PLTR","side":"Buy","qty":120,"price":31.2,"value":3744},
+    {"time":"11:30","t":"BITX","side":"Sell","qty":60,"price":55.1,"value":3306},
+    {"time":"10:05","t":"NVDA","side":"Buy","qty":24,"price":206.4,"value":4954},
+    {"time":"09:41","t":"COIN","side":"Buy","qty":18,"price":205.0,"value":3690},
+    {"time":"Yest 15:50","t":"TSLA","side":"Sell","qty":12,"price":244.0,"value":2928},
+    {"time":"Yest 14:22","t":"SOXL","side":"Buy","qty":80,"price":42.6,"value":3408}
+  ],
+  "journal": [
+    {"t":"SOXL","side":"Long","opened":"Jun 9","closed":"Jun 11","entry":40.2,"exit":46.1,"qty":150,"pnlPct":14.7,"pnlUsd":885,"grade":"A","lesson":"Bought the semis dip into the bounce; 3x ETF magnified a clean sector move. Trailed the stop instead of taking profit too early — let the winner run."},
+    {"t":"BITX","side":"Long","opened":"Jun 6","closed":"Jun 10","entry":61.0,"exit":56.4,"qty":120,"pnlPct":-7.5,"pnlUsd":-552,"grade":"C","lesson":"Chased a 2x crypto ETF into a Treasury-yield spike. Stop was too wide for the leverage. Size leveraged crypto smaller and respect macro headwinds."},
+    {"t":"PLTR","side":"Long","opened":"Jun 3","closed":"Jun 5","entry":27.4,"exit":29.8,"qty":300,"pnlPct":8.8,"pnlUsd":720,"grade":"A","lesson":"Momentum breakout on volume; took partial at +6%, trailed the rest. Textbook high-beta swing."},
+    {"t":"TSLA","side":"Long","opened":"May 28","closed":"Jun 1","entry":262.0,"exit":248.5,"qty":24,"pnlPct":-5.2,"pnlUsd":-324,"grade":"D","lesson":"Caught a falling knife pre-delivery-numbers. No catalyst, just hope. Wait for confirmation on reversals."}
+  ],
+  "risk": {"drawdown": -3.1, "maxDD": -11, "peakEquity": 114200, "grossExposure": 71, "largestPos": 17, "sectorConc": 63},
+  "strategy": {
+    "name": "Aggressive Momentum (Paper)",
+    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "rules": [
+      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
+      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
+      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
+      "Take partial profit at +6–8%; let the remainder trail.",
+      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
+      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+    ]
+  },
   "signals": [
-    {"ticker":"AVGO","dir":"LONG","score":86,"entry":"1,420-1,440","stop":"1,360","target":"1,560","size":"30%","catalyst":"pre-earnings drift","thesis":"AI networking + pre-earnings setup."},
-    {"ticker":"PLTR","dir":"LONG","score":78,"entry":"31-32","stop":"29","target":"37","size":"20%","catalyst":"breakout + volume","thesis":"Gov + commercial AI; breakout on volume."},
-    {"ticker":"SMH","dir":"LONG","score":71,"entry":"265-268","stop":"256","target":"285","size":"18%","catalyst":"sector inflows","thesis":"Clean semis relative strength."},
-    {"ticker":"ETH","dir":"LONG","score":64,"entry":"3,780-3,820","stop":"3,560","target":"4,300","size":"12%","catalyst":"momentum","thesis":"Crypto momentum alongside BTC."}
-  ],
-  "trades": [
-    {"date":"06-11","ticker":"SOXL","side":"buy","qty":120,"price":42.10,"status":"filled","realized":null,"grade":null,"note":"Semis breakout entry, 18% trail set."},
-    {"date":"06-10","ticker":"MARA","side":"sell","qty":300,"price":28.40,"status":"closed","realized":920,"grade":"A","note":"Crypto-miner momentum; trailed into strength."},
-    {"date":"06-09","ticker":"TSLA","side":"sell","qty":40,"price":238.0,"status":"closed","realized":-540,"grade":"C","note":"Stopped at −7%; entry chased, lesson logged."}
+    {"t":"SMH","signal":"Base breakout + sector inflows","score":72,"action":"Buy"},
+    {"t":"AVGO","signal":"Reclaiming $400 after guidance dip","score":64,"action":"Watch"},
+    {"t":"BITX","signal":"Below trailing stop on yield spike","score":38,"action":"Sell"},
+    {"t":"COIN","signal":"Extended +30% in 6 sessions","score":55,"action":"Watch"}
   ],
   "movers": {
-    "risers": [{"ticker":"SOXL","chgPct":9.4,"vol":"heavy"},{"ticker":"COIN","chgPct":6.8,"vol":"heavy"},{"ticker":"NVDA","chgPct":4.1,"vol":"high"}],
-    "fallers": [{"ticker":"BTC","chgPct":-2.3,"vol":"high"},{"ticker":"SMCI","chgPct":-5.1,"vol":"heavy"}],
-    "biggest": [{"ticker":"NVDA","chgPct":4.1,"vol":"high"},{"ticker":"MSFT","chgPct":1.2,"vol":"normal"},{"ticker":"AAPL","chgPct":0.6,"vol":"normal"}],
-    "unusualVol": [{"ticker":"SOXL","chgPct":9.4,"vol":"4.2x avg"},{"ticker":"PLTR","chgPct":5.2,"vol":"3.1x avg"}]
+    "gainers": [{"t":"SPCX","price":151.2,"chg":12.0,"vol":"IPO"},{"t":"SOXL","price":45.3,"chg":9.4,"vol":"54M"},{"t":"COIN","price":214,"chg":6.8,"vol":"22M"},{"t":"PLTR","price":31.9,"chg":5.2,"vol":"61M"},{"t":"NVDA","price":211.1,"chg":4.1,"vol":"312M"}],
+    "losers": [{"t":"SMCI","price":41.8,"chg":-5.1,"vol":"19M"},{"t":"BITX","price":54.2,"chg":-4.6,"vol":"8M"},{"t":"OXY","price":54.2,"chg":-2.8,"vol":"12M"},{"t":"TSLA","price":238,"chg":-2.4,"vol":"88M"}],
+    "active": [{"t":"NVDA","price":211.1,"chg":4.1,"vol":"312M"},{"t":"TSLA","price":238,"chg":-2.4,"vol":"88M"},{"t":"PLTR","price":31.9,"chg":5.2,"vol":"61M"},{"t":"SOXL","price":45.3,"chg":9.4,"vol":"54M"}]
   },
   "tickers": {
-    "AVGO": {"name":"Broadcom","last":1442,"chgPct":2.1,"spark":[1402,1418,1410,1432,1445,1438,1442],"thesis":"Pre-earnings drift + AI networking."},
-    "PLTR": {"name":"Palantir","last":31.9,"chgPct":5.2,"spark":[30.1,30.8,30.4,31.2,31.7,31.5,31.9],"thesis":"Breakout on volume; gov + commercial AI."},
-    "SMH": {"name":"VanEck Semiconductor ETF","last":268,"chgPct":1.4,"spark":[262,265,263,266,269,267,268],"thesis":"Sector inflows; clean relative strength."},
-    "COIN": {"name":"Coinbase","last":214,"chgPct":6.8,"spark":[198,205,202,209,213,211,214],"thesis":"Crypto beta; volume spike."},
-    "MARA": {"name":"Marathon Digital","last":29.1,"chgPct":3.4,"spark":[27,28.4,28,28.9,29.3,29,29.1],"thesis":"Crypto-miner momentum."}
+    "SOXL": {"name":"Direxion Daily Semiconductor Bull 3x","sector":"Leveraged ETF","last":45.3,"chgPct":9.4,"spark":[38,40,39,42,44,43,45.3],"thesis":"3x semis exposure to ride the AI-chip uptrend. Held as the bot's highest-conviction momentum leg — trailed stop protects the embedded gain."},
+    "NVDA": {"name":"NVIDIA","sector":"Semiconductors","last":211.14,"chgPct":4.1,"spark":[198,202,205,208,206,210,211],"thesis":"Core AI bellwether; bought the AVGO-read-through dip. Bouncing with the group."},
+    "PLTR": {"name":"Palantir","sector":"Software","last":31.9,"chgPct":5.2,"spark":[28,29,28.5,30,31,31.5,31.9],"thesis":"High-beta momentum breakout on volume; commercial-AI narrative intact."},
+    "COIN": {"name":"Coinbase","sector":"Crypto/Financials","last":214,"chgPct":6.8,"spark":[195,200,198,205,210,212,214],"thesis":"Crypto-beta proxy; extended after a 6-session run, now trailing a 12% stop."},
+    "BITX": {"name":"2x Bitcoin Strategy ETF","sector":"Leveraged Crypto","last":54.2,"chgPct":-4.6,"spark":[59,60,57,56,55,54.5,54.2],"thesis":"2x BTC exposure underwater on a Treasury-yield spike; sized small, near the trailing stop — flagged Sell in the queue."},
+    "TSLA": {"name":"Tesla","sector":"Cons Discretionary","last":238,"chgPct":-2.4,"spark":[252,248,245,243,240,239,238],"thesis":"High-beta swing that went against the bot; below average cost and stop is tightening."}
   }
 }
