@@ -18,16 +18,24 @@
   *{box-sizing:border-box}html,body{margin:0;padding:0}
   body{color:var(--ink);font:16px/1.5 var(--body);min-height:100vh;overflow-x:hidden;
     background:
-      linear-gradient(135deg,rgba(255,255,255,.6),transparent 38%),
-      linear-gradient(312deg,rgba(214,206,184,.55),transparent 42%),
-      repeating-linear-gradient(26deg,rgba(255,255,255,.04) 0 2px,transparent 2px 26px),
-      #efe8d8 fixed}
+      radial-gradient(120% 90% at 12% -5%,rgba(255,255,255,.95),transparent 46%),
+      radial-gradient(130% 110% at 88% 105%,rgba(226,219,200,.5),transparent 52%),
+      linear-gradient(158deg,#fcfbf7 0%,#f5f1e7 52%,#ece5d5 100%) fixed}
   a{color:inherit}
-  .facets{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
-    background:conic-gradient(from 200deg at 18% 12%,rgba(255,255,255,.5),transparent 25%,rgba(210,200,176,.4) 50%,transparent 75%),conic-gradient(from 40deg at 84% 80%,rgba(255,255,255,.45),transparent 30%,rgba(205,194,168,.35) 60%,transparent 85%);mix-blend-mode:soft-light}
+  .facets{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.4;
+    background:conic-gradient(from 210deg at 16% 10%,rgba(255,255,255,.6),transparent 22%,rgba(214,204,180,.3) 48%,transparent 72%),conic-gradient(from 40deg at 86% 82%,rgba(255,255,255,.5),transparent 26%,rgba(206,195,168,.28) 58%,transparent 86%);mix-blend-mode:soft-light}
+  /* Veined white-marble layer (procedural SVG, static) — gives the alabaster real depth. */
+  .marble{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.6;mix-blend-mode:multiply}
+  .marble svg{width:100%;height:100%;display:block}
+  /* Gilt frame frill — hairline gold border, white inner liner, soft inner glow + corner diamonds. */
+  .frame{position:fixed;inset:10px;z-index:1;pointer-events:none;border:1px solid rgba(184,147,47,.32);
+    box-shadow:inset 0 0 0 3px rgba(255,255,255,.4),inset 0 0 26px rgba(138,108,34,.06)}
+  .cnr{position:absolute;color:var(--gold);font-size:10px;line-height:1;opacity:.55;text-shadow:0 0 6px rgba(184,147,47,.4)}
+  .cnr.tl{top:-6px;left:-6px}.cnr.tr{top:-6px;right:-6px}.cnr.bl{bottom:-6px;left:-6px}.cnr.br{bottom:-6px;right:-6px}
+  @media(max-width:640px){.frame{inset:6px}}
   .wrap{position:relative;z-index:2;max-width:1260px;margin:0 auto;padding:28px 26px 46px}
   header{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:20px;
-    border-bottom:1px solid var(--line);padding-bottom:16px}
+    border-bottom:2px solid;border-image:linear-gradient(90deg,transparent,rgba(184,147,47,.55) 16%,rgba(216,182,89,.85) 50%,rgba(184,147,47,.55) 84%,transparent) 1;padding-bottom:16px}
   .brand{display:flex;align-items:center;gap:14px}
   .mark{font-size:22px;color:var(--gold)}
   .switch{position:relative}
@@ -56,16 +64,20 @@
     clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
   .tab:hover{color:var(--ink);border-color:var(--gold)}
   .tab.active{color:var(--goldd);border-color:var(--gold);background:linear-gradient(180deg,#fffdf6,#f3ecda)}
-  .card{position:relative;background:var(--card);padding:17px 19px;clip-path:var(--clip);transition:transform .07s linear;margin-bottom:16px}
-  .card::before{content:'';position:absolute;inset:-1.5px;z-index:-1;clip-path:var(--clip);
-    background:var(--goldrim);background-size:250% 100%;animation:goldflow 60s linear infinite}
-  /* Slow, subtle sheen — ~5.5x slower and gentler than the old racing gleam. */
+  .card{position:relative;padding:17px 19px;margin-bottom:16px;border:1.6px solid transparent;
+    background:linear-gradient(180deg,#fffdf8,#f7f3e9) padding-box,var(--goldrim) border-box;
+    background-size:auto,250% 100%;animation:goldflow 60s linear infinite;
+    clip-path:var(--clip);box-shadow:inset 0 1px 0 rgba(255,255,255,.7);transition:transform .07s linear}
+  /* Slow, subtle sheen — ~5.5x slower and gentler than the old racing gleam. The gold rim is each card's
+     border-box background layer (cream is the padding-box layer); animating background-position sweeps it. */
   @keyframes goldflow{0%{background-position:0% 0}100%{background-position:250% 0}}
   .clk{cursor:pointer}.clk:hover{transform:translateY(-2px)}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
   @media(max-width:780px){.kpis{grid-template-columns:repeat(2,1fr)}}
-  .kpi{position:relative;background:var(--card);padding:16px 18px;clip-path:var(--clip)}
-  .kpi::before{content:'';position:absolute;inset:-1.5px;z-index:-1;clip-path:var(--clip);background:var(--goldrim);background-size:250% 100%;animation:goldflow 60s linear infinite}
+  .kpi{position:relative;padding:16px 18px;border:1.6px solid transparent;
+    background:linear-gradient(180deg,#fffdf8,#f6f2e7) padding-box,var(--goldrim) border-box;
+    background-size:auto,250% 100%;animation:goldflow 60s linear infinite;
+    clip-path:var(--clip);box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
   .kpi .lab{font-family:var(--disp);font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:1.2px}
   .kpi .val{font-family:var(--num);font-size:28px;font-weight:600;margin-top:6px;line-height:1}
   .kpi .hint{position:absolute;top:15px;right:18px;font-size:11px;color:var(--dim)}
@@ -111,6 +123,8 @@
 </head>
 <body>
 <div class="facets"></div>
+<div class="marble" aria-hidden="true"><svg viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke-linecap="round"><path d="M-30,130 C220,60 380,230 580,150 S940,40 1260,180" stroke="#8a8068" stroke-width="1.3" opacity=".5"/><path d="M-30,250 C150,300 320,210 470,250" stroke="#9a907a" stroke-width=".6" opacity=".3"/><path d="M-30,372 C260,300 430,452 720,360 S1040,300 1260,432" stroke="#9a907a" stroke-width="1.05" opacity=".42"/><path d="M-30,610 C230,560 470,690 740,600 S1020,540 1260,652" stroke="#7d7458" stroke-width="1.5" opacity=".46"/><path d="M150,-30 C90,210 240,372 170,572 S250,780 190,840" stroke="#8a8068" stroke-width=".85" opacity=".34"/><path d="M920,-30 C870,190 1000,360 940,560 S1020,780 980,840" stroke="#9a907a" stroke-width=".85" opacity=".3"/><path d="M-30,255 C260,215 440,302 650,250 S990,205 1260,300" stroke="#b8932f" stroke-width=".7" opacity=".24"/><path d="M380,-30 C420,160 320,322 420,520 S360,760 430,840" stroke="#b8932f" stroke-width=".55" opacity=".16"/></g></svg></div>
+<div class="frame" aria-hidden="true"><span class="cnr tl">◆</span><span class="cnr tr">◆</span><span class="cnr bl">◆</span><span class="cnr br">◆</span></div>
 <div class="wrap">
   <header>
     <div class="brand">
@@ -118,10 +132,7 @@
       <div class="switch">
         <div class="title" id="brandbtn">Bull <span class="caret">▾</span></div>
         <div class="subtitle" id="subtitle">Autonomous paper trader · <span id="sampleBadge"></span></div>
-        <div class="switchmenu" id="switchmenu">
-          <a href="https://atlas.cjstancin.com" target="_blank" rel="noopener"><span class="sm-mark" style="color:#7c89c0">✦</span><div><b>Atlas</b><div class="dim small">Advisor &amp; research ↗</div></div></a>
-          <a class="active" onclick="go('overview');toggleSwitch(false)"><span class="sm-mark" style="color:var(--gold)">◆</span><div><b>Bull</b><div class="dim small">Trading console</div></div></a>
-        </div>
+        <div class="switchmenu" id="switchmenu"><!-- built from SITES[] in JS — add a hub there, no markup changes --></div>
       </div>
     </div>
     <div class="hmeta">
@@ -295,7 +306,20 @@ function renderTicker(t){const d=DATA;const p=(d.positions||[]).find(x=>x.t===t)
   deferred=[];const el=$('#tch');if(el)renderChart(el,t,(T.spark||p.spark||[]));
 }
 
-/* ============ SITE SWITCHER + REFRESH ============ */
+/* ============ SITE SWITCHER (data-driven) + REFRESH ============ */
+/* Cross-hub nav. To add a project: add ONE entry to SITES below (and mirror it in the other hubs).
+   id  — unique key; the entry whose id === SITE_ID is the current hub (no link, routes home).
+   name/tag — label + sub-label.  url — hub URL.  mark/color — brand glyph + accent. */
+const SITE_ID='bull';
+const SITES=[
+  {id:'atlas',name:'Atlas',tag:'Advisor & research',url:'https://atlas.cjstancin.com', mark:'✦',color:'#7c89c0'},
+  {id:'bull', name:'Bull', tag:'Trading console',    url:'https://trading.cjstancin.com',mark:'◆',color:'#b8932f'},
+  // {id:'NEW',name:'…',tag:'…',url:'https://….cjstancin.com',mark:'★',color:'#5a8'},
+];
+function buildSwitcher(){const m=$('#switchmenu');if(!m)return;
+  m.innerHTML=SITES.map(s=>{const cur=s.id===SITE_ID;
+    return `<a class="${cur?'active':''}" ${cur?`onclick="go('overview');toggleSwitch(false)"`:`href="${s.url}" target="_blank" rel="noopener"`}><span class="sm-mark" style="color:${s.color}">${s.mark}</span><div><b>${esc(s.name)}</b><div class="dim small">${esc(s.tag)}${cur?'':' ↗'}</div></div></a>`;
+  }).join('');}
 function toggleSwitch(f){$('#switchmenu').classList.toggle('open',f);}
 $('#brandbtn').onclick=e=>{e.stopPropagation();$('#switchmenu').classList.toggle('open');};
 document.addEventListener('click',()=>$('#switchmenu').classList.remove('open'));
@@ -305,7 +329,7 @@ function chrome(){const d=DATA;$('#botstate').textContent=((d.bot||{}).status||'
 $('#reload').onclick=async()=>{await pull();chrome();route();};
 
 /* ============ BOOT ============ */
-async function boot(){await pull();chrome();route();}
+async function boot(){buildSwitcher();await pull();chrome();route();}
 /* Page re-pulls status.json every 5 min (free). Only the Bull agent routine that REGENERATES it costs credits. */
 setInterval(async()=>{await pull();chrome();const v=(location.hash||'#/overview').replace('#/','').split('/')[0];if(v!=='ticker')route();},300000);
 boot();
