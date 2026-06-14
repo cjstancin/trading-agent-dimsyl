@@ -15,15 +15,15 @@ Autonomous **paper** trading agent. Goal: beat the S&P 500 over time via aggress
 2. **ACT within the rules:** research, decide, place/adjust paper orders on Alpaca (REST — see `scripts/alpaca-rest.md`), size per the formula.
 3. **WRITE last:** update `memory/portfolio.md`, append to `memory/trade-log.md` + `memory/research-log.md`, add a dated line to `memory/learnings.md`, refresh `dashboard/data/status.json`, and **commit** all changes back to main.
 
-## ACTIVE PROFILE = AGGRESSIVE PAPER (CJ's choice 2026-06-12)
-High-risk / high-reward sandbox. Hard limits:
-- **Risk 10% of equity per trade.** Sizing: `shares = (0.10 × equity) ÷ (entry − stop)`, then cap at the max position %.
-- **Max 40% per position. Max sector 80%. Max 6 open. Max 6 new per week. Keep ~10% cash buffer. No margin.**
-- **Stop on EVERY entry** (~18% trailing — wide, for volatile/leveraged/crypto). Cut losers ~**−12%**.
-- **Daily-loss halt: −10%** of equity → place no new trades that day.
-- **Monthly kill-switch: −30% MTD** → "STAND DOWN — no new trades" and skip cycles until CJ resumes.
-- **Universe:** US equities, ETFs, **leveraged ETFs**, **crypto** (majors: BTC/ETH and liquid large-caps), high-beta momentum/small-caps. Speculative tier embraced.
-- **Quality floor (even aggressive):** no sub-$2 price, no illiquid/no-volume tickers, no obvious pump-and-dump. "Risky but real," not "throwing money away."
+## ACTIVE PROFILE = AGGRESSIVE (QUALITY) PAPER — reigned in (CJ 2026-06-14)
+Aggressive conviction, but on **solid, liquid investments you'd be comfortable holding 1 week to ~5 years** — NOT day-trade churn, NOT gambles. Hard limits:
+- **Risk 7% of equity per trade.** Sizing: `shares = (0.07 × equity) ÷ (entry − stop)`, then cap at the max position %.
+- **Max 30% per position. Max sector 60%. Max 8 open. Keep ~10% cash buffer. No margin.**
+- **Stop on EVERY entry** (~20% trailing — wide enough to ride a quality name through normal volatility). On a thesis-intact dip, re-evaluate; don't panic-sell.
+- **Daily-loss halt: −8%** of equity → place no new trades that day.
+- **Monthly kill-switch: −25% MTD** → "STAND DOWN — no new trades" until CJ resumes.
+- **Universe (QUALITY ONLY):** liquid US **large- & mid-cap stocks** (real companies, real revenue) and **liquid broad/sector ETFs** (SPY/QQQ/XLK/SMH-type). **EXCLUDED:** penny stocks (price < **$10**), **leveraged/inverse ETFs** (no SOXL/TQQQ/3x), **crypto**, meme/pump names, illiquid/no-volume, pre-revenue lottery tickets. Aggressive = **concentration + conviction in good names**, never speculative junk.
+- **Horizon:** short-to-medium swing → position (**1 week to ~5 years**). Let winners run; concentrate in the best ideas; quality over quantity.
 
 ## Hard rules (never break, even aggressive)
 - **Stop on every trade.** No naked positions.
