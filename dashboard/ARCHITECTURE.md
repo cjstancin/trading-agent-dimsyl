@@ -13,7 +13,7 @@ Design goals:
 1. **Make the bot legible.** Health/uptime, every position, every order and fill, a per-trade journal with grades + lessons, and live risk meters (daily-loss halt, monthly kill-switch, drawdown, exposure).
 2. **Paper-first, safety-first.** The bot trades Alpaca **paper** only. The **LIVE** profile is LOCKED behind CJ's written opt-in. The dashboard's "control panel" is a **UI preview only** — it never sends orders from the browser.
 3. **Static and cheap**, exactly like Go: one fetched JSON file, no framework, no secrets in the page.
-4. **Theme: "Royal Chisel"** — alabaster marble background, `clip-path` 45°-cornered cards with a constant slow gold-gradient rim (`goldflow`, no white gleam), Cinzel (display) + Fraunces (numbers) + EB Garamond (body), emerald up / ruby down, faceted gemstone status dot. Keep it.
+4. **Theme: "Royal Chisel"** — alabaster marble background, `clip-path` 45°-cornered cards with a constant slow gold-gradient rim (`goldflow`, no white gleam), Cinzel (display) + Fraunces (numbers) + EB Garamond (body), emerald up / ruby down, faceted gemstone status dot. Keep it. (As of 2026-06-13 the `--dim`/`--emer`/`--amber`/`--goldd` tokens were darkened to meet WCAG AA 4.5:1 on both card and body — the palette reads the same but passes contrast; the `goldflow` sheen is preserved, motion-guarded.) See `_ROADMAP.md` for the a11y layer (keyboard operability, focus ring, dialog focus, per-page h1).
 
 ---
 

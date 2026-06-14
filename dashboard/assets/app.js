@@ -1,5 +1,5 @@
 /* Bull shared bundle — built from the single-file console. Loaded by every page. */
-const SHELL = "<div class=\"facets\"></div>\n<div class=\"marble\" aria-hidden=\"true\"><svg viewBox=\"0 0 1200 800\" preserveAspectRatio=\"xMidYMid slice\" xmlns=\"http://www.w3.org/2000/svg\"><g fill=\"none\" stroke-linecap=\"round\"><path d=\"M-30,130 C220,60 380,230 580,150 S940,40 1260,180\" stroke=\"#8a8068\" stroke-width=\"1.3\" opacity=\".5\"/><path d=\"M-30,250 C150,300 320,210 470,250\" stroke=\"#9a907a\" stroke-width=\".6\" opacity=\".3\"/><path d=\"M-30,372 C260,300 430,452 720,360 S1040,300 1260,432\" stroke=\"#9a907a\" stroke-width=\"1.05\" opacity=\".42\"/><path d=\"M-30,610 C230,560 470,690 740,600 S1020,540 1260,652\" stroke=\"#7d7458\" stroke-width=\"1.5\" opacity=\".46\"/><path d=\"M150,-30 C90,210 240,372 170,572 S250,780 190,840\" stroke=\"#8a8068\" stroke-width=\".85\" opacity=\".34\"/><path d=\"M920,-30 C870,190 1000,360 940,560 S1020,780 980,840\" stroke=\"#9a907a\" stroke-width=\".85\" opacity=\".3\"/><path d=\"M-30,255 C260,215 440,302 650,250 S990,205 1260,300\" stroke=\"#b8932f\" stroke-width=\".7\" opacity=\".24\"/><path d=\"M380,-30 C420,160 320,322 420,520 S360,760 430,840\" stroke=\"#b8932f\" stroke-width=\".55\" opacity=\".16\"/></g></svg></div>\n<div class=\"frame\" aria-hidden=\"true\"><span class=\"cnr tl\">◆</span><span class=\"cnr tr\">◆</span><span class=\"cnr bl\">◆</span><span class=\"cnr br\">◆</span></div>\n<div class=\"wrap\">\n  <header>\n    <div class=\"brand\">\n      <span class=\"mark\">◆</span>\n      <div class=\"switch\">\n        <div class=\"title\" id=\"brandbtn\">Bull <span class=\"caret\">▾</span></div>\n        <div class=\"subtitle\" id=\"subtitle\">Autonomous paper trader · <span id=\"sampleBadge\"></span></div>\n        <div class=\"switchmenu\" id=\"switchmenu\"><!-- built from SITES[] in JS — add a hub there, no markup changes --></div>\n      </div>\n    </div>\n    <div class=\"hmeta\">\n      <span class=\"live\"><span class=\"gem\"></span><span id=\"botstate\">RUNNING</span></span>\n      <span class=\"pill paper\" id=\"profile\">Paper</span>\n      <span class=\"pill warn\" id=\"regime\">—</span>\n      <span class=\"updated\" id=\"updlbl\"></span>\n      <span class=\"refresh\" id=\"reload\" title=\"Pull latest bot data\">↻ Refresh</span>\n    </div>\n  </header>\n  <nav class=\"tabs\" id=\"tabs\"></nav>\n  <main id=\"main\"></main>\n</div>\n<div class=\"botbtn\" id=\"botbtn\" title=\"Bull is a paper bot — read-only console\">◆</div>";
+const SHELL = "<div class=\"facets\"></div>\n<div class=\"marble\" aria-hidden=\"true\"><svg viewBox=\"0 0 1200 800\" preserveAspectRatio=\"xMidYMid slice\" xmlns=\"http://www.w3.org/2000/svg\"><g fill=\"none\" stroke-linecap=\"round\"><path d=\"M-30,130 C220,60 380,230 580,150 S940,40 1260,180\" stroke=\"#8a8068\" stroke-width=\"1.3\" opacity=\".5\"/><path d=\"M-30,250 C150,300 320,210 470,250\" stroke=\"#9a907a\" stroke-width=\".6\" opacity=\".3\"/><path d=\"M-30,372 C260,300 430,452 720,360 S1040,300 1260,432\" stroke=\"#9a907a\" stroke-width=\"1.05\" opacity=\".42\"/><path d=\"M-30,610 C230,560 470,690 740,600 S1020,540 1260,652\" stroke=\"#7d7458\" stroke-width=\"1.5\" opacity=\".46\"/><path d=\"M150,-30 C90,210 240,372 170,572 S250,780 190,840\" stroke=\"#8a8068\" stroke-width=\".85\" opacity=\".34\"/><path d=\"M920,-30 C870,190 1000,360 940,560 S1020,780 980,840\" stroke=\"#9a907a\" stroke-width=\".85\" opacity=\".3\"/><path d=\"M-30,255 C260,215 440,302 650,250 S990,205 1260,300\" stroke=\"#b8932f\" stroke-width=\".7\" opacity=\".24\"/><path d=\"M380,-30 C420,160 320,322 420,520 S360,760 430,840\" stroke=\"#b8932f\" stroke-width=\".55\" opacity=\".16\"/></g></svg></div>\n<div class=\"frame\" aria-hidden=\"true\"><span class=\"cnr tl\">◆</span><span class=\"cnr tr\">◆</span><span class=\"cnr bl\">◆</span><span class=\"cnr br\">◆</span></div>\n<div class=\"wrap\">\n  <header>\n    <div class=\"brand\">\n      <span class=\"mark\" aria-hidden=\"true\">◆</span>\n      <div class=\"switch\">\n        <div class=\"title\" id=\"brandbtn\" title=\"Switch hub\">Bull <span class=\"caret\" aria-hidden=\"true\">▾</span></div>\n        <div class=\"subtitle\" id=\"subtitle\">Autonomous paper trader · <span id=\"sampleBadge\"></span></div>\n        <div class=\"switchmenu\" id=\"switchmenu\"><!-- built from SITES[] in JS — add a hub there, no markup changes --></div>\n      </div>\n    </div>\n    <div class=\"hmeta\">\n      <span class=\"live\"><span class=\"gem\"></span><span id=\"botstate\">RUNNING</span></span>\n      <span class=\"pill paper\" id=\"profile\">Paper</span>\n      <span class=\"pill warn\" id=\"regime\">—</span>\n      <span class=\"updated\" id=\"updlbl\"></span>\n      <span class=\"refresh\" id=\"reload\" title=\"Pull latest bot data\">↻ Refresh</span>\n    </div>\n  </header>\n  <h1 id=\"pgh1\" class=\"sronly\">Bull</h1>\n  <nav class=\"tabs\" id=\"tabs\" aria-label=\"Sections\"></nav>\n  <main id=\"main\"></main>\n</div>\n<div class=\"botbtn\" id=\"botbtn\" role=\"img\" aria-label=\"Bull is a read-only paper-trading console\" title=\"Bull is a paper bot — read-only console\">◆</div>";
 document.body.insertAdjacentHTML("afterbegin", SHELL);
 document.body.insertAdjacentHTML("beforeend", '<div id="embedModal" class="embedModal" aria-hidden="true"></div>');
 
@@ -12,7 +12,7 @@ function pageHref(v){return PAGEFILE[v]||'index.html';}
 function go(r){const i=(''+r).indexOf('/');const v=i<0?r:r.slice(0,i),p=i<0?'':r.slice(i+1);if(v==='ticker'){location.href='ticker.html?sym='+encodeURIComponent(p);return;}location.href=pageHref(v);}
 function prefetchTabs(){document.querySelectorAll('#tabs a[href]').forEach(a=>a.addEventListener('mouseenter',function pf(){const l=document.createElement('link');l.rel='prefetch';l.href=a.href;document.head.appendChild(l);a.removeEventListener('mouseenter',pf);}));}
 function tk(t){return `<span class="tk" onclick="event.stopPropagation();go('ticker/${t}')"><b>${t}</b></span>`;}
-function curve(a,w,h,col){if(!a||!a.length)return '';const v=a.map(x=>typeof x==='object'?x.v:x);const mn=Math.min(...v),mx=Math.max(...v),r=(mx-mn)||1;col=col||(v[v.length-1]>=v[0]?'#1f8a5a':'#b3263b');const d=v.map((x,i)=>(i?'L':'M')+(i/(v.length-1)*w).toFixed(1)+','+(h-(x-mn)/r*h).toFixed(1)).join(' ');const area=d+` L${w},${h} L0,${h} Z`;return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".2"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#bg)"/><path d="${d}" fill="none" stroke="${col}" stroke-width="2"/></svg>`;}
+function curve(a,w,h,col){if(!a||!a.length)return '';const v=a.map(x=>typeof x==='object'?x.v:x);const mn=Math.min(...v),mx=Math.max(...v),r=(mx-mn)||1;col=col||(v[v.length-1]>=v[0]?'#1a7a4e':'#b3263b');const pcS=v[0]?((v[v.length-1]-v[0])/Math.abs(v[0])*100):0;const d=v.map((x,i)=>(i?'L':'M')+(i/(v.length-1)*w).toFixed(1)+','+(h-(x-mn)/r*h).toFixed(1)).join(' ');const area=d+` L${w},${h} L0,${h} Z`;return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none" role="img" aria-label="Trend line, ${up(pcS)?'up':'down'} ${Math.abs(pcS).toFixed(1)}%"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".2"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs><path d="${area}" fill="url(#bg)"/><path d="${d}" fill="none" stroke="${col}" stroke-width="2"/></svg>`;}
 
 /* ---------- live chart (Stooq, graceful fallback) ---------- */
 const chartCache={};
@@ -23,7 +23,7 @@ async function renderChart(host,sym,fallback){
   const ranges=['1M','6M','YTD','1Y','5Y','MAX'];let cur='6M';
   host.innerHTML=`<div class="tabs" style="margin-bottom:10px">${ranges.map(r=>`<span class="tab ${r===cur?'active':''}" data-r="${r}">${r}</span>`).join('')}</div><div id="cw" style="height:210px"></div>`;
   const rows=await loadHistory(sym);
-  function draw(){const cw=host.querySelector('#cw');let m=sliceRange(rows,cur);if(!m||!m.length){m=(fallback||[]).map(v=>({d:'',v}));}if(!m.length){cw.innerHTML='<div class="dimn">No price history.</div>';return;}cw.innerHTML=curve(m,760,200,m[m.length-1].v>=m[0].v?'#1f8a5a':'#b3263b');const lab=$('#rangelbl');if(lab){const ch=(m[m.length-1].v/m[0].v-1)*100;lab.innerHTML=`<span class="${cls(ch)}">${pc(ch)}</span> ${cur}`;}}
+  function draw(){const cw=host.querySelector('#cw');let m=sliceRange(rows,cur);if(!m||!m.length){m=(fallback||[]).map(v=>({d:'',v}));}if(!m.length){cw.innerHTML='<div class="dimn">No price history.</div>';return;}cw.innerHTML=curve(m,760,200,m[m.length-1].v>=m[0].v?'#1a7a4e':'#b3263b');const lab=$('#rangelbl');if(lab){const ch=(m[m.length-1].v/m[0].v-1)*100;lab.innerHTML=`<span class="${cls(ch)}">${pc(ch)}</span> ${cur}`;}}
   host.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{cur=b.dataset.r;host.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');draw();});
   draw();
   if(!rows)host.insertAdjacentHTML('beforeend','<div class="dimn" style="margin-top:6px">Live history unavailable here — showing recent trend. Charts populate fully on the deployed site.</div>');
@@ -41,14 +41,33 @@ function tableSort(rows,cols,renderRow,initKey){let k=initKey||cols[0].k,dir=-1;
     wrap.querySelectorAll('th').forEach(th=>th.onclick=()=>{const nk=th.dataset.k;if(nk===k)dir=-dir;else{k=nk;dir=-1;}render();});}
   render();return wrap;}
 
+/* ---------- a11y: make div/span controls keyboard-operable; rows focusable but keep table semantics ---------- */
+const A11Y_SEL='[onclick]:not(a):not(button):not(input):not(select):not(textarea):not(tr),th[data-k],.tk,.clk,.ctrlbtn,.lnk,.back,.refresh,.embedX,.embedExt,.tab[data-r],#brandbtn';
+const A11Y_ROW='tbody tr[onclick]';
+function enhA(el){if(el.tabIndex<0)el.tabIndex=0;if(!el.hasAttribute('role'))el.setAttribute('role','button');}
+function enhRow(el){if(el.tabIndex<0)el.tabIndex=0;}
+function enhanceA11y(root){if(!root||root.nodeType!==1)return;try{if(root.matches){if(root.matches(A11Y_SEL))enhA(root);if(root.matches(A11Y_ROW))enhRow(root);}root.querySelectorAll(A11Y_SEL).forEach(enhA);root.querySelectorAll(A11Y_ROW).forEach(enhRow);}catch(e){}}
+document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const t=e.target;if(!t||!t.matches)return;if(t.matches('a,button,input,select,textarea'))return;if(t.matches('[role=button],tbody tr[onclick]')){e.preventDefault();t.click();}});
+new MutationObserver(muts=>{for(const m of muts)for(const n of m.addedNodes)if(n.nodeType===1)enhanceA11y(n);}).observe(document.body,{childList:true,subtree:true});
+enhanceA11y(document.body);
+/* a11y: dialog focus management for the embed overlay */
+let _modalReturn=null;
+function focusables(el){return [...el.querySelectorAll('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"]),[role=button]')].filter(n=>n.offsetParent!==null);}
+function openModalA11y(win,label){if(!win)return;win.setAttribute('role','dialog');win.setAttribute('aria-modal','true');if(label)win.setAttribute('aria-label',label);_modalReturn=document.activeElement;const f=focusables(win);(f[0]||win).focus&&(f[0]||win).focus();
+  win._trap=e=>{if(e.key!=='Tab')return;const fz=focusables(win);if(!fz.length)return;const first=fz[0],last=fz[fz.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}};
+  win.addEventListener('keydown',win._trap);}
+function closeModalA11y(win){if(win&&win._trap){win.removeEventListener('keydown',win._trap);win._trap=null;}if(_modalReturn&&_modalReturn.focus)_modalReturn.focus();_modalReturn=null;}
+
 /* ============ ROUTER ============ */
 const TABS=[['overview','Overview'],['positions','Positions'],['blotter','Blotter'],['journal','Journal'],['risk','Risk'],['strategy','Strategy'],['movers','Movers']];
 function setTabs(active){$('#tabs').innerHTML=TABS.map(t=>`<a class="tab ${t[0]===active?'active':''}" href="${pageHref(t[0])}">${t[1]}</a>`).join('');prefetchTabs();}
+const H1={overview:'Overview',positions:'Positions',blotter:'Blotter',journal:'Journal',risk:'Risk',strategy:'Strategy',movers:'Movers'};
+function setH1(t){const h=$('#pgh1');if(h)h.textContent=t||'Bull';}
 function route(){const main=$('#main');if(!DATA||!DATA.equity){main.innerHTML=card('Serve me','','<div class="note">Live data loads when this page is <b>served</b> (Netlify or a local web server). Opening the file directly (file://) blocks data fetching.</div>');return;}
   const view=document.body.dataset.page||'overview';const h=[view,new URLSearchParams(location.search).get('sym')];
-  if(view==='ticker'){renderTicker(h[1]);setTabs('positions');window.scrollTo(0,0);return;}
+  if(view==='ticker'){setH1((h[1]||'')+' · ticker');renderTicker(h[1]);setTabs('positions');window.scrollTo(0,0);return;}
   const pages={overview:pgOverview,positions:pgPositions,blotter:pgBlotter,journal:pgJournal,risk:pgRisk,strategy:pgStrategy,movers:pgMovers};
-  setTabs(view);main.innerHTML=(pages[view]||pgOverview)();window.scrollTo(0,0);mountDeferred();}
+  setH1(H1[view]||'Bull');setTabs(view);main.innerHTML=(pages[view]||pgOverview)();window.scrollTo(0,0);mountDeferred();}
 window.addEventListener('hashchange',route);
 let deferred=[];function mountDeferred(){deferred.forEach(f=>f());deferred=[];}
 
@@ -83,7 +102,7 @@ function pgOverview(){const d=DATA,b=d.bot||{},s=d.stats||{};
      '<div class="ctrlbtn pause" onclick="ctrlMsg(this,\'Pause flag set (preview). Wire to the routine to take effect.\')">❚❚ Pause bot</div>'+
      '<div class="ctrlbtn kill" onclick="ctrlMsg(this,\'Kill-switch is a hard guardrail — only CJ can flip the live profile.\')">✕ Kill-switch</div>'+
      '</div>'+
-     '<div class="slider"><label>Risk per trade — <b id="rl">'+((d.caps||{}).riskPerTrade||10)+'%</b> (cap '+((d.caps||{}).riskPerTrade||10)+'%)</label><input type="range" min="1" max="'+((d.caps||{}).riskPerTrade||10)+'" value="'+((d.caps||{}).riskPerTrade||10)+'" oninput="document.getElementById(\'rl\').textContent=this.value+\'%\'"></div>'+
+     '<div class="slider"><label>Risk per trade — <b id="rl">'+((d.caps||{}).riskPerTrade||10)+'%</b> (cap '+((d.caps||{}).riskPerTrade||10)+'%)</label><input type="range" aria-label="Risk per trade percent" min="1" max="'+((d.caps||{}).riskPerTrade||10)+'" value="'+((d.caps||{}).riskPerTrade||10)+'" oninput="document.getElementById(\'rl\').textContent=this.value+\'%\'"></div>'+
      '<div class="dimn" id="ctrlnote">These controls are a console preview. Execution happens in the Bull agent\'s Claude Code routine (paper only); this page is the monitor.</div>')}
   <div class="grid2">
     ${card('Open positions','sortable · click a row → detail','<div id="ovpos"></div>')}
@@ -186,10 +205,10 @@ document.addEventListener('click',()=>$('#switchmenu').classList.remove('open'))
 /* ============ IN-SITE EMBED OVERLAY — external links open here, staying on Bull ============ */
 function openEmbed(url,title){const m=$('#embedModal');if(!m)return;
   m.innerHTML=`<div class="embedBack"></div><div class="embedWin"><div class="embedBar"><span class="embedTitle">${esc(title||'Preview')}</span><span class="embedUrl">${esc(url.replace(/^https?:\/\//,'').slice(0,42))}</span><a class="embedExt" href="${esc(url)}" target="_blank" rel="noopener">Open externally ↗</a><span class="embedX" title="Close (Esc)">✕</span></div><iframe class="embedFrame" src="${esc(url)}" referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe><div class="embedNote">Stays blank? That site blocks embedding — use “Open externally ↗”.</div></div>`;
-  m.classList.add('open');m.querySelector('.embedBack').onclick=closeEmbed;m.querySelector('.embedX').onclick=closeEmbed;}
-function closeEmbed(){const m=$('#embedModal');if(m){m.classList.remove('open');m.innerHTML='';}}
+  m.classList.add('open');m.setAttribute('aria-hidden','false');m.querySelector('.embedBack').onclick=closeEmbed;m.querySelector('.embedX').onclick=closeEmbed;openModalA11y(m.querySelector('.embedWin'),(title||'Preview')+' — preview');}
+function closeEmbed(){const m=$('#embedModal');if(m){const w=m.querySelector('.embedWin');m.classList.remove('open');m.setAttribute('aria-hidden','true');m.innerHTML='';closeModalA11y(w);}}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeEmbed();});
-document.addEventListener('click',e=>{const a=e.target.closest('a[target="_blank"]');if(!a)return;if(a.classList.contains('embedExt')||a.closest('#switchmenu'))return;const href=a.getAttribute('href')||'';if(!/^https?:\/\//.test(href))return;e.preventDefault();openEmbed(a.href,(a.textContent||'').trim().slice(0,80));});
+document.addEventListener('click',e=>{if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;/* let modified/middle clicks open a real new tab */const a=e.target.closest('a[target="_blank"]');if(!a)return;if(a.classList.contains('embedExt')||a.closest('#switchmenu'))return;const href=a.getAttribute('href')||'';if(!/^https?:\/\//.test(href))return;e.preventDefault();openEmbed(a.href,(a.textContent||'').trim().slice(0,80));});
 let lastFetch=null;
 async function pull(){const b=$('#reload');if(b)b.classList.add('spin');try{const r=await fetch('data/status.json?_='+Date.now());DATA=await r.json();lastFetch=new Date();}catch(e){}finally{if(b)b.classList.remove('spin');}}
 function chrome(){const d=DATA;$('#botstate').textContent=((d.bot||{}).status||'—').toUpperCase();$('#profile').textContent=d.profile||'Paper';$('#regime').textContent='Regime: '+(d.regime||'—');$('#sampleBadge').innerHTML=d.isSample?'<span style="color:var(--amber)">sample data</span>':(d.updated||'');const u=$('#updlbl');if(u)u.textContent='pulled '+(lastFetch?lastFetch.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'—');}
@@ -198,5 +217,9 @@ $('#reload').onclick=async()=>{await pull();chrome();route();};
 /* ============ BOOT ============ */
 async function boot(){buildSwitcher();await pull();chrome();route();}
 /* Page re-pulls status.json every 5 min (free). Only the Bull agent routine that REGENERATES it costs credits. */
-setInterval(async()=>{await pull();chrome();const v=document.body.dataset.page||'overview';if(v!=='ticker')route();},300000);
+setInterval(async()=>{await pull();chrome();
+  /* don't rebuild main while the user is mid-interaction (slider, modal) */
+  const ae=document.activeElement,editing=ae&&ae.matches&&ae.matches('#main input,#main select,#main textarea'),modalOpen=!!document.querySelector('.embedModal.open');
+  if(editing||modalOpen)return;
+  const v=document.body.dataset.page||'overview';if(v!=='ticker')route();},300000);
 boot();

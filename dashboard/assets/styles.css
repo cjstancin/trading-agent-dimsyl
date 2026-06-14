@@ -1,13 +1,17 @@
 :root{
-    --alab:#f6f2e9;--card:#fbf9f2;--ink:#1a160e;--mut:#6d6452;--dim:#928974;--line:rgba(120,100,50,.18);
-    --gold:#b8932f;--gold2:#d8b659;--goldlt:#efd98e;--goldd:#8a6c22;
-    --emer:#1f8a5a;--emerbg:rgba(31,138,90,.12);--ruby:#b3263b;--rubybg:rgba(179,38,59,.12);--amber:#b07d18;
+    --alab:#f6f2e9;--card:#fbf9f2;--ink:#1a160e;--mut:#6d6452;--dim:#746b55;--line:rgba(120,100,50,.18);
+    --gold:#b8932f;--gold2:#d8b659;--goldlt:#efd98e;--goldd:#7a5f1e;
+    --emer:#1a7a4e;--emerbg:rgba(31,138,90,.12);--ruby:#b3263b;--rubybg:rgba(179,38,59,.12);--amber:#8a6314;
     --disp:'Cinzel',Georgia,serif;--num:'Fraunces',Georgia,serif;--body:'EB Garamond',Georgia,serif;
     --clip:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
     /* Gold card rim — softened palette, swept very slowly by @goldflow for a subtle gem-like sheen (not a racing gleam). */
     --goldrim:linear-gradient(115deg,#9c7d2e,#cdab48 20%,#b8932f 38%,#e3cd86 50%,#b8932f 62%,#cdab48 80%,#9c7d2e);
   }
   *{box-sizing:border-box}html,body{margin:0;padding:0}
+  /* a11y: visible keyboard focus (the console had none), screen-reader-only utility, touch-target floor */
+  a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,th:focus-visible,[role=button]:focus-visible,[tabindex]:focus-visible,.tab:focus-visible,.tk:focus-visible{outline:2px solid var(--goldd);outline-offset:2px}
+  .sronly{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .refresh,.embedX,.embedExt,.lnk,.back,.botbtn{min-height:30px;display:inline-flex;align-items:center;justify-content:center}
   body{color:var(--ink);font:16px/1.5 var(--body);min-height:100vh;overflow-x:hidden;
     background:
       radial-gradient(120% 90% at 12% -5%,rgba(255,255,255,.95),transparent 46%),
