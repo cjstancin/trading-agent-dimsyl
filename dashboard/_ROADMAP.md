@@ -6,7 +6,8 @@
 The **monitor** for an aggressive automated **Alpaca paper** trading agent — "what is the bot doing and is it within its risk limits." Health/uptime, every position/order/fill, a graded trade journal, and live risk meters. Decoupled from Go (the advisor/research hub). Static & cheap: one fetched `status.json`, no framework, no secrets in the page.
 
 ## Locked decisions
-- **Theme: "Royal Chisel"** — alabaster marble background, `clip-path` 45°-cornered cards with a constant slow gold-gradient rim (`goldflow`, no white gleam), Cinzel (display) + Fraunces (numbers) + EB Garamond (body), emerald up / ruby down, faceted gemstone status dot. **Keep it** (single committed theme; the `goldflow` sheen is intentional and reduced-motion-guarded).
+- **Theme: "White Gold"** *(2026-06-14 — replaced "Royal Chisel" entirely per CJ's impeccable redo)* — a **private-wealth desk**: cool **pearl/platinum** base (not cream), **onyx** ink, **white-gold/champagne** metallic as the brand accent (cool, not brassy), faint **guilloché** (engine-turned banknote) texture, emerald up / garnet down / amber warn money semantics (all AA-verified). **Seamless with Go**: adopted Go's component DNA — **rounded soft cards, pill chrome, pulse-dot status, shared header/switcher** — dropping Royal Chisel's angular 45° `clip-path` cards and the racing `goldflow` sheen for calm static metallic edges. **Type:** `Outfit` (geometric sans — all UI labels/body) + `Fraunces` (high-contrast serif — brand, big numbers/prices). Deliberately **not navy+gold** (the fintech cliché): white-gold + onyx + jewel money colors. Single committed theme; reduced-motion-guarded.
+  - _Prior (removed): "Royal Chisel" — alabaster marble, clip-path cards + `goldflow` rim, Cinzel/Fraunces/EB Garamond, faceted gem dot._
 - **Paper-first, safety-first.** Bot trades Alpaca paper only; the LIVE profile is LOCKED behind CJ's written opt-in. The "control panel" is a **UI preview** — it never sends orders from the browser.
 - **Vanilla MPA**, real `<a>` tab nav, version-stamped assets (`?v=…`), shared header/tabs, hover prefetch.
 
@@ -29,6 +30,12 @@ Pre-fix ~**13/20**. Gaps mirrored Go's: div/span controls not keyboard-operable,
 - _(empty — drop raw ideas here with full premise.)_
 
 ## Changelog
+- **2026-06-14** — **White Gold re-theme** (impeccable redesign; replaces "Royal Chisel" entirely):
+  - **palette** — cool pearl/platinum surfaces (not cream), onyx ink, white-gold/champagne metallic brand accent, faint guilloché texture; emerald up / garnet down / amber warn. All 8 text tokens re-verified WCAG AA (≥4.5:1) on card + darkest body stop.
+  - **seamless-with-Go** — dropped the angular 45° `clip-path` cards + racing `goldflow` sheen; adopted Go's rounded soft cards, 999px pill chrome, round pulse-dot status, champagne KPI accent rails, semantic z-scale.
+  - **type** — `Cinzel`/`EB Garamond` → `Outfit` (geometric sans, all UI/body) + kept `Fraunces` (serif, brand + numbers/prices). Contrast-axis pairing.
+  - **code** — single-file `styles.css` rewrite (every class preserved so `app.js` is untouched structurally); recolored the 3 hardcoded chart hexes + SPY line + the Bull switcher glyph color in `app.js`; swapped the font `<link>` and bumped stamps to `?v=0614wg` on all 8 pages. Old marble-vein SVG kept in the SHELL but hidden (`.marble svg{display:none}`); texture is now CSS guilloché. `node --check` clean. Verified by serving locally + headless-Chrome screenshots (overview/risk/ticker).
+  - switcher: Bull's glyph color updated to `#bfa765` (Go intentionally keeps its own theme/color — not mirrored).
 - **2026-06-13** — impeccable redo (mirrors Go's pass):
   - **a11y/keyboard** — div/span controls now focusable + Enter/Space-activatable via a `MutationObserver`-backed enhancer; table rows stay real rows (focusable, not `role=button`); added the missing `:focus-visible` ring; `role="dialog"` + focus-trap + restore on the embed overlay; link interceptor respects modifier/middle clicks.
   - **labels** — `aria-label`s on the risk-per-trade slider + read-only badge; decorative glyphs hidden from AT; visually-hidden per-page `<h1>`.

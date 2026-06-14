@@ -1,131 +1,157 @@
-:root{
-    --alab:#f6f2e9;--card:#fbf9f2;--ink:#1a160e;--mut:#6d6452;--dim:#746b55;--line:rgba(120,100,50,.18);
-    --gold:#b8932f;--gold2:#d8b659;--goldlt:#efd98e;--goldd:#7a5f1e;
-    --emer:#1a7a4e;--emerbg:rgba(31,138,90,.12);--ruby:#b3263b;--rubybg:rgba(179,38,59,.12);--amber:#8a6314;
-    --disp:'Cinzel',Georgia,serif;--num:'Fraunces',Georgia,serif;--body:'EB Garamond',Georgia,serif;
-    --clip:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
-    /* Gold card rim — softened palette, swept very slowly by @goldflow for a subtle gem-like sheen (not a racing gleam). */
-    --goldrim:linear-gradient(115deg,#9c7d2e,#cdab48 20%,#b8932f 38%,#e3cd86 50%,#b8932f 62%,#cdab48 80%,#9c7d2e);
+/* ==========================================================================
+   BULL — single theme: WHITE GOLD (private-wealth desk).
+   Cool pearl/platinum surfaces, onyx ink, white-gold (champagne→platinum)
+   metallic as the brand accent, faint guilloché texture. Rounded soft cards,
+   pill chrome and pulse-dot status — seamless with the Go hub. Emerald up /
+   garnet down / amber warn. AA-verified, reduced-motion-guarded.
+   ========================================================================== */
+  :root{
+    /* surfaces — cool pearl + platinum (NOT cream) */
+    --alab:#eef0f4;--card:#f9fafc;--ink:#1a1e25;--ink2:#363c45;--mut:#566069;--dim:#5b656e;
+    --line:rgba(40,46,60,.12);--line2:rgba(40,46,60,.20);
+    /* white-gold metallic ramp (cool champagne ↔ platinum) — decorative; --goldd is the readable ink */
+    --gold:#b59b56;--gold2:#d8c489;--goldlt:#efe2bb;--goldd:#6f5d2c;--plat:#cfd6dd;
+    /* money semantics (AA on both card and body) */
+    --emer:#0c7245;--emerbg:rgba(16,120,74,.12);--ruby:#a8283a;--rubybg:rgba(168,40,58,.11);--amber:#8a6116;
+    --disp:'Outfit',-apple-system,"Segoe UI",sans-serif;--num:'Fraunces',Georgia,serif;--body:'Outfit',-apple-system,"Segoe UI",sans-serif;
+    --r:14px;--rsm:10px;--rxs:7px;
+    /* Static white-gold rim — used as a border-box layer on alert/accent surfaces (no animation). */
+    --goldrim:linear-gradient(135deg,#c9b486,#efe2bb 28%,#b59b56 50%,#e6d6a8 72%,#c9b486);
+    /* semantic z-scale */
+    --z-frame:1;--z-wrap:2;--z-sticky:30;--z-menu:50;--z-bot:60;--z-modal:200;
   }
   *{box-sizing:border-box}html,body{margin:0;padding:0}
-  /* a11y: visible keyboard focus (the console had none), screen-reader-only utility, touch-target floor */
-  a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,th:focus-visible,[role=button]:focus-visible,[tabindex]:focus-visible,.tab:focus-visible,.tk:focus-visible{outline:2px solid var(--goldd);outline-offset:2px}
+  /* a11y: visible keyboard focus, screen-reader-only utility, touch-target floor */
+  a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,th:focus-visible,[role=button]:focus-visible,[tabindex]:focus-visible,.tab:focus-visible,.tk:focus-visible{outline:2px solid var(--goldd);outline-offset:2px;border-radius:6px}
   .sronly{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   .refresh,.embedX,.embedExt,.lnk,.back,.botbtn{min-height:30px;display:inline-flex;align-items:center;justify-content:center}
-  body{color:var(--ink);font:16px/1.5 var(--body);min-height:100vh;overflow-x:hidden;
+  ::selection{background:rgba(216,196,137,.4);color:#1a1e25}
+  *::-webkit-scrollbar{width:8px;height:8px}
+  *::-webkit-scrollbar-thumb{background:rgba(40,46,60,.22);border-radius:8px}
+  *::-webkit-scrollbar-thumb:hover{background:rgba(40,46,60,.36)}
+  *{scrollbar-width:thin;scrollbar-color:rgba(40,46,60,.26) transparent}
+  body{color:var(--ink);font:14px/1.55 var(--body);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
     background:
-      radial-gradient(120% 90% at 12% -5%,rgba(255,255,255,.95),transparent 46%),
-      radial-gradient(130% 110% at 88% 105%,rgba(226,219,200,.5),transparent 52%),
-      linear-gradient(158deg,#fcfbf7 0%,#f5f1e7 52%,#ece5d5 100%) fixed}
+      radial-gradient(62% 50% at 16% -6%,rgba(255,255,255,.92),transparent 56%),
+      radial-gradient(58% 48% at 86% 106%,rgba(207,214,221,.55),transparent 60%),
+      radial-gradient(70% 55% at 50% 48%,rgba(239,226,187,.10),transparent 72%),
+      linear-gradient(160deg,#f1f3f6 0%,#e8ebef 54%,#eef1f4 100%) fixed}
   a{color:inherit}
-  .facets{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.4;
-    background:conic-gradient(from 210deg at 16% 10%,rgba(255,255,255,.6),transparent 22%,rgba(214,204,180,.3) 48%,transparent 72%),conic-gradient(from 40deg at 86% 82%,rgba(255,255,255,.5),transparent 26%,rgba(206,195,168,.28) 58%,transparent 86%);mix-blend-mode:soft-light}
-  /* Veined white-marble layer (procedural SVG, static) — gives the alabaster real depth. */
-  .marble{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.6;mix-blend-mode:multiply}
-  .marble svg{width:100%;height:100%;display:block}
-  /* Gilt frame frill — hairline gold border, white inner liner, soft inner glow + corner diamonds. */
-  .frame{position:fixed;inset:10px;z-index:1;pointer-events:none;border:1px solid rgba(184,147,47,.32);
-    box-shadow:inset 0 0 0 3px rgba(255,255,255,.4),inset 0 0 26px rgba(138,108,34,.06)}
-  .cnr{position:absolute;color:var(--gold);font-size:10px;line-height:1;opacity:.55;text-shadow:0 0 6px rgba(184,147,47,.4)}
-  .cnr.tl{top:-6px;left:-6px}.cnr.tr{top:-6px;right:-6px}.cnr.bl{bottom:-6px;left:-6px}.cnr.br{bottom:-6px;right:-6px}
+  .sech h2,h1,h2,h3{text-wrap:balance}.note,.dimn,.digest{text-wrap:pretty}
+  /* Ambient light: champagne flare top-left, platinum glow bottom-right. */
+  .facets{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.65;
+    background:radial-gradient(58% 48% at 18% 8%,rgba(239,226,187,.34),transparent 62%),radial-gradient(54% 44% at 85% 88%,rgba(207,214,221,.42),transparent 64%)}
+  /* Guilloché — faint engine-turned banknote texture (replaces the old marble veins; the inline SVG is hidden). */
+  .marble{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;mix-blend-mode:multiply;
+    background:
+      repeating-radial-gradient(circle at 16% 14%,rgba(140,135,110,.05) 0 1px,transparent 1px 9px),
+      repeating-radial-gradient(circle at 86% 84%,rgba(110,120,132,.055) 0 1px,transparent 1px 10px),
+      repeating-linear-gradient(58deg,rgba(120,125,135,.025) 0 1px,transparent 1px 13px)}
+  .marble svg{display:none}
+  /* Platinum hairline frame — Bull's quiet signature (a framed certificate), with champagne corner diamonds. */
+  .frame{position:fixed;inset:10px;z-index:var(--z-frame);pointer-events:none;border:1px solid rgba(176,160,110,.28);border-radius:18px;
+    box-shadow:inset 0 0 0 3px rgba(255,255,255,.42),inset 0 0 26px rgba(120,110,70,.05)}
+  .cnr{position:absolute;color:var(--gold);font-size:9px;line-height:1;opacity:.6}
+  .cnr.tl{top:-5px;left:-5px}.cnr.tr{top:-5px;right:-5px}.cnr.bl{bottom:-5px;left:-5px}.cnr.br{bottom:-5px;right:-5px}
   @media(max-width:640px){.frame{inset:6px}}
-  .wrap{position:relative;z-index:2;max-width:1260px;margin:0 auto;padding:28px 26px 46px}
+  .wrap{position:relative;z-index:var(--z-wrap);max-width:1260px;margin:0 auto;padding:28px 26px 46px}
+  /* Header — airy gallery bar with a champagne→platinum gilt rule. */
   header{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:20px;
-    border-bottom:2px solid;border-image:linear-gradient(90deg,transparent,rgba(184,147,47,.55) 16%,rgba(216,182,89,.85) 50%,rgba(184,147,47,.55) 84%,transparent) 1;padding-bottom:16px}
-  .brand{display:flex;align-items:center;gap:14px}
-  .mark{font-size:22px;color:var(--gold)}
+    border-bottom:1.5px solid;border-image:linear-gradient(90deg,transparent,var(--gold2) 28%,var(--plat) 50%,var(--gold2) 72%,transparent) 1;padding-bottom:16px}
+  .brand{display:flex;align-items:center;gap:13px}
+  .mark{font-size:20px;color:var(--gold);text-shadow:0 1px 1px rgba(255,255,255,.6)}
   .switch{position:relative}
-  .title{font-family:var(--disp);font-size:26px;font-weight:700;letter-spacing:3px;text-transform:uppercase;cursor:pointer}
-  .title .caret{font-size:13px;color:var(--mut);letter-spacing:0}
-  .subtitle{font-size:13px;color:var(--mut);letter-spacing:.5px}
-  .switchmenu{position:absolute;top:42px;left:0;width:230px;background:var(--card);border:1px solid var(--gold);overflow:hidden;z-index:50;display:none;clip-path:var(--clip);box-shadow:0 18px 40px rgba(80,60,20,.25)}
+  .title{font-family:var(--num);font-size:27px;font-weight:600;letter-spacing:-.01em;cursor:pointer;line-height:1.05}
+  .title .caret{font-size:13px;color:var(--mut);letter-spacing:0;font-family:var(--disp)}
+  .subtitle{font-size:12px;color:var(--mut);letter-spacing:.2px;margin-top:1px}
+  .switchmenu{position:absolute;top:46px;left:0;width:236px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;z-index:var(--z-menu);display:none;box-shadow:0 18px 40px rgba(40,46,60,.22)}
   .switchmenu.open{display:block}
   .switchmenu a{display:flex;align-items:center;gap:11px;padding:12px 14px;text-decoration:none;color:var(--ink);border-bottom:1px solid var(--line);cursor:pointer}
-  .switchmenu a:last-child{border-bottom:none}.switchmenu a:hover{background:rgba(184,147,47,.1)}
-  .switchmenu a.active{background:rgba(184,147,47,.14)}.sm-mark{font-size:18px}.switchmenu b{font-family:var(--disp);letter-spacing:1px;font-size:13px}
-  .hmeta{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
-  .pill{font-family:var(--disp);font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;padding:6px 12px;color:var(--goldd);
-    background:var(--card);border:1px solid var(--gold);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
-  .pill.warn{color:var(--amber);border-color:var(--amber)}
-  .pill.paper{color:var(--emer);border-color:var(--emer)}
-  .live{display:inline-flex;align-items:center;gap:8px;font-family:var(--disp);font-size:11px;letter-spacing:1.2px;color:var(--emer);text-transform:uppercase}
-  .gem{width:13px;height:13px;background:linear-gradient(135deg,#5fe0b0,#1f8a5a 55%,#0c5e3c);clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);box-shadow:0 0 0 1px rgba(31,138,90,.3);animation:gempulse 4.6s ease-in-out infinite}
-  @keyframes gempulse{0%,100%{filter:brightness(1);opacity:.9}50%{filter:brightness(1.18);opacity:1}}
-  .refresh{cursor:pointer;font-family:var(--disp);font-size:10.5px;letter-spacing:1px;text-transform:uppercase;padding:6px 12px;color:var(--goldd);background:var(--card);border:1px solid var(--gold);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);user-select:none}
-  .refresh:hover{background:rgba(184,147,47,.12)}.refresh.spin{opacity:.55}
+  .switchmenu a:last-child{border-bottom:none}.switchmenu a:hover{background:rgba(176,160,110,.12)}
+  .switchmenu a.active{background:rgba(176,160,110,.16)}.sm-mark{font-size:18px}.switchmenu b{font-family:var(--disp);font-weight:600;letter-spacing:.2px;font-size:13px}
+  .hmeta{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pill{font-family:var(--disp);font-size:10.5px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;padding:5px 11px;border-radius:999px;color:var(--goldd);
+    background:var(--card);border:1px solid var(--line2)}
+  .pill.warn{color:var(--amber);border-color:rgba(138,97,22,.45);background:rgba(138,97,22,.07)}
+  .pill.paper{color:var(--emer);border-color:rgba(12,114,69,.4);background:rgba(12,114,69,.07)}
+  .live{display:inline-flex;align-items:center;gap:8px;font-family:var(--disp);font-size:11px;font-weight:600;letter-spacing:.7px;color:var(--emer);text-transform:uppercase}
+  /* Status — round pulse dot (seamless with Go), emerald gem core. */
+  .gem{width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#5fe0b0,#0c7245 72%);box-shadow:0 0 0 1px rgba(12,114,69,.3);animation:gempulse 2.4s ease-in-out infinite}
+  @keyframes gempulse{0%{box-shadow:0 0 0 0 rgba(12,114,69,.45)}70%{box-shadow:0 0 0 7px rgba(12,114,69,0)}100%{box-shadow:0 0 0 0 rgba(12,114,69,0)}}
+  .refresh{cursor:pointer;font-family:var(--disp);font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;padding:5px 12px;border-radius:999px;color:var(--goldd);background:var(--card);border:1px solid var(--line2);user-select:none}
+  .refresh:hover{background:rgba(176,160,110,.12);border-color:var(--gold)}.refresh.spin{opacity:.55}
   .updated{font-family:var(--body);font-size:11px;color:var(--dim);letter-spacing:0;text-transform:none}
-  nav.tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
-  .tab{font-family:var(--disp);font-size:12px;letter-spacing:1px;text-transform:uppercase;padding:9px 16px;color:var(--mut);
-    background:var(--card);border:1px solid var(--line);cursor:pointer;transition:none;text-decoration:none;display:inline-block;
-    clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+  nav.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+  .tab{font-family:var(--disp);font-size:12px;font-weight:600;letter-spacing:.3px;padding:8px 15px;border-radius:999px;color:var(--mut);
+    background:var(--card);border:1px solid var(--line2);cursor:pointer;transition:color .15s,border-color .15s,background .15s;text-decoration:none;display:inline-block}
   .tab:hover{color:var(--ink);border-color:var(--gold)}
-  .tab.active{color:var(--goldd);border-color:var(--gold);background:linear-gradient(180deg,#fffdf6,#f3ecda)}
-  .card{position:relative;padding:17px 19px;margin-bottom:16px;border:1.6px solid transparent;
-    background:linear-gradient(180deg,#fffdf8,#f7f3e9) padding-box,var(--goldrim) border-box;
-    background-size:auto,250% 100%;animation:goldflow 60s linear infinite;
-    clip-path:var(--clip);box-shadow:inset 0 1px 0 rgba(255,255,255,.7);transition:transform .07s linear}
-  /* Slow, subtle sheen — ~5.5x slower and gentler than the old racing gleam. The gold rim is each card's
-     border-box background layer (cream is the padding-box layer); animating background-position sweeps it. */
-  @keyframes goldflow{0%{background-position:0% 0}100%{background-position:250% 0}}
-  .clk{cursor:pointer}.clk:hover{transform:translateY(-2px)}
+  .tab.active{color:var(--goldd);border-color:var(--gold);background:linear-gradient(180deg,#fffdf6,var(--goldlt))}
+  /* Cards — rounded, hairline border, soft elevation + inset highlight (no racing sheen). */
+  .card{position:relative;padding:16px 18px;margin-bottom:16px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r);
+    box-shadow:0 1px 2px rgba(40,46,60,.05),0 10px 26px rgba(40,46,60,.05),inset 0 1px 0 rgba(255,255,255,.7);transition:transform .16s,box-shadow .16s,border-color .16s}
+  .clk{cursor:pointer}.clk:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(40,46,60,.12),inset 0 1px 0 rgba(255,255,255,.7);border-color:var(--gold)}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
   @media(max-width:780px){.kpis{grid-template-columns:repeat(2,1fr)}}
-  .kpi{position:relative;padding:16px 18px;border:1.6px solid transparent;
-    background:linear-gradient(180deg,#fffdf8,#f6f2e7) padding-box,var(--goldrim) border-box;
-    background-size:auto,250% 100%;animation:goldflow 60s linear infinite;
-    clip-path:var(--clip);box-shadow:inset 0 1px 0 rgba(255,255,255,.7)}
-  .kpi .lab{font-family:var(--disp);font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:1.2px}
-  .kpi .val{font-family:var(--num);font-size:28px;font-weight:600;margin-top:6px;line-height:1}
-  .kpi .hint{position:absolute;top:15px;right:18px;font-size:11px;color:var(--dim)}
+  .kpi{position:relative;padding:15px 17px;background:var(--card);border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;
+    box-shadow:0 1px 2px rgba(40,46,60,.05),0 8px 22px rgba(40,46,60,.045),inset 0 1px 0 rgba(255,255,255,.7)}
+  .kpi::before{content:"";position:absolute;left:0;top:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--gold2) 30%,var(--plat) 50%,var(--gold2) 70%,transparent);opacity:.85}
+  .kpi .lab{font-family:var(--disp);font-size:10px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.7px}
+  .kpi .val{font-family:var(--num);font-size:28px;font-weight:600;margin-top:6px;line-height:1;letter-spacing:-.01em}
+  .kpi .hint{position:absolute;top:14px;right:17px;font-size:11px;color:var(--dim)}
   .up{color:var(--emer)}.dn{color:var(--ruby)}.warnc{color:var(--amber)}.mut{color:var(--mut)}.dim{color:var(--dim)}.small{font-size:13px}
   .grid2{display:grid;grid-template-columns:1.05fr 1fr;gap:16px}@media(max-width:880px){.grid2{grid-template-columns:1fr}}
   .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}@media(max-width:880px){.grid3{grid-template-columns:1fr}}
-  .ctitle{display:flex;justify-content:space-between;align-items:center;font-family:var(--disp);font-size:12.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--goldd);margin-bottom:12px}
-  .ctitle .hint{font-family:var(--body);font-size:12px;letter-spacing:0;text-transform:none;color:var(--dim)}
-  .leg{display:flex;gap:8px;align-items:center;font-family:var(--body);font-size:12px;letter-spacing:0;text-transform:none;color:var(--mut)}.leg .d{width:14px;height:3px;display:inline-block}.d.blue{background:var(--gold)}.d.gray{background:#b0a890}
-  table{width:100%;border-collapse:collapse;font-size:14px}
-  th{font-family:var(--disp);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--goldd);text-align:right;padding:8px 10px;border-bottom:1.5px solid var(--gold);cursor:pointer;user-select:none}
+  .ctitle{display:flex;justify-content:space-between;align-items:center;font-family:var(--disp);font-size:11.5px;font-weight:600;letter-spacing:.7px;text-transform:uppercase;color:var(--goldd);margin-bottom:12px}
+  .ctitle .hint{font-family:var(--body);font-size:12px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--dim)}
+  .leg{display:flex;gap:8px;align-items:center;font-family:var(--body);font-size:12px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--mut)}.leg .d{width:14px;height:3px;display:inline-block;border-radius:2px}.d.blue{background:var(--gold)}.d.gray{background:#9aa3ad}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{font-family:var(--disp);font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--goldd);text-align:right;padding:8px 10px;border-bottom:1.5px solid var(--gold);cursor:pointer;user-select:none}
   th:first-child,td:first-child{text-align:left}td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line)}
-  tbody tr{transition:none;cursor:pointer}tbody tr:hover{background:rgba(184,147,47,.08)}
-  .tk{cursor:pointer;font-weight:600}.tk b{border-bottom:1px solid rgba(184,147,47,.5)}.tk:hover{color:var(--goldd)}
-  .tag{font-family:var(--disp);font-size:9.5px;letter-spacing:.6px;color:var(--goldd);background:rgba(184,147,47,.14);padding:2px 7px;margin-left:6px;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+  tbody tr{transition:background .12s;cursor:pointer}tbody tr:hover{background:rgba(176,160,110,.09)}
+  .tk{cursor:pointer;font-weight:600}.tk b{border-bottom:1px solid rgba(176,160,110,.55)}.tk:hover{color:var(--goldd)}
+  .tag{font-family:var(--disp);font-size:9.5px;font-weight:600;letter-spacing:.3px;color:var(--goldd);background:rgba(176,160,110,.16);padding:2px 8px;border-radius:999px;margin-left:6px}
   .tag.buy{color:var(--emer);background:var(--emerbg)}.tag.sell{color:var(--ruby);background:var(--rubybg)}
-  .score{color:var(--goldd);font-weight:600}
-  .back{display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--goldd);cursor:pointer;margin-bottom:14px}
+  .score{color:var(--goldd);font-weight:600;font-family:var(--num)}
+  .back{display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--goldd);cursor:pointer;margin-bottom:14px}
+  .back:hover{color:var(--ink)}
   .tkhead{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:12px}
-  .tkprice{font-family:var(--num);font-size:32px;font-weight:600}
+  .tkprice{font-family:var(--num);font-size:32px;font-weight:600;letter-spacing:-.01em}
   .tkmeta{display:flex;gap:22px;flex-wrap:wrap;margin:10px 0}.tkmeta .b{font-size:13px;color:var(--mut)}.tkmeta .b b{color:var(--ink);font-weight:600;font-size:16px;display:block;font-family:var(--num)}
-  .lnk{font-family:var(--disp);font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--goldd);cursor:pointer}
+  .lnk{font-family:var(--disp);font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--goldd);cursor:pointer}.lnk:hover{color:var(--ink)}
   .barrow{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:13px}
-  .barrow .nm{width:64px;font-weight:600}.bartrack{flex:1;height:14px;background:rgba(184,147,47,.12);position:relative;clip-path:polygon(4px 0,100% 0,100% 100%,0 100%)}
-  .barfill{height:100%;background:linear-gradient(90deg,var(--gold2),var(--gold))}
-  .meter{height:12px;background:rgba(184,147,47,.14);position:relative;margin:8px 0;clip-path:polygon(5px 0,100% 0,100% 100%,0 100%)}
-  .meterfill{height:100%}.meter .lim{position:absolute;top:-3px;width:2px;height:18px;background:var(--ink)}
+  .barrow .nm{width:64px;font-weight:600}.bartrack{flex:1;height:13px;background:rgba(40,46,60,.08);position:relative;border-radius:999px;overflow:hidden}
+  .barfill{height:100%;background:linear-gradient(90deg,var(--gold2),var(--gold));border-radius:999px}
+  .meter{height:11px;background:rgba(40,46,60,.08);position:relative;margin:8px 0;border-radius:999px;overflow:hidden}
+  .meterfill{height:100%;border-radius:999px}.meter .lim{position:absolute;top:-3px;width:2px;height:17px;background:var(--ink);border-radius:2px}
   .ctrl{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}@media(max-width:780px){.ctrl{grid-template-columns:1fr}}
-  .ctrlbtn{font-family:var(--disp);font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:11px;text-align:center;background:var(--card);border:1px solid var(--gold);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);cursor:pointer;color:var(--goldd)}
-  .ctrlbtn:hover{background:rgba(184,147,47,.12)}.ctrlbtn.run{color:var(--emer);border-color:var(--emer)}.ctrlbtn.pause{color:var(--amber);border-color:var(--amber)}.ctrlbtn.kill{color:var(--ruby);border-color:var(--ruby)}
+  .ctrlbtn{font-family:var(--disp);font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:11px;text-align:center;background:var(--card);border:1px solid var(--line2);border-radius:var(--rsm);cursor:pointer;color:var(--goldd);transition:background .14s,border-color .14s}
+  .ctrlbtn:hover{background:rgba(176,160,110,.12);border-color:var(--gold)}
+  .ctrlbtn.run{color:var(--emer);border-color:rgba(12,114,69,.4)}.ctrlbtn.run:hover{background:var(--emerbg)}
+  .ctrlbtn.pause{color:var(--amber);border-color:rgba(138,97,22,.4)}.ctrlbtn.pause:hover{background:rgba(138,97,22,.08)}
+  .ctrlbtn.kill{color:var(--ruby);border-color:rgba(168,40,58,.4)}.ctrlbtn.kill:hover{background:var(--rubybg)}
   .slider{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:12px;color:var(--mut)}
   .slider input{accent-color:var(--gold)}
-  .note{font-size:14px;color:var(--ink);line-height:1.55}.dimn{font-size:13px;color:var(--mut);line-height:1.5}
-  .pill2{font-family:var(--disp);font-size:9px;letter-spacing:.6px;text-transform:uppercase;padding:2px 7px;clip-path:polygon(4px 0,100% 0,100% 100%,0 100%);background:rgba(184,147,47,.14);color:var(--goldd)}
-  .pill2.green{background:var(--emerbg);color:var(--emer)}.pill2.red{background:var(--rubybg);color:var(--ruby)}.pill2.amber{background:rgba(176,125,24,.14);color:var(--amber)}
+  .note{font-size:13.5px;color:var(--ink2);line-height:1.55}.dimn{font-size:13px;color:var(--mut);line-height:1.5}
+  .pill2{font-family:var(--disp);font-size:9px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:rgba(176,160,110,.16);color:var(--goldd)}
+  .pill2.green{background:var(--emerbg);color:var(--emer)}.pill2.red{background:var(--rubybg);color:var(--ruby)}.pill2.amber{background:rgba(138,97,22,.12);color:var(--amber)}
   .grade{font-family:var(--num);font-weight:600;font-size:18px}
-  .heart{display:flex;gap:3px;align-items:flex-end;height:24px}.heart span{width:5px;background:var(--emer);opacity:.85}
+  .heart{display:flex;gap:3px;align-items:flex-end;height:24px}.heart span{width:5px;background:var(--emer);opacity:.85;border-radius:2px 2px 0 0}
   ul.rules{margin:4px 0 0;padding-left:18px}ul.rules li{margin:4px 0;font-size:13.5px}
-  .botbtn{position:fixed;right:22px;bottom:22px;z-index:60;width:56px;height:56px;background:var(--card);border:1px solid var(--gold);color:var(--gold);font-size:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);box-shadow:0 8px 22px rgba(80,60,20,.28)}
+  /* Floating monitor token — round, like Go's bot button. */
+  .botbtn{position:fixed;right:22px;bottom:22px;z-index:var(--z-bot);width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#fbfcfd,#e7dcb8 72%);border:1px solid var(--gold);color:var(--goldd);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 22px rgba(40,46,60,.26)}
   /* In-site embed overlay (external links open here, staying on Bull) */
-  .embedModal{display:none;position:fixed;inset:0;z-index:200}
+  .embedModal{display:none;position:fixed;inset:0;z-index:var(--z-modal)}
   .embedModal.open{display:block}
-  .embedBack{position:absolute;inset:0;background:rgba(40,30,10,.42);backdrop-filter:blur(3px)}
-  .embedWin{position:absolute;inset:4% 6%;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--gold);overflow:hidden;clip-path:var(--clip);box-shadow:0 30px 80px rgba(80,60,20,.4)}
+  .embedBack{position:absolute;inset:0;background:rgba(28,32,44,.42);backdrop-filter:blur(3px)}
+  .embedWin{position:absolute;inset:4% 6%;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;box-shadow:0 30px 80px rgba(40,46,60,.4)}
   .embedBar{display:flex;align-items:center;gap:12px;padding:10px 15px;border-bottom:1px solid var(--line)}
-  .embedTitle{font-family:var(--disp);font-size:12px;letter-spacing:.6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:36%}
+  .embedTitle{font-family:var(--disp);font-size:12px;font-weight:600;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:36%}
   .embedUrl{font-size:12px;color:var(--dim)}
-  .embedExt{margin-left:auto;font-family:var(--disp);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--goldd);border:1px solid var(--gold);padding:5px 11px;text-decoration:none;clip-path:polygon(6px 0,100% 0,100% 100%,0 100%)}
-  .embedExt:hover{background:rgba(184,147,47,.12)}
+  .embedExt{margin-left:auto;font-family:var(--disp);font-size:10px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--goldd);border:1px solid var(--line2);border-radius:999px;padding:5px 12px;text-decoration:none}
+  .embedExt:hover{background:rgba(176,160,110,.12);border-color:var(--gold)}
   .embedX{cursor:pointer;color:var(--mut);font-size:18px;padding:0 4px}.embedX:hover{color:var(--ink)}
   .embedFrame{flex:1;width:100%;border:0;background:#fff}
   .embedNote{font-size:12px;color:var(--dim);padding:6px 15px;border-top:1px solid var(--line)}
   @media(max-width:760px){.embedWin{inset:2% 3%}.embedTitle{max-width:28%}}
-  /* Accessibility: honor reduced-motion — freeze the sheen, gem pulse, and hover transitions. */
+  /* Accessibility: honor reduced-motion — freeze the gem pulse and hover transitions. */
   @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
