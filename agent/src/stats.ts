@@ -4,6 +4,7 @@
 //   (b) Trade-level stats: win rate, profit factor, expectancy, avg win/loss, avg R — reconciled from the
 //       proposal ledger + closed orders. Latent until Bill actually trades (returns zeros, correct shape).
 import { readLedger, type ProposalRecord } from "./ledger.js";
+import { attribution, type Attribution } from "./attribution.js";
 import { getPortfolioHistory, getClosedOrders } from "./alpaca.js";
 import { withTimeout, DEFAULT_TIMEOUT_MS } from "./http-utils.js";
 
@@ -34,6 +35,7 @@ export interface Measurement {
   monthPnlPct: number;
   risk: { drawdown: number; maxDD: number; peakEquity: number };
   stats: { winRate: number; trades: number; wins: number; losses: number; avgWin: number; avgLoss: number; profitFactor: number; sharpe: number; sortino: number; calmar: number; expectancy: number; avgR: number };
+  attribution: Attribution;
   proposals: { total: number; proposed: number; rejected: number; recent: ProposalRecord[] };
 }
 
@@ -101,6 +103,7 @@ export async function measure(equityNow: number): Promise<Measurement> {
     monthPnlPct,
     risk: { drawdown, maxDD: r1(maxDD), peakEquity: r2(peak) },
     stats: { winRate, trades, wins: wins.length, losses: losses.length, avgWin, avgLoss, profitFactor, sharpe, sortino, calmar, expectancy, avgR },
+    attribution: attribution(closed),
     proposals: { total: ledger.length, proposed: proposedAll.length, rejected: rejected.length, recent: ledger.slice(-10).reverse() },
   };
 }

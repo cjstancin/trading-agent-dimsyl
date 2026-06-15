@@ -102,6 +102,7 @@ const next = {
   monthPnlPct: m.monthPnlPct,
   vsSpyPct: m.vsSpyPct,
   stats: m.stats,
+  attribution: m.attribution,
   equityCurve: m.equityCurve,
   spyCurve: m.spyCurve,
   readiness: ready,
