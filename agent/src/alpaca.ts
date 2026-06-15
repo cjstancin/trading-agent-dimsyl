@@ -146,6 +146,26 @@ export async function latestPrice(symbol: string): Promise<number | null> {
   } catch { return null; }
 }
 
+export interface AlpacaBar { t: string; o: number; h: number; l: number; c: number; v: number; }
+
+// Read-only price bars over a hold window from Alpaca market data (data host, NOT the trading host) —
+// feeds the closed-trade MAE/MFE excursion math. feed=iex (free paper tier), adjustment=raw, sorted
+// ascending. Bounded by withTimeout; NEVER places an order; returns [] on any failure so callers (the
+// journal) degrade gracefully. start/end are RFC3339 or YYYY-MM-DD; Alpaca returns bars timestamped in
+// [start, end). Mirrors latestPrice — a pure read on the data API, no money rail.
+export async function getBars(symbol: string, start: string, end: string, timeframe = "1Day", limit = 1000): Promise<AlpacaBar[]> {
+  try {
+    const qs = new URLSearchParams({ timeframe, start, end, feed: "iex", adjustment: "raw", sort: "asc", limit: String(limit) });
+    const r = await withTimeout((signal) => fetch(
+      `https://data.alpaca.markets/v2/stocks/${encodeURIComponent(symbol)}/bars?${qs.toString()}`,
+      { headers: authHeaders(), signal },
+    ), ALPACA_TIMEOUT_MS);
+    if (!r.ok) return [];
+    const j = (await r.json()) as { bars?: AlpacaBar[] };
+    return Array.isArray(j?.bars) ? j.bars : [];
+  } catch { return []; }
+}
+
 export interface PaperSnapshot {
   connected: boolean;
   account?: unknown;

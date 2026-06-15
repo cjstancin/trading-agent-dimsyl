@@ -7,7 +7,12 @@ import { readLedger, updateLedger } from "./ledger.js";
 const num = (v: unknown): number => { const x = typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN; return Number.isFinite(x) ? x : 0; };
 const round = (x: number, d = 2) => Math.round(x * 10 ** d) / 10 ** d;
 
-export interface ClosedTrade { symbol: string; qty: number; entry: number; exit: number; pnlUsd: number; pnlPct: number; rMultiple: number; openedAt: string; closedAt: string; }
+export interface ClosedTrade {
+  symbol: string; qty: number; entry: number; exit: number; pnlUsd: number; pnlPct: number; rMultiple: number; openedAt: string; closedAt: string;
+  // MAE/MFE over the hold window (Bull backlog #12) — per-share $ + % of entry. Attached at journal time
+  // from fetched bars; absent when bars were unavailable (offline/no-data) so the journal never blocks.
+  maePct?: number; maeUsd?: number; mfePct?: number; mfeUsd?: number;
+}
 
 export async function reconcile(): Promise<ClosedTrade[]> {
   let fills: Record<string, unknown>[] = [];
