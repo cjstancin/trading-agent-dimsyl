@@ -18,9 +18,9 @@ check("FAIL: buy without stop rejected", validateOrders([noStop], book)[0].reaso
 const penny: OrderRequest = { symbol: "XYZ", side: "buy", qty: 100, type: "market", est_price: 1.2, trail_percent: 18 };
 check("FAIL: sub-$2 rejected", validateOrders([penny], book)[0].reasons.some(r => /quality floor/.test(r)));
 
-// FAIL: exceeding max open (book already 2 open; 5 new buys → 7 > 6)
-const five = Array.from({ length: 5 }, (_, i): OrderRequest => ({ symbol: `AA${i}`, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 }));
-check("FAIL: max-open exceeded on the 5th", validateOrders(five, book).some(v => v.reasons.some(r => /max .* open/.test(r))));
+// FAIL: exceeding max open. AGGRESSIVE_PAPER caps at 8; book already has 2 open, so 7 new buys → 9 > 8.
+const overMax = Array.from({ length: 7 }, (_, i): OrderRequest => ({ symbol: `AA${i}`, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 }));
+check("FAIL: max-open exceeded once projected open passes the cap", validateOrders(overMax, book).some(v => v.reasons.some(r => /max .* open/.test(r))));
 
 // NULL: empty proposal → empty result, no throw.
 check("NULL: empty array → []", JSON.stringify(validateOrders([], book)) === "[]");

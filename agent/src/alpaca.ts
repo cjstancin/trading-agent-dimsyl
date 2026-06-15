@@ -47,6 +47,15 @@ export class DuplicateClientOrderIdError extends Error {
   }
 }
 
+/** Classifier: does this Alpaca POST response mean the client_order_id was already used?
+ *  Alpaca answers a re-used id (within 24h) with HTTP 422 + a body containing "duplicate
+ *  client_order_id" — i.e. a PRIOR placement of THIS request already landed. Pure (no I/O) so the
+ *  idempotency guard can be unit-tested without a live order. Specific by design: other 422s (e.g.
+ *  insufficient buying power) are NOT duplicates and must still surface as errors. */
+export function isDuplicateClientOrderIdResponse(status: number, bodyText: string): boolean {
+  return status === 422 && /duplicate client_order_id/i.test(bodyText);
+}
+
 async function post(path: string, body: unknown): Promise<unknown> {
   const res = await withTimeout((signal) => fetch(BASE + path, {
     method: "POST",
@@ -59,7 +68,7 @@ async function post(path: string, body: unknown): Promise<unknown> {
     // Idempotency win: if Alpaca rejects because the client_order_id already exists, that means a
     // PRIOR placement of THIS request already landed. Don't fail — the desired effect is already in
     // place. Caller catches this sentinel + treats it as success.
-    if (res.status === 422 && /duplicate client_order_id/i.test(t)) {
+    if (isDuplicateClientOrderIdResponse(res.status, t)) {
       const coid = typeof body === "object" && body && "client_order_id" in body ? String((body as any).client_order_id) : "";
       throw new DuplicateClientOrderIdError(coid, t.slice(0, 200));
     }
