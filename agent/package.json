@@ -16,6 +16,7 @@
     "control": "tsx src/control-server.ts",
     "ask": "tsx src/agent-cli.ts",
     "test:guardrails": "tsx src/test-guardrails.ts",
+    "test:market-calendar": "tsx src/test-market-calendar.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": { "node": ">=20" },

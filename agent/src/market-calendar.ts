@@ -48,7 +48,8 @@ const NYSE_FULL_CLOSE_HOLIDAYS: ReadonlySet<string> = new Set([
   "2026-04-03", // Good Friday
   "2026-05-25", // Memorial Day
   "2026-06-19", // Juneteenth
-  "2026-07-03", // Independence Day observed (Jul 4 is Saturday)
+  // NOTE: 2026-07-03 is NOT a full close — per the NYSE 2026 calendar it is a 1pm EARLY close
+  // (Jul 4 is a Saturday). It lives in NYSE_HALF_DAY_HOLIDAYS below. (Corrected from c63ee1d.)
   "2026-09-07", // Labor Day
   "2026-11-26", // Thanksgiving
   "2026-12-25", // Christmas
@@ -65,9 +66,34 @@ const NYSE_FULL_CLOSE_HOLIDAYS: ReadonlySet<string> = new Set([
   "2027-12-24", // Christmas observed (Dec 25 is Saturday)
 ]);
 
+// NYSE early-close (1:00pm ET) half-days. Source: NYSE/ICE official 2026–2028 calendar. These ARE
+// trading days — Bill still runs — but the session ends at 13:00 ET instead of 16:00. So the mid slot
+// (12:30 ET) is the LAST safe trade window, and execute must not place orders after 13:00 ET (Alpaca
+// rejects them once the market is closed). Review yearly.
+const NYSE_HALF_DAY_HOLIDAYS: ReadonlySet<string> = new Set([
+  // 2026
+  "2026-07-03", // Independence Day observed early close (Jul 4 is a Saturday)
+  "2026-11-27", // Day after Thanksgiving (Black Friday)
+  "2026-12-24", // Christmas Eve
+  // 2027
+  "2027-11-26", // Day after Thanksgiving (Black Friday)
+]);
+
+// ET wall-clock close of a half-day session: 13:00 ET.
+const HALF_DAY_CLOSE_MINUTES = 13 * 60;
+
 /** YYYY-MM-DD in ET for the given date (defaults to now). */
 function dateKeyET(date: Date = new Date()): string {
   return date.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+/** Minutes since ET midnight for the given date (defaults to now). 09:30 ET → 570. */
+function etMinutesOfDay(date: Date = new Date()): number {
+  const hhmm = date.toLocaleTimeString("en-US", {
+    timeZone: "America/New_York", hourCycle: "h23", hour: "2-digit", minute: "2-digit",
+  });
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
 }
 
 function dayOfWeekET(date: Date = new Date()): number {
@@ -85,11 +111,22 @@ export function isKnownNyseHoliday(date: Date = new Date()): boolean {
   return NYSE_FULL_CLOSE_HOLIDAYS.has(dateKeyET(date));
 }
 
+/** True if the given date (defaults to now) is a NYSE 1pm early-close half-day. */
+export function isHalfDayET(date: Date = new Date()): boolean {
+  return NYSE_HALF_DAY_HOLIDAYS.has(dateKeyET(date));
+}
+
+/** True if the ET wall-clock time is at/after the half-day close (13:00 ET). Time-of-day only. */
+export function isPastHalfDayCloseET(date: Date = new Date()): boolean {
+  return etMinutesOfDay(date) >= HALF_DAY_CLOSE_MINUTES;
+}
+
 export interface MarketDayCheck {
   open: boolean;
   reason: string;
   via: "alpaca" | "fallback";
   date: string; // YYYY-MM-DD in ET
+  halfDay: boolean; // true on NYSE 1pm early-close days (still a trading day)
 }
 
 /**
@@ -99,6 +136,9 @@ export interface MarketDayCheck {
  * — the trading day itself is still valid).
  */
 export async function isMarketDayToday(): Promise<MarketDayCheck> {
+  // halfDay comes from the static early-close calendar regardless of source — Alpaca's clock reports a
+  // trading day but doesn't flag the 1pm close in a single field we rely on, so we read it locally.
+  const halfDay = isHalfDayET();
   const clock = await getClock();
   if (clock != null) {
     const today = dateKeyET(new Date(clock.timestamp));
@@ -112,11 +152,11 @@ export async function isMarketDayToday(): Promise<MarketDayCheck> {
     const reason = isTradingDay
       ? clock.is_open ? "Alpaca clock: market OPEN now" : `Alpaca clock: trading day (opens ${clock.next_open})`
       : `Alpaca clock: closed all day (next open ${clock.next_open})`;
-    return { open: isTradingDay, reason, via: "alpaca", date: today };
+    return { open: isTradingDay, reason, via: "alpaca", date: today, halfDay };
   }
   // Fallback — Alpaca unreachable. Use the local heuristic.
   const today = dateKeyET();
-  if (isWeekendET()) return { open: false, reason: "weekend (fallback)", via: "fallback", date: today };
-  if (isKnownNyseHoliday()) return { open: false, reason: "NYSE full-close holiday (offline calendar)", via: "fallback", date: today };
-  return { open: true, reason: "weekday, not a known holiday (fallback)", via: "fallback", date: today };
+  if (isWeekendET()) return { open: false, reason: "weekend (fallback)", via: "fallback", date: today, halfDay };
+  if (isKnownNyseHoliday()) return { open: false, reason: "NYSE full-close holiday (offline calendar)", via: "fallback", date: today, halfDay };
+  return { open: true, reason: "weekday, not a known holiday (fallback)", via: "fallback", date: today, halfDay };
 }

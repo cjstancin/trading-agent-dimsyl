@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
 import { paperSnapshot, getActivities, getClosedOrders, getPortfolioHistory } from "./alpaca.js";
 import { getMode } from "./mode.js";
-import { isMarketDayToday } from "./market-calendar.js";
+import { isMarketDayToday, isPastHalfDayCloseET } from "./market-calendar.js";
 
 if (getMode() === "off") {
   console.log(JSON.stringify({ ok: true, skipped: true, reason: "mode=off" }));
@@ -21,6 +21,12 @@ if (getMode() === "off") {
   const marketCheck = await isMarketDayToday();
   if (!marketCheck.open) {
     console.log(JSON.stringify({ ok: true, skipped: true, reason: marketCheck.reason, via: marketCheck.via, date: marketCheck.date }));
+    process.exit(0);
+  }
+  // Half-day safety: the close-of-day wrap must not fire before the 13:00 ET close on a half-day.
+  // bill-close.timer fires at 16:00 ET — well after — so this only guards a manual/early invocation.
+  if (marketCheck.halfDay && !isPastHalfDayCloseET()) {
+    console.log(JSON.stringify({ ok: true, skipped: true, reason: "half-day not yet closed (before 13:00 ET)", date: marketCheck.date }));
     process.exit(0);
   }
 }
