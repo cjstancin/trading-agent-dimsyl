@@ -135,21 +135,27 @@ if (mode === "gated" || !autoExecAllowed()) {
   process.exit(0);
 }
 
-// auto + opt-in → PLACE paper orders.
-const results: Array<{ symbol: string; ok: boolean; error?: string }> = [];
+// auto + opt-in → PLACE paper orders. placePaperOrder waits for the buy to fill before placing the
+// protective trailing stop (Alpaca rejects a sell while the matching buy is still open). If the buy
+// fills but the stop is skipped (timeout / non-filled terminal status), we surface stopSkippedReason
+// in the Discord wrap so CJ sees the unprotected position immediately.
+const results: Array<{ symbol: string; ok: boolean; error?: string; stopSkippedReason?: string }> = [];
 for (const o of valid) {
   try {
-    await placePaperOrder(o);
-    results.push({ symbol: o.symbol, ok: true });
-    appendFileSync(TRADELOG, `- ${new Date().toISOString()} PLACED ${o.side} ${o.qty} ${o.symbol} @ ${o.type} stop ${o.trail_percent}% — ${o.thesis ?? ""}\n`);
+    const r = await placePaperOrder(o);
+    results.push({ symbol: o.symbol, ok: true, stopSkippedReason: r.stopSkippedReason });
+    const stopNote = r.stopSkippedReason ? ` (stop SKIPPED: ${r.stopSkippedReason})` : ` stop ${o.trail_percent}%`;
+    appendFileSync(TRADELOG, `- ${new Date().toISOString()} PLACED ${o.side} ${o.qty} ${o.symbol} @ ${o.type}${stopNote} — ${o.thesis ?? ""}\n`);
   } catch (e) {
     results.push({ symbol: o.symbol, ok: false, error: String(e instanceof Error ? e.message : e) });
   }
 }
 const placed = results.filter((r) => r.ok);
+const unprotected = placed.filter((r) => r.stopSkippedReason);
 await sendDiscord(
-  `🐂 **Bill the Bull — orders placed (auto · ${rules.name})**\n${placed.map((r) => "✅ " + r.symbol).join("  ") || "none"}` +
+  `🐂 **Bill the Bull — orders placed (auto · ${rules.name})**\n${placed.map((r) => (r.stopSkippedReason ? "⚠️ " : "✅ ") + r.symbol).join("  ") || "none"}` +
+    (unprotected.length ? `\n⚠️ UNPROTECTED (run \`npm run backfill-stops\` to add trailing stops): ${unprotected.map((r) => r.symbol).join(", ")}` : "") +
     (results.some((r) => !r.ok) ? `\n❌ ${results.filter((r) => !r.ok).map((r) => `${r.symbol}: ${r.error}`).join("; ")}` : ""),
   { channel: "bull", username: "Bill the Bull" }
 );
-console.log(JSON.stringify({ ok: true, mode, placed: placed.length, failed: results.length - placed.length, rejected: rejected.length, costUsd }, null, 2));
+console.log(JSON.stringify({ ok: true, mode, placed: placed.length, unprotected: unprotected.length, failed: results.length - placed.length, rejected: rejected.length, costUsd }, null, 2));

@@ -11,6 +11,7 @@
     "scan": "tsx src/run-scan.ts",
     "journal": "tsx src/run-journal.ts",
     "eod-report": "tsx src/run-eod-report.ts",
+    "backfill-stops": "tsx src/backfill-stops.ts",
     "mode": "tsx src/mode-cli.ts",
     "control": "tsx src/control-server.ts",
     "ask": "tsx src/agent-cli.ts",
