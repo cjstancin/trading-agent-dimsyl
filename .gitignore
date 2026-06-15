@@ -12,7 +12,13 @@ Thumbs.db
 agent/MODE
 agent/PROFILE
 agent/*.log
+agent/logs/
 *.log
+Signals/approved-cycle.md
+memory/ledger.jsonl
+memory/journal.jsonl
+memory/pending-orders.md
+memory/trade-log.md
 
 # Node
 agent/node_modules/
