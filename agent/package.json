@@ -10,6 +10,7 @@
     "execute": "tsx src/run-execute.ts",
     "scan": "tsx src/run-scan.ts",
     "journal": "tsx src/run-journal.ts",
+    "eod-report": "tsx src/run-eod-report.ts",
     "mode": "tsx src/mode-cli.ts",
     "control": "tsx src/control-server.ts",
     "ask": "tsx src/agent-cli.ts",

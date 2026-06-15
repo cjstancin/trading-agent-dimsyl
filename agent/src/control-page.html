@@ -1,0 +1,99 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bill the Bull — Control</title>
+<style>
+  :root{--bg:#0d1014;--panel:#151a20;--line:#2a323c;--ink:#e9edf2;--mut:#8b97a6;--gold:#e3b53c;--green:#37c46b;--amber:#f0b94e;--red:#e0564f}
+  *{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1a212a,#0d1014);color:var(--ink);font:15px/1.5 ui-sans-serif,Segoe UI,system-ui,sans-serif;min-height:100vh;font-variant-numeric:tabular-nums}
+  .wrap{max-width:740px;margin:0 auto;padding:30px 20px 60px}
+  h1{font-size:22px;margin:0 0 2px;letter-spacing:-.01em}h1 b{color:var(--gold)}
+  .sub{color:var(--mut);font-size:13px;margin-bottom:22px}
+  .state{display:flex;align-items:center;gap:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:20px}
+  .badge{font-size:26px;font-weight:800;letter-spacing:.02em;padding:8px 18px;border-radius:12px;border:1px solid}
+  .badge.off{color:var(--mut);border-color:var(--line);background:#1b2128}
+  .badge.gated{color:var(--green);border-color:rgba(55,196,107,.4);background:rgba(55,196,107,.1)}
+  .badge.auto{color:var(--gold);border-color:rgba(227,181,60,.5);background:rgba(227,181,60,.12)}
+  .state .meta{font-size:13px;color:var(--mut)}.state .meta b{color:var(--ink)}
+  .arm{margin-left:auto;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid}
+  .arm.on{color:var(--gold);border-color:rgba(227,181,60,.5);background:rgba(227,181,60,.1)}
+  .arm.no{color:var(--mut);border-color:var(--line)}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--mut);margin:24px 0 10px}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  button{font:inherit;font-weight:600;cursor:pointer;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:16px;display:flex;flex-direction:column;gap:3px;align-items:flex-start;transition:.12s;text-align:left}
+  button:hover{border-color:#3a4654;transform:translateY(-1px)}button:active{transform:none}
+  button .t{font-size:16px}button .d{font-size:11.5px;color:var(--mut);font-weight:400}
+  button:disabled{opacity:.45;cursor:default;transform:none}
+  .b-auto .t{color:var(--gold)}.b-start .t{color:var(--green)}.b-pause .t{color:var(--amber)}.b-stop .t{color:var(--red)}
+  .b-aggr .t{color:var(--red)}.b-steady .t{color:var(--green)}
+  button.sel{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold)}
+  .runs{grid-template-columns:repeat(3,1fr)}.runs button{align-items:center;text-align:center}
+  .log{margin-top:22px;background:#0a0d10;border:1px solid var(--line);border-radius:12px;padding:14px;font:12.5px/1.5 ui-monospace,Consolas,monospace;color:#b6c2d0;white-space:pre-wrap;max-height:320px;overflow:auto;min-height:64px}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:s .7s linear infinite;vertical-align:-2px;margin-right:7px}@keyframes s{to{transform:rotate(360deg)}}
+  .note{font-size:11.5px;color:var(--mut);margin-top:8px}
+</style></head><body><div class="wrap">
+  <h1>🐂 <b>Bill the Bull</b> — Control</h1>
+  <div class="sub">Local control · flips the bot's MODE + risk profile that every ritual reads · <b>paper account</b>.</div>
+
+  <div class="state">
+    <div class="badge off" id="badge">…</div>
+    <div class="meta">Bot mode<br><b id="modetxt">loading</b></div>
+    <div class="arm no" id="arm">auto-exec —</div>
+  </div>
+
+  <h2>Mode</h2>
+  <div class="grid">
+    <button class="b-start" onclick="setMode('gated')"><span class="t">▶ Start the bot</span><span class="d">Gated — proposes trades for your 👍, places nothing</span></button>
+    <button class="b-auto" onclick="setAuto()"><span class="t">⚡ Start AUTO</span><span class="d">Bill places PAPER orders within guardrails, no approval</span></button>
+    <button class="b-pause" onclick="setMode('off')"><span class="t">⏸ Pause</span><span class="d">Rituals exit until you start again</span></button>
+    <button class="b-stop" onclick="setMode('off')"><span class="t">⏹ Stop the bot</span><span class="d">Off — nothing runs</span></button>
+  </div>
+
+  <h2>Risk profile <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--mut)">— current: <b id="proftxt">…</b></span></h2>
+  <div class="grid">
+    <button class="b-aggr" onclick="setProfile('aggressive')"><span class="t">🔥 Aggressive</span><span class="d">quality names · 30% / position · 8 open · $10 floor · 20% stop · −8%/−25% halts</span></button>
+    <button class="b-steady" onclick="setProfile('steady')"><span class="t">🛡 Steady</span><span class="d">15% / position · 4 open · $5 floor · 10% trailing stop · −5%/−15% halts</span></button>
+  </div>
+
+  <h2>Run a cycle now</h2>
+  <div class="grid runs">
+    <button onclick="run('premarket')"><span class="t">📊 Pre-market brief</span><span class="d">→ #trade-bot</span></button>
+    <button onclick="run('execute')"><span class="t">🎯 Trade cycle</span><span class="d">respects mode</span></button>
+    <button onclick="run('refresh')"><span class="t">↻ Refresh data</span><span class="d">pull live book</span></button>
+    <button onclick="run('execute',true)"><span class="t">🧪 Dry-run cycle</span><span class="d">rehearse, write nothing</span></button>
+  </div>
+  <div class="note">"Trade cycle" runs <code>execute</code> — it <b>proposes</b> in gated, and <b>places paper orders</b> in auto. Each can take ~1–2 min (the agent thinks + web-searches).</div>
+
+  <h2>Output</h2>
+  <div class="log" id="log">Ready.</div>
+</div>
+<script>
+  const $=s=>document.querySelector(s);
+  function render(st){
+    const m=st.mode;
+    const b=$('#badge');b.textContent=m.toUpperCase();b.className='badge '+m;
+    $('#modetxt').textContent=m==='auto'?'AUTO — placing orders':m==='gated'?'GATED — proposing only':'OFF — idle';
+    const a=$('#arm');a.textContent='auto-exec '+(st.autoExec?'ARMED':'off');a.className='arm '+(st.autoExec?'on':'no');
+    const p=st.profile||'—';$('#proftxt').textContent=p.toUpperCase();
+    document.querySelector('.b-aggr')?.classList.toggle('sel',p==='aggressive');
+    document.querySelector('.b-steady')?.classList.toggle('sel',p==='steady');
+  }
+  async function setProfile(profile){
+    try{const r=await (await fetch('/api/profile',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({profile})})).json();
+      if(r.ok){poll();log('Risk profile → '+r.profile.toUpperCase());}else log('⚠ '+(r.error||'failed'));}catch(e){log('⚠ '+e);}
+  }
+  async function poll(){try{render(await (await fetch('/api/state')).json());}catch(e){}}
+  async function setMode(mode){
+    try{const r=await (await fetch('/api/mode',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode})})).json();
+      if(r.ok){render(r);log('Mode → '+r.mode.toUpperCase());}else log('⚠ '+(r.error||'failed'));}catch(e){log('⚠ '+e);}
+  }
+  function setAuto(){if(confirm('Start AUTO?\\n\\nBill will place PAPER orders automatically (within the 40%/6-position/$2/stop guardrails) on the next trade cycle. No human approval per order.\\n\\nThis is PAPER money only.'))setMode('auto');}
+  function log(s){const el=$('#log');el.textContent=(typeof s==='string'?s:JSON.stringify(s,null,2))+'\\n\\n'+el.textContent;}
+  let busy=false;
+  async function run(ritual,dry){
+    if(busy)return;busy=true;
+    const el=$('#log');el.innerHTML='<span class="spin"></span>running '+(dry?'dry-run ':'')+ritual+'…';
+    try{const r=await (await fetch('/api/run?ritual='+ritual+(dry?'&dry=1':''),{method:'POST'})).json();
+      el.textContent='';log((r.ok?'✅ ':'❌ ')+(dry?'dry-run ':'')+ritual+' (exit '+r.code+')\\n'+(r.tail||''));poll();}
+    catch(e){el.textContent='';log('⚠ '+e);}
+    busy=false;
+  }
+  poll();setInterval(poll,3000);
+</script></body></html>

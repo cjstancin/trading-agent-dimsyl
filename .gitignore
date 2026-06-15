@@ -7,3 +7,13 @@ Thumbs.db
 .env
 .env.*
 *.local
+
+# Bill runtime state (mutable per-run files — not source)
+agent/MODE
+agent/PROFILE
+agent/*.log
+*.log
+
+# Node
+agent/node_modules/
+node_modules/
