@@ -6,6 +6,9 @@ import { runAgent } from "./agent.js";
 import { paperSnapshot } from "./alpaca.js";
 import { getMode } from "./mode.js";
 import { isMarketDayToday } from "./market-calendar.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-premarket");
 
 if (getMode() === "off") {
   console.log(JSON.stringify({ ok: true, skipped: true, reason: "mode=off" }));

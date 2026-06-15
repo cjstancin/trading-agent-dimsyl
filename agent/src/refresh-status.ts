@@ -14,6 +14,9 @@ import { reconcile } from "./reconcile.js";
 import { getMode } from "./mode.js";
 import { getProfile } from "./profile.js";
 import { rulesFor } from "./guardrails.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-refresh");
 
 const STATUS = fileURLToPath(new URL("../../dashboard/data/status.json", import.meta.url));
 

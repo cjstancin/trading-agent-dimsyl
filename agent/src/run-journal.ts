@@ -7,6 +7,9 @@ import { readFileSync, appendFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
 import { reconcile, type ClosedTrade } from "./reconcile.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-journal");
 
 const JOURNAL = fileURLToPath(new URL("../../memory/journal.jsonl", import.meta.url));
 const key = (t: ClosedTrade) => `${t.symbol}|${t.closedAt}`;

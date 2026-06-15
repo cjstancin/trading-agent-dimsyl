@@ -5,6 +5,7 @@
 //       proposal ledger + closed orders. Latent until Bill actually trades (returns zeros, correct shape).
 import { readLedger, type ProposalRecord } from "./ledger.js";
 import { getPortfolioHistory, getClosedOrders } from "./alpaca.js";
+import { withTimeout, DEFAULT_TIMEOUT_MS } from "./http-utils.js";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -15,7 +16,10 @@ const stdev = (a: number[]) => { if (a.length < 2) return 0; const m = mean(a); 
 async function spyCloses(n: number): Promise<number[]> {
   if (n < 2) return [];
   try {
-    const r = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/SPY?range=3mo&interval=1d", { headers: { "User-Agent": "Mozilla/5.0 (compatible; Bull/1.0)" } });
+    const r = await withTimeout(
+      (signal) => fetch("https://query1.finance.yahoo.com/v8/finance/chart/SPY?range=3mo&interval=1d", { headers: { "User-Agent": "Mozilla/5.0 (compatible; Bull/1.0)" }, signal }),
+      DEFAULT_TIMEOUT_MS,
+    );
     if (!r.ok) return [];
     const j = await r.json();
     const cl = (j?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? []).filter((x: number | null) => x != null && x > 0) as number[];

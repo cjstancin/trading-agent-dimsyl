@@ -10,6 +10,9 @@ import { runAgent } from "./agent.js";
 import { paperSnapshot, getActivities, getClosedOrders, getPortfolioHistory } from "./alpaca.js";
 import { getMode } from "./mode.js";
 import { isMarketDayToday, isPastHalfDayCloseET } from "./market-calendar.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-eod-report");
 
 if (getMode() === "off") {
   console.log(JSON.stringify({ ok: true, skipped: true, reason: "mode=off" }));
