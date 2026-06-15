@@ -12,7 +12,7 @@ import { validateOrders, rulesFor, type BookState } from "./guardrails.js";
 import { getMode, autoExecAllowed } from "./mode.js";
 import { getProfile } from "./profile.js";
 import { appendProposals } from "./ledger.js";
-import { isMarketDayToday } from "./market-calendar.js";
+import { isMarketDayToday, isPastHalfDayCloseET } from "./market-calendar.js";
 
 const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
 
@@ -33,6 +33,20 @@ if (!dryRun) {
   if (!marketCheck.open) {
     console.log(JSON.stringify({ ok: true, skipped: true, reason: marketCheck.reason, via: marketCheck.via, date: marketCheck.date }));
     process.exit(0);
+  }
+  // Half-day handling. On NYSE 1pm-close days the market shuts at 13:00 ET, so the mid slot (12:30 ET)
+  // is the LAST safe trade window. If we're already past 13:00 the market is closed — skip rather than
+  // submit orders Alpaca will reject. Before close, proceed but flag to CJ that this is the last window.
+  if (marketCheck.halfDay) {
+    if (isPastHalfDayCloseET()) {
+      console.warn(JSON.stringify({ ok: true, skipped: true, reason: "market closed (half-day)", date: marketCheck.date }));
+      process.exit(0);
+    }
+    console.warn(`[bill] NYSE half-day (${marketCheck.date}) — 1pm ET close; this mid window is the LAST safe trade window.`);
+    await sendDiscord(
+      "⚠️ Bill — today is an NYSE half-day (1pm ET close). Mid trade window is the LAST.",
+      { channel: "bull", username: "Bill the Bull" },
+    );
   }
 }
 
