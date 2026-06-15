@@ -16,9 +16,11 @@
     "mode": "tsx src/mode-cli.ts",
     "control": "tsx src/control-server.ts",
     "ask": "tsx src/agent-cli.ts",
+    "test": "npm run typecheck && npm run test:guardrails && npm run test:market-calendar && npm run test:reallocate && npm run test:alpaca",
     "test:guardrails": "tsx src/test-guardrails.ts",
     "test:market-calendar": "tsx src/test-market-calendar.ts",
     "test:reallocate": "tsx src/test-reallocate.ts",
+    "test:alpaca": "tsx src/test-alpaca.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": { "node": ">=20" },
