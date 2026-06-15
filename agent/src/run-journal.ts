@@ -31,7 +31,11 @@ for (const c of fresh) {
   // MAE/MFE. reconcile() only emits long round-trips (FIFO buy→sell), so side is "long". Bars unavailable
   // → leave the fields off rather than block the journal.
   let excursion: Partial<ReturnType<typeof maeMfe>> = {};
-  const bars = await getBars(c.symbol, c.openedAt, c.closedAt);
+  // Alpaca stamps 1Day bars at session start (~05:00Z) and filters t >= start, so an intraday `start`
+  // drops that day's bar. Floor `start` to the date to include the entry-day bar (where MAE usually
+  // lives); keep `end` intraday so the exit-day bar stays in. Without this, same-day round-trips get
+  // zero bars and multi-day holds miss the entry-day drawdown.
+  const bars = await getBars(c.symbol, c.openedAt.slice(0, 10), c.closedAt);
   if (bars.length) excursion = maeMfe(c.entry, "long", bars);
 
   const prompt = `You are Bill the Bull. Write a SHORT trade post-mortem (2–3 sentences, plain text) for this closed PAPER trade:\n${JSON.stringify(c)}\nCover: the likely setup/thesis, why it ${c.pnlUsd >= 0 ? "worked" : "didn't"}, and ONE concrete lesson. No preamble.`;
