@@ -15,9 +15,11 @@ agent/*.log
 agent/logs/
 *.log
 Signals/approved-cycle.md
+Signals/realloc-candidates.json
 memory/ledger.jsonl
 memory/journal.jsonl
 memory/pending-orders.md
+memory/pending-reallocation.md
 memory/trade-log.md
 
 # Node

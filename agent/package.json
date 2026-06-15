@@ -9,6 +9,7 @@
     "refresh": "tsx src/refresh-status.ts",
     "execute": "tsx src/run-execute.ts",
     "scan": "tsx src/run-scan.ts",
+    "reallocate": "tsx src/run-reallocate.ts",
     "journal": "tsx src/run-journal.ts",
     "eod-report": "tsx src/run-eod-report.ts",
     "backfill-stops": "tsx src/backfill-stops.ts",
@@ -17,6 +18,7 @@
     "ask": "tsx src/agent-cli.ts",
     "test:guardrails": "tsx src/test-guardrails.ts",
     "test:market-calendar": "tsx src/test-market-calendar.ts",
+    "test:reallocate": "tsx src/test-reallocate.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": { "node": ">=20" },
