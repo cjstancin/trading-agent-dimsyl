@@ -5,6 +5,7 @@ import "./load-env.js";
 import { runAgent } from "./agent.js";
 import { paperSnapshot } from "./alpaca.js";
 import { getMode } from "./mode.js";
+import { isMarketDayToday } from "./market-calendar.js";
 
 if (getMode() === "off") {
   console.log(JSON.stringify({ ok: true, skipped: true, reason: "mode=off" }));
@@ -13,6 +14,19 @@ if (getMode() === "off") {
 
 // Reuse the existing tested Bill notifier (ESM .mjs); dynamic import avoids TS type-resolution on the .mjs.
 const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
+
+// Market-day guard. If today's a weekend / NYSE holiday, bail with a brief Discord notice so CJ knows
+// the system ran but did nothing. The mid + close rituals skip silently.
+const marketCheck = await isMarketDayToday();
+if (!marketCheck.open) {
+  await sendDiscord(
+    `🐂 Bill the Bull — market closed today (${marketCheck.date})\n` +
+      `↪ ${marketCheck.reason} (via ${marketCheck.via}) — premarket / scan / execute skipped. See you next session.`,
+    { channel: "bull", username: "Bill the Bull" },
+  );
+  console.log(JSON.stringify({ ok: true, skipped: true, reason: marketCheck.reason, via: marketCheck.via, date: marketCheck.date }));
+  process.exit(0);
+}
 
 const today = new Date().toLocaleDateString("en-US", {
   weekday: "long", year: "numeric", month: "long", day: "numeric",

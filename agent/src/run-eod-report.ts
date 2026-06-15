@@ -9,10 +9,20 @@ import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
 import { paperSnapshot, getActivities, getClosedOrders, getPortfolioHistory } from "./alpaca.js";
 import { getMode } from "./mode.js";
+import { isMarketDayToday } from "./market-calendar.js";
 
 if (getMode() === "off") {
   console.log(JSON.stringify({ ok: true, skipped: true, reason: "mode=off" }));
   process.exit(0);
+}
+
+// Market-day guard — no day to report on if the market was closed.
+{
+  const marketCheck = await isMarketDayToday();
+  if (!marketCheck.open) {
+    console.log(JSON.stringify({ ok: true, skipped: true, reason: marketCheck.reason, via: marketCheck.via, date: marketCheck.date }));
+    process.exit(0);
+  }
 }
 
 const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);

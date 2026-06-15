@@ -12,6 +12,7 @@ import { validateOrders, rulesFor, type BookState } from "./guardrails.js";
 import { getMode, autoExecAllowed } from "./mode.js";
 import { getProfile } from "./profile.js";
 import { appendProposals } from "./ledger.js";
+import { isMarketDayToday } from "./market-calendar.js";
 
 const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
 
@@ -24,6 +25,15 @@ const dryRun = process.argv.includes("--dry-run") || process.env.BILL_DRY_RUN ==
 if (mode === "off" && !dryRun) {
   console.log(JSON.stringify({ ok: true, skipped: true, reason: "mode=off" }));
   process.exit(0);
+}
+
+// Market-day guard — premarket posts the closure notice, execute just bails silently.
+if (!dryRun) {
+  const marketCheck = await isMarketDayToday();
+  if (!marketCheck.open) {
+    console.log(JSON.stringify({ ok: true, skipped: true, reason: marketCheck.reason, via: marketCheck.via, date: marketCheck.date }));
+    process.exit(0);
+  }
 }
 
 // NULL case — nothing approved to act on.
