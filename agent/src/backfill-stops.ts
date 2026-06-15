@@ -5,7 +5,7 @@
 //   npm run backfill-stops               # uses BILL_TRAIL_PCT or 20% default
 //   BILL_TRAIL_PCT=15 npm run backfill-stops
 import "./load-env.js";
-import { getPositions, getOpenOrders, post } from "./alpaca.js";
+import { getPositions, getOpenOrders, placeTrailingStop } from "./alpaca.js";
 
 const trailPct = Number(process.env.BILL_TRAIL_PCT || 20);
 if (!(trailPct > 0 && trailPct < 90)) { console.error(`bad BILL_TRAIL_PCT=${trailPct}`); process.exit(2); }
@@ -30,15 +30,8 @@ for (const p of positions || []) {
   if (!isLong || qty <= 0) { results.push({ sym, skipped: true, reason: "not long or zero qty" }); continue; }
   if (trailingStopsBySymbol.has(sym)) { results.push({ sym, skipped: true, reason: "already has trailing stop" }); continue; }
   try {
-    const stop: any = await post("/v2/orders", {
-      symbol: sym,
-      qty,
-      side: "sell",
-      type: "trailing_stop",
-      trail_percent: String(trailPct),
-      time_in_force: "gtc",
-    });
-    results.push({ sym, ok: true, qty, trailPct, orderId: stop.id });
+    const stop: any = await placeTrailingStop(sym, qty, trailPct);
+    results.push({ sym, ok: true, qty, trailPct, orderId: stop?.id });
   } catch (e: any) {
     results.push({ sym, ok: false, qty, error: String(e?.message || e).slice(0, 200) });
   }

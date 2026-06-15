@@ -45,6 +45,19 @@ export const getPositions = () => get("/v2/positions");
 export const getOpenOrders = () => get("/v2/orders?status=open&limit=100");
 export const getOrder = (id: string) => get(`/v2/orders/${encodeURIComponent(id)}`);
 
+/** Place a standalone protective trailing-stop SELL. Used by the backfill script + the post-fill leg
+ *  of placePaperOrder. trail_percent is a number (e.g. 20 for 20%); time_in_force is GTC. */
+export async function placeTrailingStop(symbol: string, qty: number, trailPercent: number): Promise<unknown> {
+  return post("/v2/orders", {
+    symbol,
+    qty,
+    side: "sell",
+    type: "trailing_stop",
+    trail_percent: String(trailPercent),
+    time_in_force: "gtc",
+  });
+}
+
 /**
  * Poll a specific order until it reaches a TERMINAL state (filled / canceled / expired / rejected /
  * done_for_day). Returns the final order object (or null on timeout). Bounded so an open order
@@ -148,14 +161,7 @@ export async function placePaperOrder(o: OrderRequest): Promise<{ entry: any; st
     } else {
       // Buy filled — safe to place the trailing-stop sell now. Use the actual filled qty in case of partial fill.
       const fillQty = Number(final.filled_qty || final.qty || o.qty);
-      stop = await post("/v2/orders", {
-        symbol: o.symbol,
-        qty: fillQty,
-        side: "sell",
-        type: "trailing_stop",
-        trail_percent: String(o.trail_percent),
-        time_in_force: "gtc",
-      });
+      stop = await placeTrailingStop(o.symbol, fillQty, o.trail_percent);
     }
   }
   return { entry, stop, stopSkippedReason };
