@@ -2,6 +2,9 @@
 //   npm run ask -- "how's my paper book positioned vs the S&P?"
 import "./load-env.js";
 import { runAgent } from "./agent.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-ask");
 
 const prompt = process.argv.slice(2).join(" ").trim();
 if (!prompt) {

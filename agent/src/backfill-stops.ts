@@ -6,6 +6,9 @@
 //   BILL_TRAIL_PCT=15 npm run backfill-stops
 import "./load-env.js";
 import { getPositions, getOpenOrders, placeTrailingStop } from "./alpaca.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-backfill-stops");
 
 const trailPct = Number(process.env.BILL_TRAIL_PCT || 20);
 if (!(trailPct > 0 && trailPct < 90)) { console.error(`bad BILL_TRAIL_PCT=${trailPct}`); process.exit(2); }

@@ -1,5 +1,8 @@
 // Toggle Bill's mode.  Print:  npm run mode    Set:  npm run mode -- auto|gated|off
 import { getMode, setMode, autoExecAllowed, MODES, type Mode } from "./mode.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-mode");
 
 const arg = process.argv[2]?.trim().toLowerCase();
 

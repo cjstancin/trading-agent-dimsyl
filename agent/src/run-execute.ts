@@ -13,6 +13,9 @@ import { getMode, autoExecAllowed } from "./mode.js";
 import { getProfile } from "./profile.js";
 import { appendProposals } from "./ledger.js";
 import { isMarketDayToday, isPastHalfDayCloseET } from "./market-calendar.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-execute");
 
 const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
 

@@ -16,6 +16,9 @@ import { getProfile } from "./profile.js";
 import { getMode } from "./mode.js";
 import { readLedger } from "./ledger.js";
 import { planReallocation, type Holding, type Candidate } from "./reallocate.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-reallocate");
 
 const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
 

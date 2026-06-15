@@ -10,6 +10,9 @@ import { paperSnapshot } from "./alpaca.js";
 import { getMode } from "./mode.js";
 import { getProfile } from "./profile.js";
 import { rulesFor } from "./guardrails.js";
+import { installSafetyNet } from "./http-utils.js";
+
+installSafetyNet("bill-scan");
 
 if (getMode() === "off") { console.log(JSON.stringify({ ok: true, skipped: true, reason: "mode=off" })); process.exit(0); }
 
