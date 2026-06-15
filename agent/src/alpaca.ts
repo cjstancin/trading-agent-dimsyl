@@ -3,6 +3,19 @@
 // Accept the paper host with or without a trailing "/v2" or slash — the client appends "/v2/..." itself.
 // Normalize first, then HARD-require the paper host: any live/non-paper host still throws. Bill is paper-only.
 import { withTimeout, DEFAULT_TIMEOUT_MS } from "./http-utils.js";
+import { randomBytes } from "node:crypto";
+
+/** Generate an Alpaca client_order_id for idempotency. Per the §0 fleet rule:
+ *   <service>-<operation>-<uuid>  →  bill-<symbol>-<YYYYMMDD-HHmm>-<8hex>
+ * Alpaca rejects duplicate client_order_ids within 24h, so retrying a placement that already filled
+ * (network hiccup, harness restart, etc.) returns a 422 "duplicate client_order_id" we treat as a
+ * SAFE no-op. Max 48 chars per Alpaca; this template is ~30. */
+export function billOrderId(symbol: string, suffix = ""): string {
+  const sym = symbol.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  const ts = new Date().toISOString().slice(0, 16).replace(/[-T:]/g, "");
+  const r = randomBytes(4).toString("hex");
+  return `bill-${sym}-${ts}-${r}${suffix ? "-" + suffix : ""}`.slice(0, 48);
+}
 
 const RAW_BASE = process.env.ALPACA_BASE_URL || "https://paper-api.alpaca.markets";
 const BASE = RAW_BASE.replace(/\/+$/, "").replace(/\/v2$/, "");
@@ -26,6 +39,14 @@ async function get(path: string, host = BASE): Promise<unknown> {
   return res.json();
 }
 
+/** Sentinel an idempotency dup throws (and that callers catch + treat as success). */
+export class DuplicateClientOrderIdError extends Error {
+  constructor(public clientOrderId: string, public bodyText: string) {
+    super(`duplicate client_order_id (treat as success): ${clientOrderId}`);
+    this.name = "DuplicateClientOrderIdError";
+  }
+}
+
 async function post(path: string, body: unknown): Promise<unknown> {
   const res = await withTimeout((signal) => fetch(BASE + path, {
     method: "POST",
@@ -35,6 +56,13 @@ async function post(path: string, body: unknown): Promise<unknown> {
   }), ALPACA_TIMEOUT_MS);
   if (!res.ok) {
     const t = await res.text().catch(() => "");
+    // Idempotency win: if Alpaca rejects because the client_order_id already exists, that means a
+    // PRIOR placement of THIS request already landed. Don't fail — the desired effect is already in
+    // place. Caller catches this sentinel + treats it as success.
+    if (res.status === 422 && /duplicate client_order_id/i.test(t)) {
+      const coid = typeof body === "object" && body && "client_order_id" in body ? String((body as any).client_order_id) : "";
+      throw new DuplicateClientOrderIdError(coid, t.slice(0, 200));
+    }
     throw new Error(`Alpaca POST ${path} → ${res.status}: ${t.slice(0, 160)}`);
   }
   return res.json();
@@ -45,17 +73,26 @@ export const getPositions = () => get("/v2/positions");
 export const getOpenOrders = () => get("/v2/orders?status=open&limit=100");
 export const getOrder = (id: string) => get(`/v2/orders/${encodeURIComponent(id)}`);
 
-/** Place a standalone protective trailing-stop SELL. Used by the backfill script + the post-fill leg
- *  of placePaperOrder. trail_percent is a number (e.g. 20 for 20%); time_in_force is GTC. */
-export async function placeTrailingStop(symbol: string, qty: number, trailPercent: number): Promise<unknown> {
-  return post("/v2/orders", {
-    symbol,
-    qty,
-    side: "sell",
-    type: "trailing_stop",
-    trail_percent: String(trailPercent),
-    time_in_force: "gtc",
-  });
+/** Place a standalone protective trailing-stop SELL with an idempotency-safe client_order_id.
+ *  Used by the backfill script + the post-fill leg of placePaperOrder. trail_percent is a number
+ *  (e.g. 20 for 20%); time_in_force is GTC. If a prior call already placed this exact stop, returns
+ *  null silently (DuplicateClientOrderIdError swallowed). */
+export async function placeTrailingStop(symbol: string, qty: number, trailPercent: number, clientOrderId?: string): Promise<unknown | null> {
+  const coid = clientOrderId || billOrderId(symbol, "stop");
+  try {
+    return await post("/v2/orders", {
+      symbol,
+      qty,
+      side: "sell",
+      type: "trailing_stop",
+      trail_percent: String(trailPercent),
+      time_in_force: "gtc",
+      client_order_id: coid,
+    });
+  } catch (e) {
+    if (e instanceof DuplicateClientOrderIdError) return null;
+    throw e;
+  }
 }
 
 /**
@@ -140,15 +177,33 @@ export interface OrderRequest {
  * (long limit order) or doesn't fill (canceled/rejected), the stop is skipped and the position note
  * captures the unprotected state — the execute ritual logs this so the EOD report surfaces it.
  */
-export async function placePaperOrder(o: OrderRequest): Promise<{ entry: any; stop?: any; stopSkippedReason?: string }> {
-  const entry: any = await post("/v2/orders", {
-    symbol: o.symbol,
-    qty: o.qty,
-    side: o.side,
-    type: o.type,
-    time_in_force: "day",
-    ...(o.type === "limit" && o.limit_price != null ? { limit_price: o.limit_price } : {}),
-  });
+export async function placePaperOrder(o: OrderRequest): Promise<{ entry: any; stop?: any; stopSkippedReason?: string; idempotent?: boolean }> {
+  // Idempotency: every buy gets a client_order_id derived from symbol + minute-precision timestamp +
+  // 8 hex chars of randomness. If the harness retries (network blip, restart), the SECOND submission
+  // returns a Duplicate sentinel we treat as success — Alpaca already has the order.
+  const entryCoid = billOrderId(o.symbol, "buy");
+  let entry: any;
+  let idempotent = false;
+  try {
+    entry = await post("/v2/orders", {
+      symbol: o.symbol,
+      qty: o.qty,
+      side: o.side,
+      type: o.type,
+      time_in_force: "day",
+      client_order_id: entryCoid,
+      ...(o.type === "limit" && o.limit_price != null ? { limit_price: o.limit_price } : {}),
+    });
+  } catch (e) {
+    if (e instanceof DuplicateClientOrderIdError) {
+      // Already placed earlier — fetch the original order so we can still attach a stop if needed.
+      idempotent = true;
+      try {
+        const list = await get(`/v2/orders?status=all&limit=20&direction=desc`) as any[];
+        entry = list?.find?.((x: any) => x.client_order_id === entryCoid) || { client_order_id: entryCoid, status: "unknown" };
+      } catch { entry = { client_order_id: entryCoid, status: "unknown" }; }
+    } else throw e;
+  }
   let stop: any | undefined;
   let stopSkippedReason: string | undefined;
   if (o.side === "buy" && o.trail_percent != null) {
@@ -164,5 +219,5 @@ export async function placePaperOrder(o: OrderRequest): Promise<{ entry: any; st
       stop = await placeTrailingStop(o.symbol, fillQty, o.trail_percent);
     }
   }
-  return { entry, stop, stopSkippedReason };
+  return { entry, stop, stopSkippedReason, idempotent };
 }

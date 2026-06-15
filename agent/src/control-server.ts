@@ -39,9 +39,10 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     if (req.method === "GET" && url.pathname === "/api/state") {
       return sendJson(res, 200, { mode: getMode(), autoExec: autoExecAllowed(), profile: getProfile() });
     }
-    // Fleet-standard health probe (same contract as SAMS /health and Atlas /health).
+    // Fleet-standard health probe (same contract as SAMS /health, Atlas /health). Includes mode +
+    // profile so a monitor can see Bill's current trading posture at a glance.
     if (req.method === "GET" && url.pathname === "/health") {
-      return sendJson(res, 200, { ok: true, service: SERVICE, uptimeSec: Math.round((Date.now() - START_MS) / 1000) });
+      return sendJson(res, 200, { ok: true, service: SERVICE, uptimeSec: Math.round((Date.now() - START_MS) / 1000), mode: getMode(), profile: getProfile() });
     }
     if (req.method === "POST" && url.pathname === "/api/profile") {
       let body = "";
