@@ -54,7 +54,8 @@
   .cnr{position:absolute;color:var(--gold);font-size:9px;line-height:1;opacity:.6}
   .cnr.tl{top:-5px;left:-5px}.cnr.tr{top:-5px;right:-5px}.cnr.bl{bottom:-5px;left:-5px}.cnr.br{bottom:-5px;right:-5px}
   @media(max-width:640px){.frame{inset:6px}}
-  .wrap{position:relative;z-index:var(--z-wrap);max-width:1260px;margin:0 auto;padding:28px 26px 46px}
+  /* Shell — fluid: fills the viewport (the 26px side padding is the gutter) up to a high cap so CJ's ~70–80% zoom on a wide monitor doesn't leave empty side bands; capped to keep line lengths sane on very large displays. */
+  .wrap{position:relative;z-index:var(--z-wrap);max-width:min(100%,2560px);margin:0 auto;padding:28px 26px 46px}
   /* Header — airy gallery bar with a champagne→platinum gilt rule. */
   header{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:20px;
     border-bottom:1.5px solid;border-image:linear-gradient(90deg,transparent,var(--gold2) 28%,var(--plat) 50%,var(--gold2) 72%,transparent) 1;padding-bottom:16px}
