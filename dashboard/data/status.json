@@ -1,15 +1,15 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 16:10 UTC (Juneteenth — markets closed; Alpaca API blocked by egress)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality)",
+  "regime": "Neutral",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "vsSpyPct": -1.1,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -25,13 +25,12 @@
     "avgR": 0
   },
   "bot": {
-    "status": "Auto",
-    "uptime": "11d 4h",
+    "status": "Research-only (API blocked)",
+    "uptime": "7d 0h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 16:10 UTC",
+    "nextRun": "2026-06-22 09:30 ET (Monday open)",
     "heartbeat": [
-      0.4,
       0.7,
       0.5,
       0.9,
@@ -42,27 +41,35 @@
       0.85,
       0.6,
       0.9,
-      0.75
+      0.75,
+      0.7
     ],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality)"
   },
   "equityCurve": [
+    100000,
     100000,
     100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
+    "riskPerTrade": 7,
+    "maxPosition": 30,
     "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "type": "daily-run",
+      "note": "Juneteenth — markets closed. Alpaca API blocked by cloud egress policy. Research completed; 2 high-conviction candidates staged for Monday June 22 open: NVDA (107 shares @ $209.50 limit) and SMH (34 shares @ $658 limit). Regime: NEUTRAL (VIX ~16.41, hawkish Fed at 3.50-3.75%). No trades executed. Account remains $100k cash."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -72,29 +79,76 @@
     "sectorConc": 0
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive Quality (Paper) — Reigned In",
+    "desc": "Concentrated, high-conviction swing trades in liquid large/mid-cap stocks and broad ETFs. Quality floor: real companies, real revenue, price ≥ $10, liquid. No leveraged ETFs, no crypto. 7% risk per trade, 30% max position, 18% trailing stop. NEUTRAL regime in effect — 25% size trim on new entries.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on ≥2 of: breakout on volume, momentum sector leader, oversold quality snapback, dated catalyst.",
+      "Size: shares = (7% × equity) ÷ (entry − stop), capped at 30% of equity per position.",
+      "18% trailing stop on every entry; tighten to 12% on +30%+ winners.",
+      "Cut if −12% from entry and thesis broken; time-stop dead money after ~2–3 weeks.",
+      "Daily halt at −8%; monthly kill at −25% MTD.",
+      "NEUTRAL regime (VIX 16–24): trim all new sizes ~25%; be choosier about entry quality."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "NVDA",
+      "type": "LONG",
+      "status": "STAGED",
+      "entry": 209.50,
+      "stop": 171.79,
+      "trailPct": 18,
+      "qty": 107,
+      "estCost": 22417,
+      "pctEquity": 22.4,
+      "score": 88,
+      "conviction": "HIGH",
+      "thesis": "AI/PC momentum leader; RTX Spark Superchip (Dell/Lenovo Fall 2026 launch); volume 241M vs avg 161M (+49%); Deutsche Bank PT $220; NEUTRAL-trimmed size",
+      "staggedFor": "2026-06-22 open"
+    },
+    {
+      "ticker": "SMH",
+      "type": "LONG",
+      "status": "STAGED",
+      "entry": 658.00,
+      "stop": 539.56,
+      "trailPct": 18,
+      "qty": 34,
+      "estCost": 22372,
+      "pctEquity": 22.4,
+      "score": 82,
+      "conviction": "HIGH",
+      "thesis": "Semiconductor sector ETF showing relative strength (+5.76%); Intel/Apple chip news lifted sector; AMD Helios H2 pipeline builds tailwind; diversified semi exposure vs single name",
+      "stagedFor": "2026-06-22 open"
+    }
+  ],
   "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
+    "gainers": [
+      { "ticker": "INTC", "pct": 10.6, "note": "Apple chip manufacturing deal (US)" },
+      { "ticker": "SMH", "pct": 5.76, "note": "Semiconductor sector leadership" },
+      { "ticker": "MU", "pct": 8.5, "note": "Lifted by Intel/Apple chip news" },
+      { "ticker": "NVDA", "pct": 3.08, "note": "AI momentum + RTX Spark catalyst" }
+    ],
+    "losers": [
+      { "ticker": "QQQ", "pct": -2.92, "note": "10-day Nasdaq decline; MACD sell signal" }
+    ],
+    "active": [
+      { "ticker": "NVDA", "volume": "241M", "avgVol": "162M", "note": "+49% above avg — institutional accumulation signal" }
+    ]
   },
-  "tickers": {},
+  "tickers": {
+    "NVDA": { "price": 210.33, "dayChg": 3.08, "volume": "241M", "note": "Staged LONG" },
+    "SMH": { "price": 659.88, "dayChg": 5.76, "volume": null, "note": "Staged LONG" },
+    "AMD": { "price": 510, "dayChg": null, "volume": null, "note": "Watchlist — wait for H2 catalyst or pullback" },
+    "SPY": { "price": 746.74, "dayChg": 0.78, "volume": null, "note": "Benchmark — close Jun 18" },
+    "QQQ": { "price": 722.51, "dayChg": -1.01, "volume": null, "note": "Mixed signals; MACD sell; not adding" }
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    101.05
   ],
   "readiness": {
     "ready": false,
@@ -124,15 +178,44 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-1.1% vs SPY since Jun 12 inception"
       }
     ]
   },
   "proposals": {
-    "total": 0,
-    "proposed": 0,
+    "total": 2,
+    "proposed": 2,
     "rejected": 0,
-    "recent": []
+    "recent": [
+      {
+        "ticker": "NVDA",
+        "action": "LONG 107 @ $209.50 limit",
+        "status": "PENDING — await API fix + Mon open",
+        "date": "2026-06-19"
+      },
+      {
+        "ticker": "SMH",
+        "action": "LONG 34 @ $658.00 limit",
+        "status": "PENDING — await API fix + Mon open",
+        "date": "2026-06-19"
+      }
+    ]
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "WARN",
+      "date": "2026-06-19",
+      "msg": "Alpaca API blocked — paper-api.alpaca.markets not in cloud egress allowlist. Add to network settings to enable automated order execution."
+    },
+    {
+      "level": "INFO",
+      "date": "2026-06-19",
+      "msg": "Juneteenth holiday — US markets closed. Research-only run. 2 trades staged for Mon Jun 22 open: NVDA + SMH."
+    },
+    {
+      "level": "INFO",
+      "date": "2026-06-19",
+      "msg": "Regime: NEUTRAL (VIX ~16.41). Fed hawkish at 3.50-3.75%, 9 officials lean toward 2026 hike. Applying 25% NEUTRAL size trim on staged orders."
+    }
+  ]
 }
