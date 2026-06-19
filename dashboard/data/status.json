@@ -1,15 +1,17 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 (daily run — Alpaca API egress-blocked; equity at last-known value)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality)",
+  "regime": "Neutral",
+  "regimeNote": "VIX ~16.4 (16–24 = NEUTRAL). New sizes trimmed 25%. No leveraged ETFs. High-conviction only.",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "vsSpyPct": -2.4,
+  "blocker": "Alpaca API + Finnhub egress-blocked in cloud run env. Add paper-api.alpaca.markets, data.alpaca.markets, finnhub.io to network allowlist. Trade plan queued.",
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -25,11 +27,11 @@
     "avgR": 0
   },
   "bot": {
-    "status": "Auto",
-    "uptime": "11d 4h",
+    "status": "Blocked",
+    "uptime": "16d 0h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 (daily)",
+    "nextRun": "Next scheduled run",
     "heartbeat": [
       0.4,
       0.7,
@@ -42,27 +44,34 @@
       0.85,
       0.6,
       0.9,
-      0.75
+      0.75,
+      0
     ],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality)"
   },
   "equityCurve": [
+    100000,
     100000,
     100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 7,
+    "maxPosition": 30,
+    "trailingStop": 20,
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "note": "Daily run complete. Regime NEUTRAL (VIX 16.4). Alpaca + Finnhub APIs blocked by cloud egress policy — no orders placed. Research complete: top ideas NVDA (138sh @ ~$210, 29% alloc) and AVGO (59sh @ ~$488, 28.8% alloc). Trade plan queued for next run when API access restored. Macro: Fed hawkish hold 3.5-3.75%, Iran-driven inflation, PCE 3.6% expected year-end. SPY $746.74, YTD +8.19%. Paper equity: $100K cash, −2.4% vs SPY since inception."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -72,29 +81,83 @@
     "sectorConc": 0
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive Quality Momentum (Paper)",
+    "desc": "Concentrated swing trades in liquid large-/mid-cap stocks and broad ETFs. Momentum, breakout, and catalyst setups. 7% risk per trade, 30% max position, 60% max sector. Trailing stops ~20%. NEUTRAL regime: trim sizes 25%, high conviction only. No leveraged ETFs, no crypto, no sub-$10 junk.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on breakout above 20-day base with above-average volume and positive relative strength.",
+      "Size: shares = (7% × equity) ÷ (entry − stop). NEUTRAL regime: trim 25% → 5.25% risk.",
+      "Cap: 30% per position, 60% per sector, ≥10% cash buffer, max 8 open, no margin.",
+      "Initial stop below breakout pivot; switch to ~20% trailing stop on every position.",
+      "No new entries if daily loss halt (−8%) triggered; flatten and halt for month at −25% MTD.",
+      "Quality floor: liquid large-/mid-cap stocks and broad ETFs only. No sub-$10, no leveraged."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "NVDA",
+      "side": "BUY",
+      "conviction": "HIGH",
+      "score": 88,
+      "entry": 210.33,
+      "stop": 172.47,
+      "target": 250,
+      "allocPct": 29,
+      "shares": 138,
+      "thesis": "AI accelerator #1; vol 241M vs 162M avg; Aug 27 earnings catalyst; PT $299 (+46%)",
+      "status": "QUEUED — Alpaca blocked"
+    },
+    {
+      "ticker": "AVGO",
+      "side": "BUY",
+      "conviction": "HIGH",
+      "score": 82,
+      "entry": 488,
+      "stop": 400.16,
+      "target": 522,
+      "allocPct": 28.8,
+      "shares": 59,
+      "thesis": "Google+Meta AI TPU deals; near ATH $495; Morgan Stanley PT $485→$522; 48 analyst buy",
+      "status": "QUEUED — Alpaca blocked"
+    },
+    {
+      "ticker": "MRVL",
+      "side": "WATCH",
+      "conviction": "MEDIUM",
+      "score": 70,
+      "entry": null,
+      "stop": null,
+      "target": 321,
+      "allocPct": 0,
+      "shares": 0,
+      "thesis": "Jensen 'next trillion-dollar co' catalyst; pulled back to mid-$260s from ATH $324; wait for re-base",
+      "status": "WATCHLIST — sector cap would be exceeded"
+    }
+  ],
   "movers": {
-    "gainers": [],
+    "gainers": [
+      { "ticker": "NVDA", "note": "AI accelerator demand; +30% YTD; vol spike today" },
+      { "ticker": "AVGO", "note": "Near ATH; Google/Meta AI deals" },
+      { "ticker": "MRVL", "note": "+258% YTD after Jensen Computex endorsement" }
+    ],
     "losers": [],
-    "active": []
+    "active": [
+      { "ticker": "SPY", "price": 746.74, "note": "S&P 500; +8.19% YTD; near 52-wk high $760.40" },
+      { "ticker": "NVDA", "price": 210.33, "note": "Above-average volume 241M vs 162M avg" }
+    ]
   },
-  "tickers": {},
+  "tickers": {
+    "NVDA": { "price": 210.33, "note": "AI chip leader; 52wk $142–$237; vol spike" },
+    "AVGO": { "price": 488, "note": "Near ATH $495; AI infrastructure deals" },
+    "MRVL": { "price": 265, "note": "Post-Computex consolidation; ATH $324" },
+    "SPY":  { "price": 746.74, "note": "S&P 500 ETF; +8.19% YTD" },
+    "QQQ":  { "price": null, "note": "Nasdaq 100 ETF; +12% YTD approx" }
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    102.48
   ],
   "readiness": {
     "ready": false,
@@ -124,7 +187,7 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-2.4% vs SPY"
       }
     ]
   },
@@ -134,5 +197,10 @@
     "rejected": 0,
     "recent": []
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "WARNING",
+      "msg": "Alpaca API + Finnhub blocked by cloud network egress. No orders placed. Add paper-api.alpaca.markets, data.alpaca.markets, finnhub.io to egress allowlist to enable trading."
+    }
+  ]
 }
