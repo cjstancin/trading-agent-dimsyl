@@ -117,6 +117,7 @@ const next = {
   attribution: m.attribution,
   excursion,
   equityCurve: m.equityCurve,
+  equityCurveSeries: m.equityCurveSeries,
   spyCurve: m.spyCurve,
   readiness: ready,
   proposals: m.proposals,

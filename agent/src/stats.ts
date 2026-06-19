@@ -6,6 +6,7 @@
 import { readLedger, type ProposalRecord } from "./ledger.js";
 import { attribution, type Attribution } from "./attribution.js";
 import { rollingStats, type RollingStats } from "./rolling-stats.js";
+import { buildEquityCurve, type EquityPoint, type PortfolioHistory } from "./equity-curve.js";
 import { getPortfolioHistory, getClosedOrders } from "./alpaca.js";
 import { withTimeout, DEFAULT_TIMEOUT_MS } from "./http-utils.js";
 
@@ -31,6 +32,7 @@ async function spyCloses(n: number): Promise<number[]> {
 
 export interface Measurement {
   equityCurve: number[];
+  equityCurveSeries: EquityPoint[];
   spyCurve: number[];
   vsSpyPct: number;
   monthPnlPct: number;
@@ -43,11 +45,13 @@ export interface Measurement {
 
 export async function measure(equityNow: number): Promise<Measurement> {
   // ---- (a) portfolio-history metrics ----
-  let eq: number[] = [];
+  let ph: PortfolioHistory = {};
   try {
-    const ph = (await getPortfolioHistory("1M", "1D")) as { equity?: (number | null)[] };
-    eq = (ph?.equity ?? []).map(num).filter((x) => x > 0);
+    ph = (await getPortfolioHistory("1M", "1D")) as PortfolioHistory;
   } catch { /* leave empty */ }
+  let eq = (ph?.equity ?? []).map(num).filter((x) => x > 0);
+  // Dated daily series (date, equity, dayPnl) for the dashboard chart — built from the SAME history.
+  const equityCurveSeries = buildEquityCurve(ph);
   if (!eq.length) eq = [equityNow];
   // cap series to ~40 points for the chart
   const step = Math.max(1, Math.ceil(eq.length / 40));
@@ -100,6 +104,7 @@ export async function measure(equityNow: number): Promise<Measurement> {
 
   return {
     equityCurve,
+    equityCurveSeries,
     spyCurve,
     vsSpyPct,
     monthPnlPct,
