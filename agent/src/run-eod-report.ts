@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
 import { readLedger } from "./ledger.js";
 import { rollingStats, renderRollingFooter } from "./rolling-stats.js";
+import { excursionSummary, renderExcursionFooter, renderExcursionLines, type ExcursionTrade } from "./excursion-stats.js";
 import { paperSnapshot, getActivities, getClosedOrders, getPortfolioHistory } from "./alpaca.js";
 import { getMode } from "./mode.js";
 import { isMarketDayToday, isPastHalfDayCloseET } from "./market-calendar.js";
@@ -59,13 +60,16 @@ const isoToday = new Date().toISOString().slice(0, 10);
 const todaysFills = (Array.isArray(fills) ? fills : []).filter((f: any) => String(f?.transaction_time || f?.date || "").startsWith(isoToday));
 const todaysCloses = (Array.isArray(closedOrders) ? closedOrders : []).filter((o: any) => String(o?.filled_at || o?.updated_at || "").startsWith(isoToday));
 
-// Read recent ledger entries if present (these are CJ's paper-trade post-mortems).
+// Read recent ledger entries if present (these are CJ's paper-trade post-mortems). Also parse them into
+// ExcursionTrade records so the deterministic MAE/MFE footer (below) reports the same journal data.
 const LEDGER = fileURLToPath(new URL("../../memory/journal.jsonl", import.meta.url));
 let recentJournal = "";
+let journalEntries: (ExcursionTrade & Record<string, unknown>)[] = [];
 try {
   if (existsSync(LEDGER)) {
     const lines = readFileSync(LEDGER, "utf8").split(/\r?\n/).filter(Boolean);
     recentJournal = lines.slice(-5).join("\n");
+    journalEntries = lines.map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) as typeof journalEntries;
   }
 } catch { /* not critical */ }
 
@@ -110,7 +114,18 @@ if (isError || !text.trim()) {
 // refresh` (which reconciles outcomes) runs earlier in the close-of-day cmd. Footer is "" when no closed
 // trades yet, so a fresh account adds nothing. Pure read; never affects orders.
 const rollingFooter = renderRollingFooter(rollingStats(readLedger()));
-const report = rollingFooter ? `${text.trimEnd()}\n\n${rollingFooter}` : text;
+
+// Deterministic MAE/MFE excursion footer (Bull #12 reporting): portfolio summary over all journaled closes
+// + per-trade lines for the trades that CLOSED TODAY. Code-rendered from memory/journal.jsonl (the only
+// place excursion is persisted), so the numbers are always exact. "" when no trade carries excursion data.
+// Pure read; never affects orders.
+const excSummaryLine = renderExcursionFooter(excursionSummary(journalEntries));
+const todaysCloseLines = renderExcursionLines(journalEntries.filter((j) => String(j.closedAt ?? "").startsWith(isoToday)));
+const excursionFooter = excSummaryLine
+  ? [excSummaryLine, ...(todaysCloseLines.length ? ["📐 Today's closes:", ...todaysCloseLines] : [])].join("\n")
+  : "";
+
+const report = [text.trimEnd(), rollingFooter, excursionFooter].filter(Boolean).join("\n\n");
 
 const posted = await sendDiscord(report, { channel: "bull", username: "Bill the Bull" });
 console.log(JSON.stringify({ ok: posted.ok === true, posted, paperConnected: snap.connected, todaysFills: todaysFills.length, todaysCloses: todaysCloses.length, costUsd, numTurns }, null, 2));

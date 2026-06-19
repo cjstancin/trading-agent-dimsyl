@@ -14,6 +14,7 @@ import { reconcile } from "./reconcile.js";
 import { getMode } from "./mode.js";
 import { getProfile } from "./profile.js";
 import { rulesFor } from "./guardrails.js";
+import { excursionSummary, type ExcursionTrade } from "./excursion-stats.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-refresh");
@@ -71,14 +72,24 @@ const prev = JSON.parse(readFileSync(STATUS, "utf8")) as Record<string, unknown>
 // Bull v2 measurement: reconcile closed trades into ledger outcomes, then compute the scoreboard.
 await reconcile();
 const m = await measure(equity);
-// Trade-journal entries (written by `npm run journal`) → dashboard Journal tab.
+// Trade-journal entries (written by `npm run journal`) → dashboard Journal tab. Each carries the per-trade
+// MAE/MFE excursion (Bull #12) when bars were available at journal time; surface those fields here so the
+// dashboard can show max-adverse / max-favorable per closed trade.
 let journalEntries: unknown[] = [];
+let excursionTrades: ExcursionTrade[] = [];
 try {
   const jf = fileURLToPath(new URL("../../memory/journal.jsonl", import.meta.url));
-  if (existsSync(jf)) journalEntries = readFileSync(jf, "utf8").split(/\r?\n/).filter(Boolean)
-    .map((l) => { try { const j = JSON.parse(l); return { t: j.symbol, side: "Long", opened: String(j.openedAt ?? "").slice(0, 10), closed: String(j.closedAt ?? "").slice(0, 10), entry: j.entry, exit: j.exit, pnlPct: j.pnlPct, pnlUsd: j.pnlUsd, grade: j.grade, lesson: j.note }; } catch { return null; } })
-    .filter(Boolean).slice(-20).reverse();
+  if (existsSync(jf)) {
+    const raw = readFileSync(jf, "utf8").split(/\r?\n/).filter(Boolean)
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean) as Record<string, unknown>[];
+    excursionTrades = raw;
+    journalEntries = raw
+      .map((j) => ({ t: j.symbol, side: "Long", opened: String(j.openedAt ?? "").slice(0, 10), closed: String(j.closedAt ?? "").slice(0, 10), entry: j.entry, exit: j.exit, pnlPct: j.pnlPct, pnlUsd: j.pnlUsd, grade: j.grade, lesson: j.note, maePct: j.maePct ?? null, maeUsd: j.maeUsd ?? null, mfePct: j.mfePct ?? null, mfeUsd: j.mfeUsd ?? null }))
+      .slice(-20).reverse();
+  }
 } catch { /* none yet */ }
+// Portfolio-level excursion summary (avg MAE/MFE, capture ratio) over all journaled closes.
+const excursion = excursionSummary(excursionTrades);
 const fills = await recentFills();
 const ready = readiness(m);
 const mode = getMode();
@@ -104,6 +115,7 @@ const next = {
   stats: m.stats,
   rolling: m.rolling,
   attribution: m.attribution,
+  excursion,
   equityCurve: m.equityCurve,
   spyCurve: m.spyCurve,
   readiness: ready,
