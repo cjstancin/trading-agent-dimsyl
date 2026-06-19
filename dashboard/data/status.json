@@ -1,15 +1,18 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 (run: research-only — Alpaca API not in egress allowlist)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality)",
+  "regime": "Neutral",
+  "vix": 16.41,
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "monthPnlUsd": 0,
+  "vsSpyPct": -3.5,
+  "spyYtdPct": 10.09,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -25,11 +28,11 @@
     "avgR": 0
   },
   "bot": {
-    "status": "Auto",
-    "uptime": "11d 4h",
+    "status": "Research-only (Alpaca blocked)",
+    "uptime": "16d",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19",
+    "nextRun": "Tomorrow AM",
     "heartbeat": [
       0.4,
       0.7,
@@ -44,25 +47,32 @@
       0.9,
       0.75
     ],
-    "mode": "auto",
-    "profile": "Aggressive"
+    "mode": "research-only",
+    "profile": "Aggressive (Quality)",
+    "alert": "paper-api.alpaca.markets not in egress allowlist — add to env settings to enable trading"
   },
   "equityCurve": [
+    100000,
     100000,
     100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
+    "riskPerTrade": 7,
+    "maxPosition": 30,
     "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "entry": "Daily run completed. VIX 16.41 → NEUTRAL. No positions. Alpaca API blocked from cloud env — research only. Proposals: NVDA LONG 107 shares @~$210, QQQ LONG 30 shares @~$744 (both pending Alpaca egress fix)."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -72,29 +82,88 @@
     "sectorConc": 0
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive (Quality) Momentum (Paper)",
+    "desc": "Short-to-medium-hold momentum and breakout trades in high-conviction liquid large/mid-cap stocks and broad ETFs. Quality floor: price >$10, real revenue, liquid. No leveraged ETFs, no crypto, no penny stocks. Rides relative strength with 18% trailing stops; cuts losers fast.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on 2+ triggers: breakout, momentum leader, oversold snapback, dated catalyst.",
+      "Size: shares = (7% × equity) ÷ (entry − stop), capped at 30% per position.",
+      "Max sector 60%, max 8 open, keep ~10% cash, no margin.",
+      "18% trailing stop on every new entry, placed simultaneously.",
+      "No new entries if daily loss halt (−8%) is hit; stand down for month at −25% MTD.",
+      "NEUTRAL regime (VIX 16-24): trim new sizes ~25%, be choosier.",
+      "Quality only: large/mid-cap liquid US stocks and broad ETFs — no leveraged ETFs, no crypto, no sub-$10 names."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "NVDA",
+      "side": "LONG",
+      "status": "PROPOSAL",
+      "entry": 210.33,
+      "stop": 172,
+      "target": 250,
+      "qty": 107,
+      "cost": 22505,
+      "pctEquity": 22.5,
+      "thesis": "AI infra spend robust (+85% rev YoY); post-June-5-selloff oversold snapback; weekly bull flag; $299 consensus target; 64% odds >$216 by June end.",
+      "triggers": ["oversold snapback", "momentum leader"],
+      "blocked": "Alpaca API not in egress allowlist"
+    },
+    {
+      "ticker": "QQQ",
+      "side": "LONG",
+      "status": "PROPOSAL",
+      "entry": 744,
+      "stop": 610,
+      "target": 820,
+      "qty": 30,
+      "cost": 22320,
+      "pctEquity": 22.3,
+      "thesis": "Nasdaq 100 at record high; QQQ +11% in 30d; US-Iran ceasefire risk-on; broad tech momentum intact; both MAs bullish.",
+      "triggers": ["momentum leader", "breakout"],
+      "blocked": "Alpaca API not in egress allowlist"
+    }
+  ],
   "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
+    "gainers": [
+      { "ticker": "INTC", "pct": 11.19, "note": "Post chip-selloff rebound" },
+      { "ticker": "MU", "pct": 9.87, "note": "Post chip-selloff rebound" },
+      { "ticker": "QQQ", "pct": 11, "note": "+11% in 30 days; Nasdaq ATH" }
+    ],
+    "losers": [
+      { "ticker": "AVGO", "pct": -12.6, "note": "June 5 selloff — AI revenue miss" },
+      { "ticker": "MRVL", "pct": -17, "note": "June 5 selloff — sympathy" }
+    ],
+    "active": [
+      { "ticker": "NVDA", "note": "Rebounding; $210 post-ATH dip; bull flag" },
+      { "ticker": "QQQ", "note": "Nasdaq ATH; +11% in 30d" }
+    ]
   },
-  "tickers": {},
-  "mode": "auto",
+  "tickers": {
+    "NVDA": {
+      "price": 210.33,
+      "ma50": 212,
+      "ma200": 190,
+      "athDate": "2026-05-14",
+      "ath": 236.54,
+      "analystTarget": 298.93,
+      "regime": "Bull flag"
+    },
+    "QQQ": {
+      "price": 744,
+      "change30d": 11,
+      "note": "Nasdaq 100 at record high; US-Iran ceasefire catalyst"
+    },
+    "SPY": {
+      "ytd": 10.09
+    }
+  },
+  "mode": "research-only",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    103.5
   ],
   "readiness": {
     "ready": false,
@@ -124,15 +193,34 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "~−3.5% vs SPY"
       }
     ]
   },
   "proposals": {
-    "total": 0,
-    "proposed": 0,
+    "total": 2,
+    "proposed": 2,
     "rejected": 0,
-    "recent": []
+    "recent": [
+      {
+        "date": "2026-06-19",
+        "ticker": "NVDA",
+        "action": "LONG 107 @ ~$210.33",
+        "status": "BLOCKED — Alpaca API not in egress allowlist"
+      },
+      {
+        "date": "2026-06-19",
+        "ticker": "QQQ",
+        "action": "LONG 30 @ ~$744",
+        "status": "BLOCKED — Alpaca API not in egress allowlist"
+      }
+    ]
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "ERROR",
+      "msg": "Alpaca API (paper-api.alpaca.markets) not in cloud egress allowlist. Bull cannot place orders or fetch live account data. Add to environment egress settings to enable trading.",
+      "date": "2026-06-19"
+    }
+  ]
 }
