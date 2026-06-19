@@ -17,7 +17,7 @@
     "mode": "tsx src/mode-cli.ts",
     "control": "tsx src/control-server.ts",
     "ask": "tsx src/agent-cli.ts",
-    "test": "npm run typecheck && npm run test:guardrails && npm run test:market-calendar && npm run test:reallocate && npm run test:alpaca && npm run test:mae-mfe && npm run test:attribution && npm run test:rolling-stats && npm run test:port-review && npm run test:reconcile",
+    "test": "npm run typecheck && npm run test:guardrails && npm run test:market-calendar && npm run test:reallocate && npm run test:alpaca && npm run test:mae-mfe && npm run test:attribution && npm run test:rolling-stats && npm run test:excursion-stats && npm run test:port-review && npm run test:reconcile",
     "test:reconcile": "tsx src/test-reconcile.ts",
     "test:guardrails": "tsx src/test-guardrails.ts",
     "test:market-calendar": "tsx src/test-market-calendar.ts",
@@ -26,6 +26,7 @@
     "test:mae-mfe": "tsx src/test-mae-mfe.ts",
     "test:attribution": "tsx src/test-attribution.ts",
     "test:rolling-stats": "tsx src/test-rolling-stats.ts",
+    "test:excursion-stats": "tsx src/test-excursion-stats.ts",
     "test:port-review": "tsx src/test-port-review.ts",
     "typecheck": "tsc --noEmit"
   },
