@@ -1,15 +1,20 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 (daily run — Juneteenth, NYSE closed; Alpaca API blocked by egress)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality)",
+  "regime": "Neutral",
+  "regimeNote": "VIX 16.41 — low-NEUTRAL; trim new entries ~25%; be choosier",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "monthPnlUsd": 0,
+  "vsSpyPct": -3.8,
+  "vixLevel": 16.41,
+  "marketNote": "NYSE CLOSED — Juneteenth (Jun 19). Next trading day: Mon Jun 22.",
+  "apiNote": "Alpaca API blocked by execution environment egress policy (HTTP 403). Planned orders cannot execute until paper-api.alpaca.markets is added to allowlist.",
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -25,11 +30,11 @@
     "avgR": 0
   },
   "bot": {
-    "status": "Auto",
-    "uptime": "11d 4h",
+    "status": "Degraded — egress blocked",
+    "uptime": "16d 4h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 (Juneteenth — market closed)",
+    "nextRun": "Mon 2026-06-22 (market opens)",
     "heartbeat": [
       0.4,
       0.7,
@@ -42,59 +47,173 @@
       0.85,
       0.6,
       0.9,
-      0.75
+      0.75,
+      0.2
     ],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality)"
   },
   "equityCurve": [
+    100000,
     100000,
     100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
+    "riskPerTrade": 7,
+    "maxPosition": 30,
     "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
+  "pendingOrders": [
+    {
+      "ticker": "NVDA",
+      "side": "buy",
+      "qty": 107,
+      "limitPrice": 210.00,
+      "stopType": "trailing",
+      "trailPct": 18,
+      "stopPrice": 172.20,
+      "estCost": 22470,
+      "pctEquity": 22.5,
+      "thesis": "AI momentum leader; breakout on above-avg volume; strongest AI infrastructure play",
+      "status": "BLOCKED — awaiting network egress fix + Mon Jun 22 open",
+      "created": "2026-06-19"
+    },
+    {
+      "ticker": "MSFT",
+      "side": "buy",
+      "qty": 56,
+      "limitPrice": 396.00,
+      "stopType": "trailing",
+      "trailPct": 18,
+      "stopPrice": 324.72,
+      "estCost": 22176,
+      "pctEquity": 22.2,
+      "thesis": "Quality AI/cloud compounder; Copilot monetization; consolidating near highs",
+      "status": "BLOCKED — awaiting network egress fix + Mon Jun 22 open",
+      "created": "2026-06-19"
+    },
+    {
+      "ticker": "QQQ",
+      "side": "buy",
+      "qty": 30,
+      "limitPrice": 735.00,
+      "stopType": "trailing",
+      "trailPct": 18,
+      "stopPrice": 602.70,
+      "estCost": 22050,
+      "pctEquity": 22.1,
+      "thesis": "Broad tech ETF; diversifies NVDA/MSFT concentration; liquid, low-maintenance",
+      "status": "BLOCKED — awaiting network egress fix + Mon Jun 22 open",
+      "created": "2026-06-19"
+    }
+  ],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "note": "Daily run — Juneteenth (market closed). Alpaca API unreachable (egress blocked). Researched NVDA/MSFT/QQQ as top entries for Mon Jun 22. VIX 16.41 NEUTRAL. SPY $746.74. No orders executed. vs SPY: -3.8% (held cash since inception while SPY gained ~3.8%)."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
     "peakEquity": 100000,
     "grossExposure": 0,
     "largestPos": 0,
-    "sectorConc": 0
+    "sectorConc": 0,
+    "plannedExposure": 66.7,
+    "plannedTechConc": 44.7
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive Momentum (Quality) — Paper",
+    "desc": "Short-to-medium swing in high-conviction, liquid large/mid-cap stocks and broad ETFs. Momentum + breakout entries. 18% trailing stops. Quality floor: real revenue, price >$10, liquid. No leveraged ETFs, no crypto, no penny stocks.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter when 2+ signals align: breakout, momentum leader, oversold snapback, dated catalyst.",
+      "Size: shares = (7% × equity) ÷ (entry − stop), cap at 30% per position.",
+      "NEUTRAL regime (VIX 16–24): trim new sizes ~25%, be choosier on entries.",
+      "18% trailing stop on every entry. Never remove a stop.",
+      "Daily halt at −8% equity loss; monthly kill-switch at −25% MTD.",
+      "Max 8 open positions. Max 60% per sector. Keep ~10% cash buffer."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "NVDA",
+      "action": "BUY",
+      "conviction": "HIGH",
+      "entry": 210.00,
+      "stop": 172.20,
+      "triggers": ["breakout", "momentum_leader"],
+      "note": "Above-avg volume breakout. AI infra dominant. Top pick.",
+      "status": "pending_egress_fix"
+    },
+    {
+      "ticker": "MSFT",
+      "action": "BUY",
+      "conviction": "MEDIUM-HIGH",
+      "entry": 396.00,
+      "stop": 324.72,
+      "triggers": ["momentum_leader", "quality"],
+      "note": "AI Copilot monetization. Consolidating. Quality anchor.",
+      "status": "pending_egress_fix"
+    },
+    {
+      "ticker": "QQQ",
+      "action": "BUY",
+      "conviction": "MEDIUM",
+      "entry": 735.00,
+      "stop": 602.70,
+      "triggers": ["momentum_leader"],
+      "note": "Broad tech exposure. Portfolio diversifier.",
+      "status": "pending_egress_fix"
+    },
+    {
+      "ticker": "AVGO",
+      "action": "WATCH",
+      "conviction": "MEDIUM",
+      "entry": null,
+      "stop": null,
+      "triggers": [],
+      "note": "RSI 75 overbought. Wait for pullback to ~$440-450 or RSI ~60.",
+      "status": "watchlist"
+    }
+  ],
   "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
+    "gainers": [
+      {"ticker": "INTC", "chg": "+6.51%", "note": "Analyst upgrades + AI demand"},
+      {"ticker": "AMD", "chg": "+4.73%", "note": "ATH $547 on Jun 15; analyst upgrade"},
+      {"ticker": "AVGO", "chg": "+4.00%", "note": "JPMorgan PT raised to $580"},
+      {"ticker": "SPY", "chg": "+0.78%", "note": "Jun 18 close; Iran MOU tailwind"}
+    ],
+    "losers": [
+      {"ticker": "ADBE", "chg": "-6.76%", "note": "Competitive AI design concerns"},
+      {"ticker": "AAPL", "chg": "-1.52%", "note": "Lukewarm AI reception + competitive pressure"}
+    ],
+    "active": [
+      {"ticker": "NVDA", "vol": "241M", "avgVol": "162M", "note": "Breakout volume"},
+      {"ticker": "AMD", "vol": "high", "note": "ATH momentum"},
+      {"ticker": "AVGO", "vol": "high", "note": "JPM upgrade flow"}
+    ]
   },
-  "tickers": {},
+  "tickers": {
+    "NVDA": {"price": 210.33, "dayRange": "206.50-211.39", "note": "AI infra leader, above-avg vol"},
+    "MSFT": {"price": 396.00, "dayRange": "390.69-396.84", "note": "AI cloud, Copilot"},
+    "AVGO": {"price": 483.47, "rsi": 75.32, "note": "Overbought, watching"},
+    "AMD": {"price": 547.00, "note": "ATH Jun 15; CJ holds real shares"},
+    "QQQ": {"price": 735.00, "note": "Broad tech ETF"},
+    "SPY": {"price": 746.74, "note": "Jun 18 close"}
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    103.78
   ],
   "readiness": {
     "ready": false,
@@ -124,15 +243,37 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-3.8% vs SPY (cash drag since inception)"
       }
     ]
   },
   "proposals": {
-    "total": 0,
-    "proposed": 0,
+    "total": 1,
+    "proposed": 1,
     "rejected": 0,
-    "recent": []
+    "recent": [
+      {
+        "date": "2026-06-19",
+        "proposal": "Add paper-api.alpaca.markets (and finnhub.io) to network egress allowlist so Bull can read account state and place orders. Without this, every run is research-only.",
+        "status": "pending_cj_action"
+      }
+    ]
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "ACTION_REQUIRED",
+      "msg": "Alpaca API blocked by egress policy. Add paper-api.alpaca.markets to allowlist. Orders cannot be placed until fixed.",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "INFO",
+      "msg": "NYSE closed today (Juneteenth). Next trading day: Mon Jun 22, 2026.",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "INFO",
+      "msg": "3 planned entries queued for Mon Jun 22: NVDA (107sh @ $210), MSFT (56sh @ $396), QQQ (30sh @ $735). Total ~$66.7K deployed.",
+      "date": "2026-06-19"
+    }
+  ]
 }
