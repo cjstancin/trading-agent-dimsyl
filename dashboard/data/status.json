@@ -1,15 +1,15 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 ~14:00 UTC (daily run — market closed Juneteenth)",
   "isSample": false,
   "profile": "Aggressive",
-  "regime": "Risk-on",
+  "regime": "Neutral",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "vsSpyPct": -3.0,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -26,10 +26,10 @@
   },
   "bot": {
     "status": "Auto",
-    "uptime": "11d 4h",
+    "uptime": "18d 10h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 ~14:00 UTC",
+    "nextRun": "Mon 2026-06-22 (9:30 ET)",
     "heartbeat": [
       0.4,
       0.7,
@@ -42,7 +42,9 @@
       0.85,
       0.6,
       0.9,
-      0.75
+      0.75,
+      0.8,
+      0.7
     ],
     "mode": "auto",
     "profile": "Aggressive"
@@ -50,19 +52,53 @@
   "equityCurve": [
     100000,
     100000,
+    100000,
+    100000,
+    100000,
+    100000,
+    100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 7,
+    "maxPosition": 30,
+    "trailingStop": 20,
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
-  "openOrders": [],
+  "openOrders": [
+    {
+      "ticker": "MU",
+      "side": "buy",
+      "qty": 23,
+      "type": "limit",
+      "limitPrice": 1140,
+      "stopPrice": 912,
+      "timeInForce": "gtc",
+      "status": "PENDING — egress blocked + Juneteenth holiday",
+      "thesis": "Pre-earnings June 24; HBM AI memory sold out FY2026; 960% EPS growth; $1,300-1,500 analyst targets"
+    },
+    {
+      "ticker": "NVDA",
+      "side": "buy",
+      "qty": 128,
+      "type": "limit",
+      "limitPrice": 205,
+      "stopPrice": 164,
+      "timeInForce": "gtc",
+      "status": "PENDING — egress blocked + Juneteenth holiday",
+      "thesis": "AI GPU infrastructure; Blackwell 85% YoY; Vera Rubin H2 2026; $275 analyst consensus"
+    }
+  ],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "title": "First Trade Decisions — Juneteenth Run",
+      "body": "Market closed (Juneteenth). Alpaca paper API blocked by network egress. Ran full research cycle and identified 2 high-quality paper trades for June 22 open: (1) MU 23 shares @ $1,140 limit — pre-earnings play with HBM memory sold-out thesis, June 24 catalyst, $1,300-1,500 analyst targets, stock hit ATH +8% on June 18. (2) NVDA 128 shares @ $205 — long-term AI GPU thesis, Blackwell demand, 95% analyst buy consensus, $275 target. Both sized in NEUTRAL regime (VIX 16.4): 5.25% risk each. Combined cost $52,460, leaving 47.5% cash buffer. Paper trails SPY by -3.0% since inception due to zero positions. Action required: fix Alpaca egress (paper-api.alpaca.markets not in allowlist) and ALPACA_BASE_URL double-pathing bug."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -73,28 +109,90 @@
   },
   "strategy": {
     "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta large/mid-cap names and liquid sector ETFs. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only. QUALITY floor: price > $10, real revenue, liquid. No leveraged ETFs, no crypto.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on 2+ triggers: breakout, momentum leader, oversold snapback, near-term catalyst.",
+      "Size by risk: shares = (7% × equity) ÷ (entry − stop), capped at 30% of equity per name.",
+      "Trailing stop ~20% initial on every entry; tighten to 12-15% once +15% in profit.",
+      "Take partial profit at first target; let the remainder trail.",
+      "NEUTRAL regime (VIX 16-24): trim new sizes ~25%; be choosier.",
+      "No new entries if daily loss halt (−8%) is hit; stand down for the month at −25% MTD."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "MU",
+      "side": "BUY",
+      "entry": 1140,
+      "stop": 912,
+      "target": 1400,
+      "confidence": "HIGH",
+      "triggers": ["breakout-ATH", "momentum-leader", "dated-catalyst"],
+      "thesis": "June 24 earnings catalyst; HBM AI memory sold out all FY2026; Stifel/Wedbush/DB/Cowen targets $1,300-1,500; 960% EPS growth expected; stock hit ATH +8.4% on June 18",
+      "status": "PENDING — market closed (Juneteenth) + Alpaca egress blocked",
+      "qty": 23,
+      "pctEquity": 26.2
+    },
+    {
+      "ticker": "NVDA",
+      "side": "BUY",
+      "entry": 205,
+      "stop": 164,
+      "target": 275,
+      "confidence": "MEDIUM",
+      "triggers": ["momentum-leader", "future-catalyst"],
+      "thesis": "AI GPU infrastructure leader; Blackwell $81.6B quarter (+85% YoY); Vera Rubin H2 2026; 95% analyst buy; $275 consensus target (34% upside)",
+      "status": "PENDING — market closed (Juneteenth) + Alpaca egress blocked",
+      "qty": 128,
+      "pctEquity": 26.2
+    }
+  ],
   "movers": {
-    "gainers": [],
+    "gainers": [
+      {"ticker": "MU", "changePct": 8.4, "price": 1140, "note": "New ATH; mass analyst upgrades pre-Juneteenth"},
+      {"ticker": "SMH", "changePct": 3.2, "price": 210, "note": "Semi sector recovery from June 5 selloff"}
+    ],
     "losers": [],
-    "active": []
+    "active": ["MU", "NVDA", "SMH", "QQQ", "XLK"]
   },
-  "tickers": {},
+  "tickers": {
+    "MU": {
+      "price": 1140,
+      "changePct": 8.4,
+      "note": "ATH; June 24 earnings; HBM sold out",
+      "analystTarget": 1400,
+      "conviction": "HIGH"
+    },
+    "NVDA": {
+      "price": 205,
+      "changePct": -1.1,
+      "note": "Pulled back from $232 resistance; long-term thesis intact",
+      "analystTarget": 275,
+      "conviction": "MEDIUM"
+    },
+    "QQQ": {
+      "price": 729.86,
+      "changePct": 0.3,
+      "note": "RSI 73.5 — elevated; watching for pullback to ~$700",
+      "analystTarget": null,
+      "conviction": "WATCH"
+    },
+    "VIX": {
+      "price": 16.4,
+      "note": "Neutral regime; down from 22.2 on June 10",
+      "conviction": null
+    }
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    101.5,
+    101.8,
+    102.3,
+    103.0,
+    103.0
   ],
   "readiness": {
     "ready": false,
@@ -124,7 +222,7 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-3.0% vs SPY since June 12 inception"
       }
     ]
   },
@@ -134,5 +232,24 @@
     "rejected": 0,
     "recent": []
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "WARNING",
+      "code": "EGRESS_BLOCKED",
+      "message": "Alpaca paper API (paper-api.alpaca.markets) blocked by network egress policy. Cannot read account/positions or place orders. Add host to egress allowlist to restore autonomous trading.",
+      "timestamp": "2026-06-19 ~14:00 UTC"
+    },
+    {
+      "level": "WARNING",
+      "code": "BASEURL_DOUBLE_V2",
+      "message": "ALPACA_BASE_URL env var already includes /v2 suffix. Naively appending /v2/endpoint creates /v2/v2/endpoint — fix scripts to use BASE_URL directly without re-adding /v2.",
+      "timestamp": "2026-06-19 ~14:00 UTC"
+    },
+    {
+      "level": "INFO",
+      "code": "MARKET_HOLIDAY",
+      "message": "June 19 (Juneteenth) — US markets closed. 2 pending GTC orders queued for June 22 open: MU 23@$1,140, NVDA 128@$205.",
+      "timestamp": "2026-06-19 ~14:00 UTC"
+    }
+  ]
 }
