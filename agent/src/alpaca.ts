@@ -235,7 +235,12 @@ export async function placePaperOrder(o: OrderRequest): Promise<{ entry: any; st
   }
   let stop: any | undefined;
   let stopSkippedReason: string | undefined;
-  if (o.side === "buy" && o.trail_percent != null) {
+  if (o.side === "buy" && o.trail_percent != null && !entry?.id) {
+    // Idempotent replay where the original order couldn't be re-fetched: entry has no id, so polling
+    // would hit /v2/orders/undefined and spin until timeout. Skip the wait — the prior placement already
+    // landed; reconcile() backfills the protective stop from fills.
+    stopSkippedReason = "idempotent replay: original order id unavailable — stop must be backfilled by reconcile";
+  } else if (o.side === "buy" && o.trail_percent != null) {
     // Wait for the buy to reach terminal status before placing the protective stop.
     const final = await waitForOrderTerminal(entry.id, { timeoutMs: 45_000, intervalMs: 1_000 });
     if (!final) {

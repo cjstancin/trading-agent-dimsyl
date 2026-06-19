@@ -22,6 +22,17 @@ check("FAIL: sub-$2 rejected", validateOrders([penny], book)[0].reasons.some(r =
 const overMax = Array.from({ length: 7 }, (_, i): OrderRequest => ({ symbol: `AA${i}`, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 }));
 check("FAIL: max-open exceeded once projected open passes the cap", validateOrders(overMax, book).some(v => v.reasons.some(r => /max .* open/.test(r))));
 
+// INVALID buys must NOT consume open slots: an order that fails another check is rejected + never placed,
+// so it can't push later VALID buys over maxOpen. Book has 6 open; cap is 8 → room for exactly 2 valid buys.
+// The 3 leading invalid buys (no stop) used to each bump the projected count, wrongly rejecting both valids.
+const capBook = { equity: 100_000, openCount: 6 };
+const noStopBuy = (s: string): OrderRequest => ({ symbol: s, side: "buy", qty: 1, type: "market", est_price: 50 });
+const validBuy = (s: string): OrderRequest => ({ symbol: s, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 });
+const mixed = validateOrders([noStopBuy("AA"), noStopBuy("BB"), noStopBuy("CC"), validBuy("DD"), validBuy("EE")], capBook);
+check("CAP: invalid buys are still rejected (missing stop)", mixed.slice(0, 3).every(v => v.ok === false));
+check("CAP: invalid buys don't consume slots → both valid buys pass", mixed[3].ok === true && mixed[4].ok === true);
+check("CAP: neither valid buy is mismarked as over-cap", !mixed[3].reasons.concat(mixed[4].reasons).some(r => /max .* open/.test(r)));
+
 // NULL: empty proposal → empty result, no throw.
 check("NULL: empty array → []", JSON.stringify(validateOrders([], book)) === "[]");
 

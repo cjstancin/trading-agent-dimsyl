@@ -50,8 +50,12 @@ export function validateOrders(orders: OrderRequest[], book: BookState, rules: R
         reasons.push(`position ${(100 * notional / book.equity).toFixed(0)}% > ${100 * rules.maxPositionPct}% cap`);
       }
       if (order.trail_percent == null) reasons.push("buy needs a protective stop (trail_percent)");
-      projectedOpen += 1;
-      if (projectedOpen > rules.maxOpen) reasons.push(`would exceed max ${rules.maxOpen} open positions`);
+      // Only a buy that clears every other check consumes an open slot. An invalid buy is rejected and
+      // never placed, so counting it toward the cap would wrongly push later VALID buys over maxOpen.
+      if (reasons.length === 0) {
+        projectedOpen += 1;
+        if (projectedOpen > rules.maxOpen) reasons.push(`would exceed max ${rules.maxOpen} open positions`);
+      }
     }
 
     if (order.type === "limit" && order.limit_price == null) reasons.push("limit order needs limit_price");

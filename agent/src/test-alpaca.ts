@@ -9,7 +9,7 @@ process.env.ALPACA_API_KEY = "test-key-not-real";
 process.env.ALPACA_API_SECRET = "test-secret-not-real";
 delete process.env.ALPACA_BASE_URL; // default → https://paper-api.alpaca.markets (module-load guard)
 
-const { billOrderId, DuplicateClientOrderIdError, isDuplicateClientOrderIdResponse, placeTrailingStop } =
+const { billOrderId, DuplicateClientOrderIdError, isDuplicateClientOrderIdResponse, placeTrailingStop, placePaperOrder } =
   await import("./alpaca.js");
 
 let pass = 0, fail = 0;
@@ -65,6 +65,24 @@ try {
   stubFetch(200, "", { id: "fake-order-1", status: "accepted" });
   const okResult = await placeTrailingStop("AMD", 10, 20) as { id?: string } | null;
   check("SWALLOW: successful placement returns the order (not null)", !!okResult && okResult.id === "fake-order-1");
+
+  // --- REPLAY: idempotent dup where the original order can't be re-fetched (entry has no id) ---------
+  // POST → 422 dup (prior placement already landed); GET status=all → [] (order not in the recent list),
+  // so the fallback entry carries no id. The stop must be SKIPPED, not polled against /v2/orders/undefined.
+  // Before the guard, waitForOrderTerminal(undefined) would spin until the 45s timeout (slow + wrong
+  // reason); after the guard it returns instantly with the replay reason. The third branch below is a
+  // tripwire: if the (fixed) code ever polls, it gets a non-terminal order and the reason assertion fails.
+  globalThis.fetch = (async (url: unknown, init: { method?: string } = {}) => {
+    const u = String(url); const method = init.method ?? "GET";
+    if (method === "POST" && u.includes("/v2/orders")) return fakeResponse(422, "duplicate client_order_id: bill-AMD-x");
+    if (method === "GET" && u.includes("status=all")) return fakeResponse(200, "[]", []);
+    return fakeResponse(200, "", { id: "should-not-be-polled", status: "new" });
+  }) as unknown as typeof fetch;
+  const replay = await placePaperOrder({ symbol: "AMD", side: "buy", qty: 10, type: "market", est_price: 100, trail_percent: 20 });
+  check("REPLAY: idempotent dup is flagged", replay.idempotent === true);
+  check("REPLAY: entry carries no id (order not re-fetched)", (replay.entry as { id?: string })?.id == null);
+  check("REPLAY: stop skipped (not polled) when original order id is unavailable",
+    replay.stop === undefined && /idempotent replay/.test(replay.stopSkippedReason ?? ""));
 } finally {
   globalThis.fetch = origFetch;
 }
