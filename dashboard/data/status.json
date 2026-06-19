@@ -1,15 +1,16 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 (Juneteenth — market closed; no Alpaca API access this run)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality)",
+  "regime": "Neutral",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "monthPnlUsd": 0,
+  "vsSpyPct": -2.7,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -26,10 +27,10 @@
   },
   "bot": {
     "status": "Auto",
-    "uptime": "11d 4h",
+    "uptime": "16d 0h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 (Juneteenth — research-only run)",
+    "nextRun": "2026-06-22 (Mon) market open 09:30 ET",
     "heartbeat": [
       0.4,
       0.7,
@@ -42,27 +43,36 @@
       0.85,
       0.6,
       0.9,
-      0.75
+      0.75,
+      0.7
     ],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality)",
+    "alert": "Alpaca + Finnhub APIs blocked by network egress policy — add hosts to allowlist to enable live trading"
   },
   "equityCurve": [
+    100000,
     100000,
     100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 7,
+    "maxPosition": 30,
+    "trailingStop": 20,
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "type": "daily-run",
+      "note": "Juneteenth — market closed. Research-only run. Planned NVDA (125sh @$210) + SMH (39sh @$660) for Monday open. Alpaca API unreachable (network egress block). CJ notified via Discord."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -72,29 +82,94 @@
     "sectorConc": 0
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive (Quality) Momentum — Paper",
+    "desc": "Concentrated, high-conviction swing trades in solid large/mid-cap stocks and liquid sector ETFs. Momentum + breakout + oversold-snapback triggers. Trailing stops on every entry. No leveraged ETFs, no crypto, no penny stocks. Horizon 1 week to 5 years. Reigned-in profile approved by CJ 2026-06-14.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Quality universe only: large/mid-cap stocks (price >$10, real revenue) and liquid ETFs (SPY/QQQ/XLK/SMH-type). No SOXL/TQQQ/crypto.",
+      "Size by risk: shares = (7% × equity) ÷ (entry − stop), capped at 30% of equity per name.",
+      "~20% trailing stop on every entry. No naked positions ever.",
+      "NEUTRAL regime (VIX 16-24): reduce sizes ~25%, be choosier. RISK-OFF (VIX >24): high-conviction only.",
+      "Daily halt at −8%; monthly kill at −25%. Stand down and wait for CJ's resume signal.",
+      "Let winners run; cut losers fast; never widen a stop or limit without CJ's approval."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "NVDA",
+      "action": "BUY",
+      "entry": 210,
+      "stop": 168,
+      "trailPct": 20,
+      "qty": 125,
+      "cost": 26250,
+      "pctEquity": 26.3,
+      "status": "PENDING — execute Monday June 22 open",
+      "thesis": "AI infra leader in confirmed uptrend; ~5% pullback from recent high creating entry; neutral-bullish technicals; upside to 52-wk high $236.54 (+12.5%)",
+      "score": 7
+    },
+    {
+      "ticker": "SMH",
+      "action": "BUY",
+      "entry": 660,
+      "stop": 528,
+      "trailPct": 20,
+      "qty": 39,
+      "cost": 25740,
+      "pctEquity": 25.7,
+      "status": "PENDING — execute Monday June 22 open",
+      "thesis": "Semiconductor sector ETF; strong +5.76% momentum; AI capex supercycle; diversified single-name risk vs individual semis",
+      "score": 7
+    },
+    {
+      "ticker": "AVGO",
+      "action": "WATCH",
+      "entry": null,
+      "stop": null,
+      "status": "SKIP — below 50-day MA, MACD negative; wait for recapture",
+      "thesis": "Great fundamentals, but technically weakening near-term. Re-evaluate if 50-day MA recaptured.",
+      "score": 4
+    },
+    {
+      "ticker": "QQQ",
+      "action": "WATCH",
+      "entry": null,
+      "stop": null,
+      "status": "SKIP — MACD turned negative June 4-5; wait for momentum confirmation",
+      "thesis": "Broad Nasdaq exposure but momentum weakened. Revisit if MACD crosses back positive.",
+      "score": 4
+    }
+  ],
   "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
+    "gainers": [
+      { "ticker": "SMH", "pct": 5.76, "note": "Semiconductor ETF momentum" },
+      { "ticker": "AMD", "pct": 4.0, "note": "AI chips, US-Iran peace deal tailwind (June 15)" },
+      { "ticker": "NVDA", "pct": 2.0, "note": "AI leader, partial recovery after 4.7% pullback" }
+    ],
+    "losers": [
+      { "ticker": "AVGO", "pct": -3.0, "note": "Below 50-day MA since June 5; MACD negative" },
+      { "ticker": "QQQ", "pct": -1.5, "note": "MACD turned negative June 4; momentum fading" }
+    ],
+    "active": [
+      { "ticker": "NVDA", "note": "High vol during recovery from VIX spike" },
+      { "ticker": "AMD", "note": "Up 133% YTD, still active" },
+      { "ticker": "SMH", "note": "Sector ETF with strong flows" }
+    ]
   },
-  "tickers": {},
+  "tickers": {
+    "SPY": { "price": 746.74, "date": "2026-06-18", "note": "+10.99% YTD; 52-wk high $760.40" },
+    "QQQ": { "price": 708.0, "date": "2026-06-18", "note": "+11% over 30 days; MACD negative" },
+    "SMH": { "price": 659.88, "date": "2026-06-18", "note": "+5.76% momentum" },
+    "NVDA": { "price": 210.33, "date": "2026-06-18", "note": "Pullback in uptrend; 52-wk $142-$236" },
+    "AVGO": { "price": 408.24, "date": "2026-06-18", "note": "Below 50-day MA since June 5" },
+    "AMD": { "price": 516.0, "date": "2026-06-18", "note": "CJ 45% in Fidelity; skip in paper" },
+    "VIX": { "price": 16.41, "date": "2026-06-16", "note": "NEUTRAL; peaked 22.22 on June 10" }
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    102.70
   ],
   "readiness": {
     "ready": false,
@@ -124,7 +199,7 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-2.7% vs SPY"
       }
     ]
   },
@@ -134,5 +209,16 @@
     "rejected": 0,
     "recent": []
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "WARN",
+      "msg": "Alpaca API unreachable (paper-api.alpaca.markets not in network egress allowlist). Add host to enable live paper trading.",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "INFO",
+      "msg": "Market closed today — Juneteenth (June 19). Planned entries NVDA + SMH pending Monday June 22 open.",
+      "date": "2026-06-19"
+    }
+  ]
 }
