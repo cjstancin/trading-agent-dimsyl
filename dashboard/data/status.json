@@ -1,15 +1,15 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 (no Alpaca sync — network egress blocked; equity/cash from Jun 14 state)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality) — reigned in",
+  "regime": "Neutral",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "vsSpyPct": -0.5,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -26,10 +26,10 @@
   },
   "bot": {
     "status": "Auto",
-    "uptime": "11d 4h",
+    "uptime": "17d 0h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 (scheduled daily run)",
+    "nextRun": "2026-06-20 market open",
     "heartbeat": [
       0.4,
       0.7,
@@ -42,27 +42,63 @@
       0.85,
       0.6,
       0.9,
-      0.75
+      0.75,
+      0.5
     ],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality) — reigned in"
   },
   "equityCurve": [
     100000,
     100000,
+    100000,
     100000
   ],
+  "equityCurveSeries": [
+    { "date": "2026-06-12", "equity": 100000, "dayPnl": 0 },
+    { "date": "2026-06-13", "equity": 100000, "dayPnl": 0 },
+    { "date": "2026-06-14", "equity": 100000, "dayPnl": 0 },
+    { "date": "2026-06-19", "equity": 100000, "dayPnl": 0 }
+  ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
+    "riskPerTrade": 7,
+    "maxPosition": 30,
     "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
-  "openOrders": [],
+  "openOrders": [
+    {
+      "id": "PENDING",
+      "symbol": "ARM",
+      "side": "buy",
+      "qty": 69,
+      "type": "limit",
+      "limitPrice": 419.00,
+      "status": "pending_manual",
+      "note": "Could not submit — Alpaca API unreachable. Execute manually or next run.",
+      "submittedAt": "2026-06-19"
+    },
+    {
+      "id": "PENDING",
+      "symbol": "ANET",
+      "side": "buy",
+      "qty": 176,
+      "type": "limit",
+      "limitPrice": 165.00,
+      "status": "pending_manual",
+      "note": "Could not submit — Alpaca API unreachable. Execute manually or next run.",
+      "submittedAt": "2026-06-19"
+    }
+  ],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "entry": "Daily run completed. VIX ~16.4 (Neutral regime). Fed held rates, hawkish tone — no 2026 cuts expected. BTC/ETH fell ~2.4%/2.2% post-Fed. Identified ARM (+5.69% breakout) and ANET (AI networking, product catalyst) as top candidates. Sized per CLAUDE.md: 7% risk, 30% cap, 25% neutral-trim. ARM 69 shares @ $419 and ANET 176 shares @ $165 intended. BLOCKER: Alpaca API (paper-api.alpaca.markets) is not in this environment's network egress allowlist — orders could not be placed. Flagged to CJ via Discord."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -72,29 +108,75 @@
     "sectorConc": 0
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive (Quality) Paper — reigned in",
+    "desc": "Concentrated swing and momentum trades in quality large/mid-cap US stocks and liquid broad/sector ETFs. No leveraged ETFs, no crypto, no penny stocks (<$10). Risk 7% per trade, 30% position cap. Holds 1 week to ~5 years. Lets winners run with 18% trailing stops; cuts quick on thesis breaks. Paper-only sandbox.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Universe: quality large/mid-cap US stocks + liquid broad/sector ETFs (SPY/QQQ/XLK/XLC/SMH-type). NO leveraged/inverse ETFs. NO crypto. NO stocks <$10.",
+      "Size by risk: shares = (7% × equity) ÷ (entry − stop), capped at 30% of equity per name.",
+      "Regime overlay: RISK-ON (VIX<16) full size; NEUTRAL (16-24) trim 25%; RISK-OFF (>24) high-conviction only.",
+      "Stop on every entry: ~18% trailing (wider only with dated catalyst). Never remove or widen a stop.",
+      "Cut at −12% from entry unless thesis intact + imminent catalyst. Time-stop dead money at ~2-3 weeks.",
+      "Halt at −8% daily loss. Stand down (no new trades) at −25% MTD until CJ resumes."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "ARM",
+      "side": "BUY",
+      "entry": 419.00,
+      "stop": 343.58,
+      "stopPct": 18,
+      "qty": 69,
+      "sizePct": 28.9,
+      "score": 85,
+      "thesis": "Breakout day +5.69%; AI chip design leader; momentum + breakout (2 triggers hit). Neutral-regime size trim applied.",
+      "status": "PENDING — Alpaca unreachable",
+      "date": "2026-06-19"
+    },
+    {
+      "ticker": "ANET",
+      "side": "BUY",
+      "entry": 165.00,
+      "stop": 135.30,
+      "stopPct": 18,
+      "qty": 176,
+      "sizePct": 29.0,
+      "score": 78,
+      "thesis": "AI networking infra; 1.6T rack-scale platform launch; bullish technicals (3/4 SMAs); below ATH $177. Neutral-regime trim applied.",
+      "status": "PENDING — Alpaca unreachable",
+      "date": "2026-06-19"
+    }
+  ],
   "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
+    "gainers": [
+      { "ticker": "ARM",  "changePct": 5.69,  "price": 418.88, "note": "Breakout — AI chip design" },
+      { "ticker": "AVGO", "changePct": 0.8,   "price": 411.46, "note": "AI infra steady" }
+    ],
+    "losers": [
+      { "ticker": "NVDA", "changePct": -1.46, "price": 209.35, "note": "Soft day; AI infra mixed" },
+      { "ticker": "BTC",  "changePct": -2.40, "price": 62498,  "note": "Post-Fed hawkish selloff (not in universe)" },
+      { "ticker": "ETH",  "changePct": -2.20, "price": 1687,   "note": "Post-Fed (not in universe)" }
+    ],
+    "active": [
+      { "ticker": "ARM",  "changePct": 5.69,  "price": 418.88 },
+      { "ticker": "ANET", "changePct": 2.10,  "price": 164.93 },
+      { "ticker": "AVGO", "changePct": 0.80,  "price": 411.46 }
+    ]
   },
-  "tickers": {},
+  "tickers": {
+    "ARM":  { "price": 418.88, "changePct": 5.69,  "note": "AI chip design — PENDING BUY" },
+    "ANET": { "price": 164.93, "changePct": 2.10,  "note": "AI networking — PENDING BUY" },
+    "AVGO": { "price": 411.46, "changePct": 0.80,  "note": "AI infra — watchlist" },
+    "NVDA": { "price": 209.35, "changePct": -1.46, "note": "Weak today — watchlist" },
+    "SPY":  { "price": 429.00, "changePct": -0.30, "note": "Benchmark" },
+    "QQQ":  { "price": 735.00, "changePct": -0.20, "note": "Benchmark" }
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    100.5
   ],
   "readiness": {
     "ready": false,
@@ -124,7 +206,7 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-0.5% vs SPY (est.)"
       }
     ]
   },
@@ -134,5 +216,12 @@
     "rejected": 0,
     "recent": []
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "warn",
+      "message": "Alpaca API unreachable: paper-api.alpaca.markets not in network egress allowlist. Add this host to environment network settings to enable order execution and live account sync.",
+      "date": "2026-06-19",
+      "action": "Add paper-api.alpaca.markets to network egress in environment settings, then re-run."
+    }
+  ]
 }
