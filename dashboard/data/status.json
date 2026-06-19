@@ -1,15 +1,18 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 (Juneteenth — markets closed; Bull daily run)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality)",
+  "regime": "Neutral",
+  "regimeDetail": "VIX 16.41 (June 16 close) — just above Risk-On threshold; sizing trimmed ~25%",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "monthPnlUsd": 0,
+  "vsSpyPct": -3.3,
+  "vsSpyNote": "SPY +3.3% since inception; Bull 0% (no positions deployed yet)",
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -25,44 +28,33 @@
     "avgR": 0
   },
   "bot": {
-    "status": "Auto",
-    "uptime": "11d 4h",
+    "status": "Attention",
+    "statusDetail": "Alpaca API blocked by egress policy — paper-api.alpaca.markets not in allowlist. Add to egress settings to enable order execution.",
+    "uptime": "16d 0h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
-    "heartbeat": [
-      0.4,
-      0.7,
-      0.5,
-      0.9,
-      0.6,
-      0.8,
-      1,
-      0.7,
-      0.85,
-      0.6,
-      0.9,
-      0.75
-    ],
+    "lastRun": "2026-06-19 (Juneteenth)",
+    "nextRun": "Monday 2026-06-22 (market open 09:30 ET)",
+    "heartbeat": [0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 1, 0.7, 0.85, 0.6, 0.9, 0.75, 0.8],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality)"
   },
-  "equityCurve": [
-    100000,
-    100000,
-    100000
-  ],
+  "equityCurve": [100000, 100000, 100000, 100000, 100000],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
+    "riskPerTrade": 7,
+    "maxPosition": 30,
     "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "note": "Juneteenth — NYSE/NASDAQ closed. Alpaca API blocked by egress policy. Research complete: AVGO and ANET identified as top Monday entries. MU skipped (pre-earnings risk). Market regime NEUTRAL (VIX 16.41). Plan queued in Signals/trade-queue.md."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -72,67 +64,125 @@
     "sectorConc": 0
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive (Quality) Momentum — Paper",
+    "desc": "Concentrated swing trades in liquid US large/mid-cap stocks and broad ETFs. NO leveraged ETFs, NO crypto. Entry on breakouts, momentum, and quality oversold snaps. Trailing stops on every position. NEUTRAL regime active: sizes trimmed ~25% from max.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on 2+ of: breakout above multi-week high, momentum leader in hot sector, oversold snapback off support, near-term catalyst.",
+      "Size: shares = (7% × equity) ÷ (entry − stop), capped at 30% of equity per name.",
+      "Initial 18% trailing stop on every entry — no naked positions.",
+      "Cut if −12% from entry unless dated catalyst imminent and thesis intact.",
+      "No new entries if daily loss ≥ −8%; stand down for month if MTD ≤ −25%.",
+      "NEUTRAL regime (VIX 16–24): trim new sizes ~25%; be choosier. RISK-OFF (>24): high-conviction only.",
+      "Universe: liquid US large/mid-cap stocks + broad/sector ETFs. NO leveraged ETFs, NO crypto, NO penny stocks (<$10)."
     ]
   },
-  "signals": [],
-  "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
-  },
-  "tickers": {},
-  "mode": "auto",
-  "spyCurve": [
-    100,
-    101.7,
-    102.25
+  "signals": [
+    {
+      "ticker": "AVGO",
+      "side": "BUY",
+      "score": 88,
+      "status": "QUEUED — Monday June 22",
+      "entry": 411.35,
+      "stop": 337.31,
+      "target": 500,
+      "qty": 54,
+      "costBasis": 22213,
+      "pctEquity": 22.2,
+      "trailingStopPct": 18,
+      "thesis": "AI custom chip leader; Q3 guided $16B AI rev (+200% YoY); $70B backlog; 6 hyperscaler customers; post-Q2-earnings dip recovery"
+    },
+    {
+      "ticker": "ANET",
+      "side": "BUY",
+      "score": 83,
+      "status": "QUEUED — Monday June 22",
+      "entry": 168.24,
+      "stop": 137.96,
+      "target": 190,
+      "qty": 133,
+      "costBasis": 22376,
+      "pctEquity": 22.4,
+      "trailingStopPct": 18,
+      "thesis": "AI data center networking; revenue +35% YoY; 2026 guidance raised $11.5B; new 1.6T rack-scale AI platform"
+    },
+    {
+      "ticker": "MU",
+      "side": "WATCH",
+      "score": 70,
+      "status": "MONITOR — enter AFTER June 24 earnings if positive",
+      "entry": null,
+      "stop": null,
+      "target": null,
+      "qty": 0,
+      "costBasis": 0,
+      "pctEquity": 0,
+      "thesis": "AI memory HBM boom; June 24 earnings catalyst; skipping pre-earnings (post-beat selloff risk from last quarter)"
+    }
   ],
+  "movers": {
+    "gainers": [
+      {"ticker": "MU", "pct": 8.74, "note": "AI memory momentum, pre-earnings run"},
+      {"ticker": "ANET", "pct": 3.06, "note": "AI networking demand, guidance raised"},
+      {"ticker": "NVDA", "pct": 2.95, "note": "AI GPU leader, continued momentum"}
+    ],
+    "losers": [],
+    "active": [
+      {"ticker": "AVGO", "note": "$411.35 close June 18; AI custom chip; Q3 guidance $16B"},
+      {"ticker": "MU", "note": "$1,142.92 close June 18; earnings June 24"},
+      {"ticker": "NVDA", "note": "$210.69 close June 18; momentum leader"}
+    ]
+  },
+  "tickers": {
+    "AVGO": {"price": 411.35, "date": "2026-06-18", "note": "AI custom chip; Q2 rev $22.2B +48% YoY; Q3 AI guided $16B"},
+    "ANET": {"price": 168.24, "date": "2026-06-18", "note": "AI networking; rev +35% YoY; guidance raised $11.5B"},
+    "MU":   {"price": 1142.92, "date": "2026-06-18", "note": "AI memory HBM; earnings June 24; +8.74% on June 18"},
+    "NVDA": {"price": 210.69, "date": "2026-06-18", "note": "AI GPU leader; +2.95% June 18"},
+    "SPY":  {"price": null, "note": "market closed June 19 (Juneteenth); est. +3.3% since Bull inception"}
+  },
+  "mode": "auto",
+  "spyCurve": [100, 101.7, 102.25, 103.30, 103.30],
   "readiness": {
     "ready": false,
     "passed": 1,
     "total": 5,
     "checks": [
-      {
-        "label": "≥ 30 closed trades",
-        "pass": false,
-        "detail": "0 closed"
-      },
-      {
-        "label": "Positive expectancy",
-        "pass": false,
-        "detail": "$0/trade"
-      },
-      {
-        "label": "Profit factor ≥ 1.3",
-        "pass": false,
-        "detail": "0"
-      },
-      {
-        "label": "Max drawdown < 20%",
-        "pass": true,
-        "detail": "0%"
-      },
-      {
-        "label": "Beats S&P over window",
-        "pass": false,
-        "detail": "-2.2% vs SPY"
-      }
+      {"label": "≥ 30 closed trades", "pass": false, "detail": "0 closed — no positions yet"},
+      {"label": "Positive expectancy", "pass": false, "detail": "$0/trade — no trades yet"},
+      {"label": "Profit factor ≥ 1.3", "pass": false, "detail": "0 — no trades yet"},
+      {"label": "Max drawdown < 20%", "pass": true, "detail": "0% drawdown"},
+      {"label": "Beats S&P over window", "pass": false, "detail": "−3.3% vs SPY (cash drag since inception)"}
     ]
   },
   "proposals": {
-    "total": 0,
-    "proposed": 0,
+    "total": 1,
+    "proposed": 1,
     "rejected": 0,
-    "recent": []
+    "recent": [
+      {
+        "date": "2026-06-19",
+        "proposal": "Enable egress to paper-api.alpaca.markets in remote execution environment network policy to allow Bull to place orders autonomously.",
+        "status": "PENDING CJ ACTION"
+      }
+    ]
   },
-  "alerts": []
+  "alerts": [
+    {
+      "severity": "HIGH",
+      "type": "config",
+      "msg": "Alpaca REST API unreachable — paper-api.alpaca.markets blocked by egress policy. Bull cannot place orders until CJ adds this host to the environment's network allowlist.",
+      "since": "2026-06-19"
+    },
+    {
+      "severity": "INFO",
+      "type": "market",
+      "msg": "Markets closed June 19 (Juneteenth). NYSE/NASDAQ reopen Monday June 22.",
+      "since": "2026-06-19"
+    },
+    {
+      "severity": "INFO",
+      "type": "trade",
+      "msg": "2 trades queued for Monday June 22: AVGO (54sh @ $411.35) and ANET (133sh @ $168.24). Contingent on Alpaca egress being enabled.",
+      "since": "2026-06-19"
+    }
+  ]
 }
