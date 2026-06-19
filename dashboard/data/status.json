@@ -1,15 +1,18 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 (daily run — Juneteenth, markets closed)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality)",
+  "regime": "Neutral",
+  "regimeNote": "VIX ~16.4 — just above RISK-ON/NEUTRAL boundary. Fed hawkish (Chair Warsh removed rate cuts Jun 18; potential hike). Trim new sizes ~25%, be choosier.",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "monthPnlUsd": 0,
+  "vsSpyPct": -1.5,
+  "vsSpyNote": "SPY est +1.5% MTD (Jun 1–19); Bull flat (0 positions). Gap will close once queued trades execute.",
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -26,76 +29,168 @@
   },
   "bot": {
     "status": "Auto",
-    "uptime": "11d 4h",
-    "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
-    "heartbeat": [
-      0.4,
-      0.7,
-      0.5,
-      0.9,
-      0.6,
-      0.8,
-      1,
-      0.7,
-      0.85,
-      0.6,
-      0.9,
-      0.75
-    ],
+    "uptime": "16d 8h",
+    "version": "v0.4.3-paper",
+    "lastRun": "2026-06-19 (daily run)",
+    "nextRun": "Mon Jun 22 pre-market",
+    "heartbeat": [0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 1, 0.7, 0.85, 0.6, 0.9, 0.75],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality)",
+    "operationalNote": "BLOCKER: Alpaca API (paper-api.alpaca.markets) blocked by network egress policy. Cannot execute orders autonomously. CJ must (1) whitelist host in execution settings, OR (2) place queued trades manually via Alpaca dashboard on Mon Jun 22."
   },
-  "equityCurve": [
-    100000,
-    100000,
-    100000
-  ],
+  "equityCurve": [100000, 100000, 100000, 100000],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 7,
+    "maxPosition": 30,
+    "trailingStop": 20,
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
+  "queuedOrders": [
+    {
+      "ticker": "MU",
+      "side": "buy",
+      "qty": 18,
+      "limitPrice": 1110,
+      "stopTrailPct": 20,
+      "initialStop": 888,
+      "targetPrice": 1400,
+      "equityPct": 20.0,
+      "estCost": 19980,
+      "thesis": "Earnings June 24; AI HBM/NAND supercycle; $24B revenue; Cantor PT $1,500; Daiwa PT $1,600",
+      "status": "QUEUED — place Mon Jun 22"
+    },
+    {
+      "ticker": "INTC",
+      "side": "buy",
+      "qty": 163,
+      "limitPrice": 122,
+      "stopTrailPct": 20,
+      "initialStop": 97.60,
+      "targetPrice": 150,
+      "equityPct": 19.9,
+      "estCost": 19886,
+      "thesis": "CHIPS Act grants locked; BofA double-upgrade; July earnings guide $13.8-$14.8B rev above consensus",
+      "status": "QUEUED — place Mon Jun 22"
+    },
+    {
+      "ticker": "ANET",
+      "side": "buy",
+      "qty": 121,
+      "limitPrice": 165,
+      "stopTrailPct": 20,
+      "initialStop": 132,
+      "targetPrice": 190,
+      "equityPct": 20.0,
+      "estCost": 19965,
+      "thesis": "AI networking leader; 35% rev growth; FY26 raised to $11.5B; BofA PT $200; 30/0 buy consensus",
+      "status": "QUEUED — place Mon Jun 22"
+    }
+  ],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "entry": "Daily run (Juneteenth — markets closed). Regime: NEUTRAL (VIX ~16.4). Fed hawkish shift Jun 18 (Warsh removed rate cuts, potential hike). SPY +10.09% YTD. Top candidates queued: MU (earnings Jun 24 catalyst), INTC (CHIPS Act + foundry recovery), ANET (AI networking). Alpaca API blocked by network egress — cannot execute autonomously. All 3 trades queued for CJ to place manually on Mon Jun 22, or to auto-execute once egress is fixed."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
     "peakEquity": 100000,
     "grossExposure": 0,
+    "netExposure": 0,
     "largestPos": 0,
-    "sectorConc": 0
+    "sectorConc": 0,
+    "queuedExposure": 59.8,
+    "queuedSectorIT": 59.8
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive Momentum — Quality (Paper)",
+    "desc": "Short-to-medium swing trades in quality large/mid-cap stocks and liquid broad ETFs. Concentration in high-conviction AI infrastructure, semiconductor, and momentum leaders. 20% trailing stops; 7% risk per trade; no leveraged ETFs, no penny stocks, no crypto (per CLAUDE.md update Jun 14).",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on 2+ signals: breakout, momentum leadership, oversold snapback, dated catalyst, sector conviction.",
+      "Size: shares = (0.07 × equity) ÷ (entry − stop), cap at 30% per position (CLAUDE.md overrides strategy.md).",
+      "20% trailing stop on every entry (CLAUDE.md). No naked positions ever.",
+      "NEUTRAL regime (VIX 16-24): trim new sizes ~25%, be choosier.",
+      "Daily halt at −8% equity loss; monthly kill-switch at −25% MTD.",
+      "Universe: liquid US large/mid-cap, real revenue, price >$10. No leveraged ETFs, no crypto, no junk."
     ]
   },
-  "signals": [],
-  "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
-  },
-  "tickers": {},
-  "mode": "auto",
-  "spyCurve": [
-    100,
-    101.7,
-    102.25
+  "signals": [
+    {
+      "ticker": "MU",
+      "score": 92,
+      "action": "BUY",
+      "entry": 1110,
+      "stop": 888,
+      "target": 1400,
+      "catalyst": "Earnings June 24; AI HBM demand; NAND shortage; Wall St. price targets $1,050-$1,600",
+      "regime": "Neutral",
+      "status": "QUEUED"
+    },
+    {
+      "ticker": "INTC",
+      "score": 85,
+      "action": "BUY",
+      "entry": 122,
+      "stop": 97.60,
+      "target": 150,
+      "catalyst": "CHIPS Act grants; BofA double-upgrade; July earnings guide above consensus",
+      "regime": "Neutral",
+      "status": "QUEUED"
+    },
+    {
+      "ticker": "ANET",
+      "score": 82,
+      "action": "BUY",
+      "entry": 165,
+      "stop": 132,
+      "target": 190,
+      "catalyst": "AI networking; +35% rev growth; FY26 guide raised $11.5B; BofA PT $200",
+      "regime": "Neutral",
+      "status": "QUEUED"
+    },
+    {
+      "ticker": "NVDA",
+      "score": 78,
+      "action": "WATCH",
+      "entry": 212,
+      "stop": 169.60,
+      "target": 270,
+      "catalyst": "+85% YoY revenue; avg PT $275; dominant AI GPU; next earns Aug 26",
+      "regime": "Neutral",
+      "status": "WATCHLIST — add as position 4 once sector cap allows"
+    }
   ],
+  "movers": {
+    "gainers": [
+      {"ticker": "SNDK", "pct": 464.5, "note": "AI NAND shortage; $2,182 price; up 4000% since spinoff"},
+      {"ticker": "INTC", "pct": 250, "note": "Intel recovery; CHIPS Act + AI foundry; up from $36.90 start of 2026"},
+      {"ticker": "STX", "pct": 180, "note": "Seagate; HDD/storage supercycle"},
+      {"ticker": "WDC", "pct": 180, "note": "Western Digital; storage demand"},
+      {"ticker": "MU", "pct": 0, "note": "Micron $1,086-$1,146; earnings Jun 24; $1T market cap"}
+    ],
+    "losers": [],
+    "active": [
+      {"ticker": "QQQ", "price": 739.36, "note": "Nasdaq ETF; June 18 close"},
+      {"ticker": "SPY", "price": 746.74, "note": "S&P 500 ETF; +10.09% YTD"},
+      {"ticker": "AMD", "price": 512.48, "note": "CJ real holding; AI/data center; pulled back from ATH $547.26"}
+    ]
+  },
+  "tickers": {
+    "MU": {"price": 1115, "source": "web-search June 18", "note": "Earnings June 24; $1T market cap"},
+    "INTC": {"price": 122, "source": "web-search est June 18", "note": "Up 250% YTD; CHIPS Act; July earnings"},
+    "ANET": {"price": 163.24, "source": "web-search June 15", "note": "AI networking; 52wk $85-$180"},
+    "NVDA": {"price": 211, "source": "web-search June 15", "note": "AI GPU leader; $5.1T market cap"},
+    "AMD": {"price": 512.48, "source": "web-search June 17", "note": "CJ real holding - not in paper"},
+    "SPY": {"price": 746.74, "source": "web-search June 18", "note": "+10.09% YTD"},
+    "QQQ": {"price": 739.36, "source": "web-search June 18", "note": "Nasdaq 100 ETF"}
+  },
+  "mode": "auto",
+  "spyCurve": [100, 101.7, 102.25, 103.75],
   "readiness": {
     "ready": false,
     "passed": 1,
@@ -104,27 +199,27 @@
       {
         "label": "≥ 30 closed trades",
         "pass": false,
-        "detail": "0 closed"
+        "detail": "0 closed (3 queued, not yet executed)"
       },
       {
         "label": "Positive expectancy",
         "pass": false,
-        "detail": "$0/trade"
+        "detail": "$0/trade (no closed trades)"
       },
       {
         "label": "Profit factor ≥ 1.3",
         "pass": false,
-        "detail": "0"
+        "detail": "0 (no closed trades)"
       },
       {
         "label": "Max drawdown < 20%",
         "pass": true,
-        "detail": "0%"
+        "detail": "0% drawdown"
       },
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "Bull 0% vs SPY est +1.5% MTD"
       }
     ]
   },
@@ -134,5 +229,21 @@
     "rejected": 0,
     "recent": []
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "WARNING",
+      "msg": "Alpaca API blocked by network egress — autonomous trading disabled. Add paper-api.alpaca.markets to egress allowlist.",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "INFO",
+      "msg": "3 trades queued for manual execution Mon Jun 22: MU (18 @ $1,110), INTC (163 @ $122), ANET (121 @ $165). Total ~$59,831 (60% equity).",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "INFO",
+      "msg": "MU earnings June 24 — key catalyst. Pre-earnings entry carries gap risk (±10-20%). Proceed with 20% trailing stop.",
+      "date": "2026-06-19"
+    }
+  ]
 }
