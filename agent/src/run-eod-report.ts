@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
 import { readLedger } from "./ledger.js";
 import { rollingStats, renderRollingFooter } from "./rolling-stats.js";
+import { attribution, renderAttributionFooter } from "./attribution.js";
 import { excursionSummary, renderExcursionFooter, renderExcursionLines, type ExcursionTrade } from "./excursion-stats.js";
 import { paperSnapshot, getActivities, getClosedOrders, getPortfolioHistory } from "./alpaca.js";
 import { getMode } from "./mode.js";
@@ -115,6 +116,12 @@ if (isError || !text.trim()) {
 // trades yet, so a fresh account adds nothing. Pure read; never affects orders.
 const rollingFooter = renderRollingFooter(rollingStats(readLedger()));
 
+// Deterministic per-strategy P&L attribution footer (Bull strategy-attribution): which setups make/lose
+// money + win-rate per strategy, code-rendered from the proposal ledger's closed trades (the same set the
+// rolling footer reads). attribution() filters to win/loss internally, so passing the raw ledger is correct.
+// "" when no closed trade is tagged. Pure read; never affects orders.
+const attributionFooter = renderAttributionFooter(attribution(readLedger()));
+
 // Deterministic MAE/MFE excursion footer (Bull #12 reporting): portfolio summary over all journaled closes
 // + per-trade lines for the trades that CLOSED TODAY. Code-rendered from memory/journal.jsonl (the only
 // place excursion is persisted), so the numbers are always exact. "" when no trade carries excursion data.
@@ -125,7 +132,7 @@ const excursionFooter = excSummaryLine
   ? [excSummaryLine, ...(todaysCloseLines.length ? ["📐 Today's closes:", ...todaysCloseLines] : [])].join("\n")
   : "";
 
-const report = [text.trimEnd(), rollingFooter, excursionFooter].filter(Boolean).join("\n\n");
+const report = [text.trimEnd(), rollingFooter, attributionFooter, excursionFooter].filter(Boolean).join("\n\n");
 
 const posted = await sendDiscord(report, { channel: "bull", username: "Bill the Bull" });
 console.log(JSON.stringify({ ok: posted.ok === true, posted, paperConnected: snap.connected, todaysFills: todaysFills.length, todaysCloses: todaysCloses.length, costUsd, numTurns }, null, 2));
