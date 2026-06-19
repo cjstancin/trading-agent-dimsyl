@@ -1,15 +1,15 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 (Juneteenth — market closed; Alpaca/Finnhub API blocked; data via web research)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality)",
+  "regime": "Neutral",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "vsSpyPct": -7.3,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -26,10 +26,10 @@
   },
   "bot": {
     "status": "Auto",
-    "uptime": "11d 4h",
+    "uptime": "16d 3h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 (Juneteenth)",
+    "nextRun": "Monday 2026-06-23",
     "heartbeat": [
       0.4,
       0.7,
@@ -42,27 +42,39 @@
       0.85,
       0.6,
       0.9,
-      0.75
+      0.75,
+      0.5
     ],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality)",
+    "alerts": [
+      "⚠️ Alpaca API blocked by network egress (paper-api.alpaca.markets)",
+      "⚠️ Finnhub blocked by network egress (finnhub.io)",
+      "⚠️ Paper API keys exposed in curl -v output — recommend rotating"
+    ]
   },
   "equityCurve": [
+    100000,
     100000,
     100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 7,
+    "maxPosition": 30,
+    "trailingStop": 20,
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "note": "Juneteenth — markets closed. Alpaca and Finnhub APIs blocked by network egress. No orders placed. Researched via web: VIX 16.4 (Neutral), SPY $746.74, SMH at 52-wk high ($659.61), NVDA ~$207. US-Iran ceasefire sent semis higher. Watchlist set for Monday: SMH (45sh @ ~$662) + NVDA (100sh @ ~$207) pending API access restoration and market open confirmation."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -72,29 +84,127 @@
     "sectorConc": 0
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive Momentum — Quality (Paper)",
+    "desc": "Concentrated swing trades in liquid large/mid-cap stocks and broad/sector ETFs. Rides AI infrastructure and sector breakouts with trailing stops. Quality over speculation — no leveraged ETFs, no crypto, no penny stocks. CLAUDE.md rules govern: 7% risk/trade, 30% max position, 20% trailing stop.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on 2+ signals: breakout above multi-week high, momentum leader in hot sector, oversold snapback off support, or near-term catalyst.",
+      "Size by risk: shares = (7% × equity) ÷ (entry − stop), capped at 30% of equity.",
+      "18-20% trailing stop on every entry. Never remove or widen stops.",
+      "Cut if position is down ~12% from entry and thesis is broken.",
+      "Time-stop after 2-3 weeks of dead money — recycle the capital.",
+      "No new entries on daily loss ≤ -8%. STAND DOWN on MTD ≤ -25%."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "SMH",
+      "type": "Breakout",
+      "strength": "HIGH",
+      "action": "BUY Monday",
+      "entry": 662,
+      "stop": 543,
+      "shares": 45,
+      "pct": 29.8,
+      "thesis": "52-wk high breakout ($660.84 intraday); AI infra demand; Iran deal removed macro overhang; Strong Buy all MAs. Await Monday open confirmation."
+    },
+    {
+      "ticker": "NVDA",
+      "type": "Momentum",
+      "strength": "MEDIUM-HIGH",
+      "action": "BUY Monday (after SMH confirmed)",
+      "entry": 207,
+      "stop": 170,
+      "shares": 100,
+      "pct": 20.7,
+      "thesis": "AI compute leader; stable $203-209 range; add after SMH fills. Keeps sector (SMH+NVDA) at ~51%, under 60% cap."
+    },
+    {
+      "ticker": "AMD",
+      "type": "Watch",
+      "strength": "MEDIUM",
+      "action": "HOLD OFF — wait for base",
+      "entry": null,
+      "stop": null,
+      "shares": null,
+      "pct": null,
+      "thesis": "ATH $558 (Jun 15) → ~$430 (-23%) on June 18. Pullback too sharp without known catalyst. Wait for stabilization."
+    },
+    {
+      "ticker": "AVGO",
+      "type": "Watch",
+      "strength": "MEDIUM",
+      "action": "HOLD OFF — momentum mixed",
+      "entry": null,
+      "stop": null,
+      "shares": null,
+      "pct": null,
+      "thesis": "82% YTD but momentum indicator below 0 since June 5. SMH already proxies AVGO. Re-evaluate next week."
+    }
+  ],
   "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
+    "gainers": [
+      { "ticker": "SMH", "pct": 5.7, "note": "52-wk high breakout Jun 18; AI infra demand" },
+      { "ticker": "AVGO", "pct": 3.0, "note": "Overnight gain on debt-buyback program" },
+      { "ticker": "AMD", "pct": 133.0, "note": "YTD leader (+133%); recently pulled back from ATH" }
+    ],
+    "losers": [
+      { "ticker": "AMD", "pct": -23.0, "note": "Off ATH ($558) by -23% as of Jun 18" },
+      { "ticker": "OIL", "pct": -8.0, "note": "WTI crude fell sharply on US-Iran ceasefire/Hormuz reopening (est.)" }
+    ],
+    "active": [
+      { "ticker": "SMH", "note": "Primary watchlist — 52-wk breakout" },
+      { "ticker": "NVDA", "note": "Secondary watchlist — AI leader, stable range" },
+      { "ticker": "QQQ", "note": "Broad Nasdaq recovery on Iran deal; backup entry" }
+    ]
   },
-  "tickers": {},
+  "tickers": {
+    "SMH": {
+      "price": 659.61,
+      "priceDate": "2026-06-18",
+      "change52wHigh": 660.84,
+      "change52wLow": 257.12,
+      "signal": "Strong Buy",
+      "regime": "Breakout"
+    },
+    "NVDA": {
+      "price": 207.0,
+      "priceDate": "2026-06-18",
+      "signal": "Neutral-Bullish",
+      "regime": "Consolidation"
+    },
+    "SPY": {
+      "price": 746.74,
+      "priceDate": "2026-06-18",
+      "note": "Near Jun 2 ATH of $759.57"
+    },
+    "QQQ": {
+      "price": 722.51,
+      "priceDate": "2026-06-18"
+    },
+    "VIX": {
+      "price": 16.4,
+      "priceDate": "2026-06-18",
+      "regime": "Neutral (>16 threshold)"
+    },
+    "AVGO": {
+      "price": 408.24,
+      "priceDate": "2026-06-18",
+      "ytdReturn": 82
+    },
+    "AMD": {
+      "price": 430.0,
+      "priceDate": "2026-06-18 (approx)",
+      "ath": 558.37,
+      "athDate": "2026-06-15",
+      "ytdReturn": 133
+    }
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    107.3
   ],
   "readiness": {
     "ready": false,
@@ -124,7 +234,7 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-7.3% vs SPY (cash while market rallied)"
       }
     ]
   },
@@ -134,5 +244,26 @@
     "rejected": 0,
     "recent": []
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "critical",
+      "msg": "Alpaca paper-api.alpaca.markets blocked by network egress — cannot trade until allowlist updated"
+    },
+    {
+      "level": "critical",
+      "msg": "finnhub.io blocked by network egress — no live market data until allowlist updated"
+    },
+    {
+      "level": "warning",
+      "msg": "Paper API keys may need rotation — exposed in curl -v debug output in Jun 19 session"
+    },
+    {
+      "level": "info",
+      "msg": "Markets closed Jun 19 (Juneteenth). Next open: Mon Jun 23."
+    },
+    {
+      "level": "info",
+      "msg": "Watchlist ready for Mon: SMH (45sh @ $662 limit) + NVDA (100sh @ $207 limit), both with 18% trailing stops."
+    }
+  ]
 }
