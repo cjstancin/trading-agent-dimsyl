@@ -2,7 +2,8 @@
 // compute realized P&L + R-multiple, and back-fill each ledger proposal's outcome. Deterministic; no LLM,
 // no orders. No-op safe on a flat/empty account (returns []). Idempotent — already-closed proposals are skipped.
 import { getActivities } from "./alpaca.js";
-import { readLedger, updateLedger } from "./ledger.js";
+import { readLedger, updateLedger, type ProposalRecord } from "./ledger.js";
+import { rulesFor } from "./guardrails.js";
 
 const num = (v: unknown): number => { const x = typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN; return Number.isFinite(x) ? x : 0; };
 const round = (x: number, d = 2) => Math.round(x * 10 ** d) / 10 ** d;
@@ -53,13 +54,29 @@ export async function reconcile(): Promise<ClosedTrade[]> {
   // Back-fill ledger outcomes: match each closed trade to the nearest prior open proposal for that symbol.
   const ledger = readLedger();
   for (const ct of closed) {
-    const cand = ledger.filter((l) => l.symbol === ct.symbol && (l.status === "proposed" || l.status === "placed") && (l.outcome === "open" || l.outcome == null) && l.ts <= ct.closedAt);
-    const prop = cand.length ? cand[cand.length - 1] : null;
-    const trail = Number(prop?.trail_percent ?? 18);
+    const prop = matchProposal(ledger, ct.symbol, ct.closedAt);
+    const trail = trailForProposal(prop);
     const risk = ct.entry * ct.qty * (trail / 100);
     ct.rMultiple = risk ? round(ct.pnlUsd / risk, 2) : 0;
     if (prop) { prop.outcome = ct.pnlUsd > 0 ? "win" : "loss"; prop.realizedPnlUsd = ct.pnlUsd; prop.rMultiple = ct.rMultiple; }
   }
   updateLedger(ledger);
   return closed;
+}
+
+/** Match a closed LONG round-trip back to the BUY proposal that opened it: the latest still-open buy
+ *  proposal for that symbol placed at/before the close. reconcile() only builds long round-trips, so the
+ *  entry proposal MUST be a buy — filtering on side keeps a SELL proposal for the same symbol (which can
+ *  be the latest open proposal) from being mismarked win/loss and corrupting the win-rate/readiness gate.
+ *  Returns null when no open buy proposal precedes the close. Pure (no I/O) so it's unit-testable. */
+export function matchProposal(ledger: ProposalRecord[], symbol: string, closedAt: string): ProposalRecord | null {
+  const cand = ledger.filter((l) => l.symbol === symbol && l.side === "buy" && (l.status === "proposed" || l.status === "placed") && (l.outcome === "open" || l.outcome == null) && l.ts <= closedAt);
+  return cand.length ? cand[cand.length - 1] : null;
+}
+
+/** Trailing-stop % used to size the R-multiple of a closed trade: the proposal's own trail when set,
+ *  else the rulebook trail for the proposal's risk profile (aggressive 20 / steady 10). Never invents a
+ *  trail no rulebook uses. Pure (no I/O) so it's unit-testable. */
+export function trailForProposal(prop: ProposalRecord | null): number {
+  return Number(prop?.trail_percent ?? rulesFor(prop?.profile ?? "").trailPercent ?? 20);
 }
