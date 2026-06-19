@@ -3,7 +3,7 @@
 // couple of aggregates, and the exclusion of non-win/loss outcomes. Run: npm run test:attribution
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { attribution } from "./attribution.js";
+import { attribution, renderAttributionFooter } from "./attribution.js";
 
 // Synthetic closed trades. Timestamps are UTC; the ET conversions (June → EDT, UTC-4) are:
 //   13:00Z→09:00 ET (premarket) · 14:00Z→10:00 (open) · 13:30Z→09:30 (open) · 18:00Z→14:00 (midday) · 20:30Z→16:30 (close)
@@ -71,4 +71,28 @@ test("unparseable timestamp → 'unknown' time/day bucket (still counted by setu
   assert.equal(a.bySetup.z.count, 1);
   assert.equal(a.byTimeOfDay.unknown.count, 1);
   assert.equal(a.byDayOfWeek.unknown.count, 1);
+});
+
+test("renderAttributionFooter sorts setups by P&L desc and renders P&L · win-rate · count", () => {
+  // breakout +60 (50% win, 2) · pullback +40 (1 win) · loser −20 (0% win, 1)
+  const footer = renderAttributionFooter(attribution([
+    { ts: "2026-06-15T14:00:00Z", setup: "breakout", outcome: "win", realizedPnlUsd: 100 },
+    { ts: "2026-06-16T14:00:00Z", setup: "breakout", outcome: "loss", realizedPnlUsd: -40 },
+    { ts: "2026-06-15T14:00:00Z", setup: "pullback", outcome: "win", realizedPnlUsd: 40 },
+    { ts: "2026-06-15T14:00:00Z", setup: "loser", outcome: "loss", realizedPnlUsd: -20 },
+  ]));
+  assert.equal(footer, "🧭 By strategy (P&L): breakout +$60 · 50% win (2) | pullback +$40 · 100% win (1) | loser −$20 · 0% win (1)");
+});
+
+test("renderAttributionFooter: no tagged closed trades → '' (fresh account adds nothing)", () => {
+  assert.equal(renderAttributionFooter(attribution([])), "");
+  // an open trade is excluded by attribution(), so still nothing to render
+  assert.equal(renderAttributionFooter(attribution([{ ts: "2026-06-15T14:00:00Z", setup: "x", outcome: "open", realizedPnlUsd: null }])), "");
+});
+
+test("renderAttributionFooter ties broken by name, and caps the tail with '+N more'", () => {
+  // four setups all at +$0 totalPnl → name-ascending order; limit 2 shows the first two + "+2 more"
+  const trades = ["d", "c", "b", "a"].map((s) => ({ ts: "2026-06-15T14:00:00Z", setup: s, outcome: "win" as const, realizedPnlUsd: 0 }));
+  const footer = renderAttributionFooter(attribution(trades), 2);
+  assert.equal(footer, "🧭 By strategy (P&L): a +$0 · 100% win (1) | b +$0 · 100% win (1) | +2 more");
 });

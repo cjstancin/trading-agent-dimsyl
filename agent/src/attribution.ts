@@ -95,3 +95,23 @@ export function attribution(trades: AttributedTrade[]): Attribution {
     byDayOfWeek: groupBy(closed, (t) => dayOfWeek(t.ts)),
   };
 }
+
+/**
+ * One-line Discord-friendly per-strategy P&L attribution footer — the bySetup slice rendered for Bill's EOD
+ * wrap, mirroring renderRollingFooter / renderExcursionFooter. Returns "" when no closed trade is tagged, so a
+ * fresh account adds nothing. Setups are sorted by realized P&L descending (ties broken by name) so the best
+ * and worst earners read left-to-right deterministically. Caps at `limit` setups and appends "(+N more)" so a
+ * long tail is DISCLOSED, never silently dropped. Pure render over already-computed buckets; touches no order.
+ * e.g. "🧭 By strategy (P&L): breakout +$60 · 50% win (2) | pullback −$20 · 0% win (1)"
+ */
+export function renderAttributionFooter(attr: Attribution, limit = 8): string {
+  const usd = (n: number) => (n < 0 ? "−$" + Math.abs(n).toFixed(0) : "+$" + n.toFixed(0));
+  const entries = Object.entries(attr?.bySetup ?? {})
+    .filter(([, b]) => b.count > 0)
+    .sort((a, b) => b[1].totalPnl - a[1].totalPnl || a[0].localeCompare(b[0]));
+  if (!entries.length) return "";
+  const shown = entries.slice(0, Math.max(0, limit));
+  const parts = shown.map(([name, b]) => `${name} ${usd(b.totalPnl)} · ${b.winRate}% win (${b.count})`);
+  const more = entries.length - shown.length;
+  return "🧭 By strategy (P&L): " + parts.join(" | ") + (more > 0 ? ` | +${more} more` : "");
+}
