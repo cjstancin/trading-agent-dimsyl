@@ -1,15 +1,15 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 (Juneteenth — markets CLOSED; live Alpaca PAPER unreachable from run env)",
   "isSample": false,
   "profile": "Aggressive",
-  "regime": "Risk-on",
+  "regime": "Neutral (VIX 16.4 — borderline Risk-On; recovering from 22.2 on Jun 10)",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "vsSpyPct": -2.5,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -25,11 +25,11 @@
     "avgR": 0
   },
   "bot": {
-    "status": "Auto",
-    "uptime": "11d 4h",
+    "status": "Blocked",
+    "uptime": "16d 2h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 (Juneteenth daily run — research only)",
+    "nextRun": "Monday 2026-06-22 at market open (9:30 ET)",
     "heartbeat": [
       0.4,
       0.7,
@@ -50,19 +50,25 @@
   "equityCurve": [
     100000,
     100000,
+    100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 7,
+    "maxPosition": 30,
+    "trailingStop": 20,
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "note": "Juneteenth holiday — markets CLOSED. Alpaca API blocked by run-env network egress policy (paper-api.alpaca.markets not in allowlist). No trades executed. Completed market research. Regime: Neutral (VIX 16.4). SMH +72% YTD had brutal week (PHLX -10% on June 5 Broadcom guide miss, SMH -4.81% June 17). Rebounded 5.7% on June 18. Thesis intact — oversold snapback. Planned Monday entries: SMH (40sh ~$660) and AAPL (87sh ~$298). ACTION REQUIRED: CJ must whitelist paper-api.alpaca.markets in egress settings before Monday."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -73,28 +79,79 @@
   },
   "strategy": {
     "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names and sector ETFs. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
+      "Enter on breakout above a 20-day base with above-average volume and positive relative strength.",
+      "Size by risk: shares = (7% × equity) ÷ (entry − stop), capped at 30% of equity per name.",
+      "Regime: NEUTRAL (VIX 16-24) → trim new sizes ~25%, be choosier.",
+      "Initial stop 20% trailing on every entry — never remove a stop.",
       "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "No new entries if daily loss halt (−8%) is hit; flatten and stop for the month at −25%.",
+      "No leveraged/inverse ETFs, no crypto, no sub-$10 stocks."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "SMH",
+      "name": "VanEck Semiconductor ETF",
+      "action": "PLAN — BUY Monday",
+      "entry": 660,
+      "stop": 528,
+      "target": 780,
+      "shares": 40,
+      "cost": 26400,
+      "pctEquity": 26.4,
+      "thesis": "Sector oversold snapback after Broadcom guide miss. SMH -4.81% Jun 17, bounced +5.7% Jun 18. YTD +72% leader. VIX normalizing. AI demand intact.",
+      "score": 8,
+      "status": "pending — awaiting Monday open + Alpaca fix"
+    },
+    {
+      "ticker": "AAPL",
+      "name": "Apple Inc.",
+      "action": "PLAN — BUY Monday",
+      "entry": 298,
+      "stop": 238,
+      "target": 340,
+      "shares": 87,
+      "cost": 25926,
+      "pctEquity": 25.9,
+      "thesis": "BofA Buy PT $330; App Store revenue +12% YoY. iPhone upgrade cycle AI-driven. YoY +48%. Quality mega-cap with durable momentum.",
+      "score": 7,
+      "status": "pending — awaiting Monday open + Alpaca fix"
+    }
+  ],
   "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
+    "gainers": [
+      { "ticker": "SMH", "change": 5.7, "note": "June 18 — semis rebounded after brutal selloff" },
+      { "ticker": "AAPL", "change": 0.7, "note": "June 18 — steady; BofA top pick for June" }
+    ],
+    "losers": [
+      { "ticker": "SMH", "change": -4.81, "note": "June 17 — Broadcom guide miss sympathy drop" },
+      { "ticker": "XLK", "change": -2.79, "note": "June 17 — tech growth unwind" },
+      { "ticker": "MSFT", "change": -19, "note": "YTD — AI competition headwinds, $190B capex concerns" }
+    ],
+    "active": [
+      { "ticker": "NVDA", "price": 210.33, "note": "Jun 19 — recovering from $200 low; down from $236.26 ATH" },
+      { "ticker": "AAPL", "price": 298.01, "note": "Jun 18 close" },
+      { "ticker": "SMH", "price": 659.61, "note": "Jun 18 close" },
+      { "ticker": "SPY", "price": 746.74, "note": "Jun 18 close; YTD +10.09%" }
+    ]
   },
-  "tickers": {},
+  "tickers": {
+    "SPY": { "price": 746.74, "ytd": 10.09, "note": "Jun 18 close" },
+    "SMH": { "price": 659.61, "ytd": 72.15, "note": "Jun 18 close; rebounded from selloff" },
+    "XLK": { "price": null, "ytd": 32.86, "note": "YTD as of mid-June" },
+    "QQQ": { "price": null, "ytd": 17.57, "note": "YTD as of mid-June" },
+    "NVDA": { "price": 210.33, "ytd": null, "note": "Jun 19; recovering from $200.42 Jun 10 low" },
+    "AAPL": { "price": 298.01, "ytd": null, "note": "Jun 18 close; BofA Buy PT $330" },
+    "VIX": { "price": 16.41, "ytd": null, "note": "Jun 16 close; down from 22.22 on Jun 10" }
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    102.5
   ],
   "readiness": {
     "ready": false,
@@ -104,7 +161,7 @@
       {
         "label": "≥ 30 closed trades",
         "pass": false,
-        "detail": "0 closed"
+        "detail": "0 closed — account never traded"
       },
       {
         "label": "Positive expectancy",
@@ -119,12 +176,12 @@
       {
         "label": "Max drawdown < 20%",
         "pass": true,
-        "detail": "0%"
+        "detail": "0% — cash only"
       },
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-2.5% vs SPY (cash drag while SPY +2.5% since inception)"
       }
     ]
   },
@@ -134,5 +191,21 @@
     "rejected": 0,
     "recent": []
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "critical",
+      "msg": "Alpaca API BLOCKED: paper-api.alpaca.markets is not in the run environment's network egress allowlist. No orders can be placed or verified from this environment. CJ must add this host to egress settings before next run.",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "info",
+      "msg": "Juneteenth holiday (June 19): NYSE and Nasdaq CLOSED. Markets reopen Monday June 22.",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "warning",
+      "msg": "Account has been 100% cash since inception (June 12). Opportunity cost: SPY +2.5% in that window = ~$2,500 left on the table. Deploy capital Monday if Alpaca is fixed.",
+      "date": "2026-06-19"
+    }
+  ]
 }
