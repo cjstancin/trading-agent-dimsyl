@@ -7,6 +7,8 @@ import "./load-env.js";
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
+import { readLedger } from "./ledger.js";
+import { rollingStats, renderRollingFooter } from "./rolling-stats.js";
 import { paperSnapshot, getActivities, getClosedOrders, getPortfolioHistory } from "./alpaca.js";
 import { getMode } from "./mode.js";
 import { isMarketDayToday, isPastHalfDayCloseET } from "./market-calendar.js";
@@ -103,6 +105,13 @@ if (isError || !text.trim()) {
   process.exit(1);
 }
 
-const posted = await sendDiscord(text, { channel: "bull", username: "Bill the Bull" });
+// Append the deterministic rolling-form footer (recent win-rate / avg win-loss / expectancy). Code-rendered,
+// not LLM-written, so the numbers are always exact and present. Reads the proposal ledger as-is — `npm run
+// refresh` (which reconciles outcomes) runs earlier in the close-of-day cmd. Footer is "" when no closed
+// trades yet, so a fresh account adds nothing. Pure read; never affects orders.
+const rollingFooter = renderRollingFooter(rollingStats(readLedger()));
+const report = rollingFooter ? `${text.trimEnd()}\n\n${rollingFooter}` : text;
+
+const posted = await sendDiscord(report, { channel: "bull", username: "Bill the Bull" });
 console.log(JSON.stringify({ ok: posted.ok === true, posted, paperConnected: snap.connected, todaysFills: todaysFills.length, todaysCloses: todaysCloses.length, costUsd, numTurns }, null, 2));
 if (!posted.ok) process.exitCode = 1;
