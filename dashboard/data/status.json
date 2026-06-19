@@ -1,15 +1,19 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 09:05 UTC (market holiday — Juneteenth)",
   "isSample": false,
   "profile": "Aggressive",
-  "regime": "Risk-on",
+  "regime": "Neutral",
+  "regimeNote": "VIX ~16.2 (just above 16 RISK-ON threshold). Trim new sizes 25%, be choosier. Iran peace tailwind; S&P near ATH ~7,600.",
   "equity": 100000,
   "cash": 100000,
   "buyingPower": 400000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
+  "monthPnlUsd": 0,
   "vsSpyPct": -2.2,
+  "marketStatus": "CLOSED — Juneteenth (June 19, 2026). Reopens Monday June 22.",
+  "alpacaStatus": "BLOCKED — paper-api.alpaca.markets not in cloud egress allowlist. CJ must add host to network egress settings.",
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -26,10 +30,10 @@
   },
   "bot": {
     "status": "Auto",
-    "uptime": "11d 4h",
+    "uptime": "16d 9h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 09:05 UTC",
+    "nextRun": "Mon June 22 pre-market ET",
     "heartbeat": [
       0.4,
       0.7,
@@ -42,7 +46,8 @@
       0.85,
       0.6,
       0.9,
-      0.75
+      0.75,
+      0.8
     ],
     "mode": "auto",
     "profile": "Aggressive"
@@ -50,19 +55,26 @@
   "equityCurve": [
     100000,
     100000,
+    100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 7,
+    "maxPosition": 30,
+    "trailingStop": 20,
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "type": "daily-run",
+      "note": "Holiday run (Juneteenth). Market closed. Alpaca egress blocked — cannot sync live account or place orders. Regime: NEUTRAL (VIX ~16.2). S&P near ATH ~7,600. Trade plan drafted for Monday: NVDA @ $191 limit, AVGO watch (wait for $400 stabilization). No circuit breakers triggered. MTD P&L = 0%. Action needed: add paper-api.alpaca.markets + finnhub.io to network egress allowlist."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -73,27 +85,72 @@
   },
   "strategy": {
     "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta, liquid large/mid-cap stocks and broad ETFs. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on 2+ triggers: breakout, momentum leader, oversold snapback, near-term catalyst, or sector thesis conviction.",
+      "Size by risk: shares = (7% × equity) ÷ (entry − stop), then apply NEUTRAL regime 25% size trim, cap at 30% of equity per name.",
+      "Set ~20% trailing stop on every entry. Never remove a stop.",
+      "Cut at −12% from entry unless dated catalyst is imminent and thesis intact.",
+      "No new entries if daily loss halt (−8%) is hit; stand down for the month at −25% MTD.",
+      "Universe: liquid US large/mid-cap stocks + broad/sector ETFs. No leveraged ETFs, crypto, penny stocks (<$10), or meme names."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "NVDA",
+      "side": "BUY",
+      "score": 8,
+      "entry": 191,
+      "stop": 153,
+      "target": 230,
+      "qty": 137,
+      "cost": 26167,
+      "pctEquity": 26.2,
+      "regime": "NEUTRAL",
+      "triggers": ["Momentum leader", "AI catalyst (hyperscaler capex $750B 2026)"],
+      "thesis": "AI chip king; NVDA FY26 revenue $215.9B (+65% YoY); ongoing AI infra supercycle. Strongest name in strongest sector.",
+      "status": "PENDING — place limit Monday June 22 open"
+    },
+    {
+      "ticker": "AVGO",
+      "side": "BUY WATCH",
+      "score": 6,
+      "entry": 408,
+      "stop": 326,
+      "target": 495,
+      "qty": 64,
+      "cost": 26112,
+      "pctEquity": 26.1,
+      "regime": "NEUTRAL",
+      "triggers": ["Oversold 17% from $495 ATH", "AI accelerator thesis intact (+106% AI revenue)"],
+      "thesis": "Broadcom oversold on broad tech pullback; custom AI accelerator and networking moat intact; 48-analyst Strong Buy consensus with $490 target.",
+      "status": "WATCH — broke $410 support; verify stabilization above $400 Monday AM before entering"
+    }
+  ],
   "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
+    "gainers": [
+      {"ticker": "AMD", "pct": 1.02, "note": "130% YTD momentum leader"},
+      {"ticker": "MU", "pct": 2.20, "note": "AI memory demand; +703% past year"},
+      {"ticker": "NVDA", "pct": 1.02, "note": "AI chip leader; $215.9B FY26 revenue"}
+    ],
+    "losers": [
+      {"ticker": "AVGO", "pct": -17, "note": "17% off $495 ATH (June 3); broke $410 support"}
+    ],
+    "active": ["NVDA", "AMD", "MU", "AVGO"]
   },
-  "tickers": {},
+  "tickers": {
+    "NVDA": {"price": 189, "pctChange": 1.02, "note": "~June 18 close est."},
+    "AMD": {"price": 512.48, "pctChange": 1.02, "note": "June 18 close"},
+    "AVGO": {"price": 408.24, "pctChange": -0.8, "note": "June 18 close; ATH $495 on June 3"},
+    "MU": {"price": 1043.19, "pctChange": 2.20, "note": "June 18 close"},
+    "SPY": {"price": 760, "pctChange": 0.52, "note": "S&P 500 ~7,600 (ATH range); est."},
+    "VIX": {"price": 16.2, "pctChange": -1.2, "note": "NEUTRAL zone; June 16 close 16.41"}
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
+    102.25,
     102.25
   ],
   "readiness": {
@@ -119,12 +176,12 @@
       {
         "label": "Max drawdown < 20%",
         "pass": true,
-        "detail": "0%"
+        "detail": "0% (no trades yet)"
       },
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-2.2% vs SPY (Bull flat; SPY +2.2% since inception)"
       }
     ]
   },
@@ -134,5 +191,14 @@
     "rejected": 0,
     "recent": []
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "ACTION",
+      "msg": "Alpaca & Finnhub blocked: add paper-api.alpaca.markets and finnhub.io to network egress allowlist in Claude Code Remote environment settings."
+    },
+    {
+      "level": "INFO",
+      "msg": "Market closed June 19 (Juneteenth). Reopens Monday June 22. Trade plan ready: NVDA limit $191 + AVGO watch $400."
+    }
+  ]
 }
