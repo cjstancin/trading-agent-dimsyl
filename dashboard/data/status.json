@@ -1,15 +1,15 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 05:05 UTC (Alpaca PAPER — blocked, see alerts)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality) — Reigned In (CJ 2026-06-14)",
+  "regime": "Neutral",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "vsSpyPct": -3.9,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -26,10 +26,10 @@
   },
   "bot": {
     "status": "Auto",
-    "uptime": "11d 4h",
+    "uptime": "16d 8h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 05:05 UTC",
+    "nextRun": "2026-06-22 (Mon open)",
     "heartbeat": [
       0.4,
       0.7,
@@ -45,24 +45,30 @@
       0.75
     ],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality)"
   },
   "equityCurve": [
+    100000,
     100000,
     100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 7,
+    "maxPosition": 30,
+    "trailingStop": 20,
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "entry": "Market closed (Juneteenth). Research complete. Staged 2 trades for Mon 6/22: NVDA 124sh @$210.50 and AVGO 64sh @$408.00. Network egress blocks Alpaca+Finnhub — execution pending. Regime: NEUTRAL (VIX 17.4). No halt/kill-switch. All cash."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -72,29 +78,87 @@
     "sectorConc": 0
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive (Quality) Momentum (Paper)",
+    "desc": "Short-to-medium swing trades in high-conviction quality large-cap stocks and liquid sector ETFs. Focuses on AI infrastructure, semiconductor leaders, and momentum names with real revenue and earnings. Trailing stops on every entry. Reigned-in profile as of June 14, 2026: 7% risk/trade, 30% max position, 60% max sector, 8 open max.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter when 2+ triggers align: breakout, momentum leadership, oversold snapback, or near-term catalyst.",
+      "Size by risk: shares = (7% × equity) ÷ (entry − stop), capped at 30% of equity per name.",
+      "Trim sizes ~25% in NEUTRAL regime (VIX 16–24); full size in RISK-ON (VIX <16).",
+      "20% trailing stop on every entry; tighten to 12% once +20% in profit.",
+      "No new entries if daily loss halt (−8%) is hit; stand down for the month at −25% MTD.",
+      "Universe: liquid US large- & mid-cap stocks and broad/sector ETFs only. No leveraged ETFs, no crypto, no penny stocks (<$10)."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "NVDA",
+      "action": "BUY",
+      "conviction": "HIGH",
+      "entry": 210.50,
+      "stop": 168.40,
+      "target": 275.00,
+      "shares": 124,
+      "cost": 26102,
+      "pctOfEquity": 26.1,
+      "thesis": "AI infra leader; Q1 FY27 +85% YoY ($81.6B rev); trading at floor of analyst range ($210 low/$275 avg/$360 high); Blackwell/Rubin $1T demand; $25B debt raise June 18.",
+      "stagedFor": "2026-06-22 open"
+    },
+    {
+      "ticker": "AVGO",
+      "action": "BUY",
+      "conviction": "HIGH",
+      "entry": 408.00,
+      "stop": 326.40,
+      "target": 522.00,
+      "shares": 64,
+      "cost": 26112,
+      "pctOfEquity": 26.1,
+      "thesis": "Custom silicon leader; AI rev 2x YoY ($10.8B Q2); guides Q3 AI rev $16B (~3x); >$100B AI semi by FY27; 6 hyperscaler customers; avg analyst target $522 (+28%).",
+      "stagedFor": "2026-06-22 open"
+    }
+  ],
   "movers": {
-    "gainers": [],
+    "gainers": [
+      { "ticker": "AMD", "changePct": 3.74, "price": 531.64, "note": "Near ATH $558 — watching" },
+      { "ticker": "NVDA", "changePct": null, "price": 210.33, "note": "Staged BUY" },
+      { "ticker": "AVGO", "changePct": null, "price": 408.00, "note": "Staged BUY" }
+    ],
     "losers": [],
-    "active": []
+    "active": ["NVDA", "AVGO", "AMD"]
   },
-  "tickers": {},
+  "tickers": {
+    "NVDA": {
+      "price": 210.33,
+      "target": 275,
+      "stopLevel": 168.40,
+      "thesis": "Blackwell AI infra — staged BUY 124sh @ $210.50",
+      "status": "staged"
+    },
+    "AVGO": {
+      "price": 408.00,
+      "target": 522,
+      "stopLevel": 326.40,
+      "thesis": "Custom silicon AI — staged BUY 64sh @ $408",
+      "status": "staged"
+    },
+    "AMD": {
+      "price": 531.64,
+      "target": 513,
+      "thesis": "Watching — near ATH, CJ already long in real portfolio",
+      "status": "watch"
+    },
+    "SPY": {
+      "price": 746.74,
+      "ytdReturn": 10.09,
+      "thesis": "Benchmark — up 10.09% YTD"
+    }
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
-    102.25
+    102.25,
+    103.88
   ],
   "readiness": {
     "ready": false,
@@ -124,15 +188,51 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "-3.9% vs SPY (est.)"
       }
     ]
   },
   "proposals": {
-    "total": 0,
-    "proposed": 0,
+    "total": 2,
+    "proposed": 2,
     "rejected": 0,
-    "recent": []
+    "recent": [
+      {
+        "ticker": "NVDA",
+        "date": "2026-06-19",
+        "side": "BUY",
+        "shares": 124,
+        "entry": 210.50,
+        "status": "staged — pending network access + Mon market open"
+      },
+      {
+        "ticker": "AVGO",
+        "date": "2026-06-19",
+        "side": "BUY",
+        "shares": 64,
+        "entry": 408.00,
+        "status": "staged — pending network access + Mon market open"
+      }
+    ]
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "warn",
+      "code": "ALPACA_BLOCKED",
+      "msg": "Alpaca API unreachable — network egress policy does not allow paper-api.alpaca.markets. Trades staged but NOT executed. Add host to egress allowlist to enable live execution.",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "warn",
+      "code": "FINNHUB_BLOCKED",
+      "msg": "Finnhub API unreachable — network egress policy does not allow finnhub.io. Live quotes unavailable; prices sourced from web search (approximate).",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "info",
+      "code": "MARKET_CLOSED",
+      "msg": "US markets closed June 19, 2026 (Juneteenth). Next trading day: Monday June 22.",
+      "date": "2026-06-19"
+    }
+  ]
 }
