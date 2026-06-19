@@ -5,3 +5,5 @@
 | Date | Ticker | Side | Qty | Price | Stop | Thesis (1 line) | Status | Realized P&L |
 |------|--------|------|-----|-------|------|-----------------|--------|--------------|
 | — | — | — | — | — | — | — | — | — |
+
+<!-- 2026-06-19: No trades executed. Alpaca API unreachable (egress blocked). MRVL dated-catalyst trade identified but not placed — see research-log.md. -->

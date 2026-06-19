@@ -1,15 +1,18 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 01:10 UTC (research-only — Alpaca egress blocked)",
   "isSample": false,
   "profile": "Aggressive",
-  "regime": "Risk-on",
+  "regime": "Neutral",
+  "regimeNote": "VIX ~16.4–17.1 (borderline RISK-ON/NEUTRAL). Trim new sizes ~25%, be choosier.",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
+  "monthPnlUsd": 0,
   "vsSpyPct": -2.2,
+  "vsSpyNote": "SPY ~$748 (June 18); S&P ~$7,360. We are flat at $100k since inception. SPY up ~2.2% from our starting baseline.",
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -25,11 +28,11 @@
     "avgR": 0
   },
   "bot": {
-    "status": "Auto",
-    "uptime": "11d 4h",
+    "status": "Research-only (egress blocked)",
+    "uptime": "16d 1h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
+    "lastRun": "2026-06-19 01:10 UTC",
+    "nextRun": "2026-06-20 (next scheduled)",
     "heartbeat": [
       0.4,
       0.7,
@@ -45,24 +48,32 @@
       0.75
     ],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive",
+    "networkStatus": "BLOCKED — paper-api.alpaca.markets not in egress allowlist. No trades placed. Research completed via web search.",
+    "actionRequired": "Add paper-api.alpaca.markets, data.alpaca.markets, api.finnhub.io, discord.com to egress allowlist in Claude Code on the web environment settings."
   },
   "equityCurve": [
+    100000,
     100000,
     100000,
     100000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
+    "riskPerTrade": 7,
+    "maxPosition": 30,
     "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "entry": "Daily run completed (research-only). Alpaca egress blocked — no orders placed. Regime: NEUTRAL (VIX ~16.4). Top opportunity: MRVL (S&P 500 inclusion June 22, B. Riley $345 target, AI tailwind). Identified sizing: 91 shares ~$29.6k @ ~$325, 18% trailing stop. Circuit breakers: all clear. Standing by for egress fix to execute."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -73,27 +84,60 @@
   },
   "strategy": {
     "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names and liquid sector ETFs. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on breakout, momentum, oversold snapback, or dated catalyst (2+ signals preferred).",
+      "Size by risk: shares = (7% × equity) ÷ (entry − stop), NEUTRAL-trimmed −25%, capped at 30% of equity per name.",
+      "Initial stop below pivot; 18% trailing stop on all entries.",
+      "Take partial profit at +6–8%; let remainder trail with tightened stop.",
+      "No new entries if daily loss halt (−8%) is hit; flatten at −25% MTD.",
+      "NEUTRAL regime (VIX 16–24): trim new sizes 25%, be choosier."
     ]
   },
-  "signals": [],
+  "signals": [
+    {
+      "ticker": "MRVL",
+      "direction": "LONG",
+      "status": "WATCH — pending execution (Alpaca egress blocked)",
+      "entryTarget": 325,
+      "stop": 267,
+      "target": 345,
+      "shares": 91,
+      "dollarSize": 29575,
+      "pctEquity": 29.6,
+      "thesis": "S&P 500 inclusion June 22 forced buying; AI chip demand; B. Riley $345 target; new CFO",
+      "risks": "Already ripped from $200s; P/E 102x; sell-the-news risk on June 22",
+      "confidence": "HIGH",
+      "expires": "2026-06-22"
+    }
+  ],
   "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
+    "gainers": [
+      { "ticker": "MRVL", "note": "S&P 500 inclusion + AI hype, up 8%+ pre-market June 18" },
+      { "ticker": "AMD", "note": "AI infrastructure demand; +130% YTD (extended)" },
+      { "ticker": "INTC", "note": "Analyst upgrade June 13, +6.5% one-day" }
+    ],
+    "losers": [
+      { "ticker": "ADBE", "note": "Down 6.8% on competitive AI concerns June 13" },
+      { "ticker": "AAPL", "note": "Down 1.5% on lukewarm AI reception" }
+    ],
+    "active": [
+      { "ticker": "NVDA", "note": "$214.75, $5.2T cap, 18/18 Strong Buy, extended RSI" },
+      { "ticker": "SMH", "note": "~$638, up 50%+ YTD, RSI 80s — wait for pullback" }
+    ]
   },
-  "tickers": {},
+  "tickers": {
+    "MRVL": { "price": 324.73, "note": "S&P 500 inclusion June 22; B. Riley target $345" },
+    "SPY": { "price": 748.09, "note": "52wk high $760.40 June 2; slight pullback" },
+    "VIX": { "price": 16.41, "note": "NEUTRAL regime; borderline RISK-ON" },
+    "NVDA": { "price": 214.75, "note": "Extended; wait for pullback" },
+    "SMH": { "price": 638, "note": "Up 50%+ YTD; RSI 80s; extended" }
+  },
   "mode": "auto",
   "spyCurve": [
     100,
     101.7,
+    102.25,
     102.25
   ],
   "readiness": {
@@ -129,10 +173,29 @@
     ]
   },
   "proposals": {
-    "total": 0,
-    "proposed": 0,
+    "total": 1,
+    "proposed": 1,
     "rejected": 0,
-    "recent": []
+    "recent": [
+      {
+        "date": "2026-06-19",
+        "ticker": "MRVL",
+        "direction": "LONG",
+        "status": "PENDING_EXECUTION",
+        "note": "Queued — Alpaca egress unblocked needed before order can be placed"
+      }
+    ]
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "WARNING",
+      "message": "Alpaca API unreachable — paper-api.alpaca.markets blocked by egress policy. Add to allowlist to enable trading.",
+      "date": "2026-06-19"
+    },
+    {
+      "level": "INFO",
+      "message": "MRVL S&P 500 inclusion trade identified (June 22 catalyst). Queued for execution when Alpaca is accessible.",
+      "date": "2026-06-19"
+    }
+  ]
 }
