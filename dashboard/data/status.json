@@ -1,15 +1,16 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-19 14:30 UTC (daily run — market closed: Juneteenth; Alpaca API blocked)",
   "isSample": false,
-  "profile": "Aggressive",
-  "regime": "Risk-on",
+  "profile": "Aggressive (Quality)",
+  "regime": "Neutral",
+  "regimeDetail": "VIX ~16.4 (June 16 close). Above 16 threshold → NEUTRAL. Trim new sizes ~25%. VIX was 22.22 on June 10 (Fed meeting), has since retraced.",
   "equity": 100000,
   "cash": 100000,
-  "buyingPower": 400000,
+  "buyingPower": 100000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "vsSpyPct": -2.4,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -25,44 +26,34 @@
     "avgR": 0
   },
   "bot": {
-    "status": "Auto",
-    "uptime": "11d 4h",
+    "status": "Blocked",
+    "statusDetail": "API egress to paper-api.alpaca.markets is blocked by network policy. Trades cannot be placed until CJ adds the host to the egress allowlist.",
+    "uptime": "16d 10h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
-    "nextRun": "Today 14:45 ET",
-    "heartbeat": [
-      0.4,
-      0.7,
-      0.5,
-      0.9,
-      0.6,
-      0.8,
-      1,
-      0.7,
-      0.85,
-      0.6,
-      0.9,
-      0.75
-    ],
+    "lastRun": "2026-06-19 14:30 UTC",
+    "nextRun": "Mon 2026-06-22 (MRVL S&P 500 inclusion day)",
+    "heartbeat": [0.4, 0.7, 0.5, 0.9, 0.6, 0.8, 1, 0.7, 0.85, 0.6, 0.9, 0.75, 0.0],
     "mode": "auto",
-    "profile": "Aggressive"
+    "profile": "Aggressive (Quality)"
   },
-  "equityCurve": [
-    100000,
-    100000,
-    100000
-  ],
+  "equityCurve": [100000, 100000, 100000, 100000],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 7,
+    "maxPosition": 30,
+    "trailingStop": 20,
+    "dailyHalt": 8,
+    "monthlyKill": 25
   },
   "positions": [],
   "openOrders": [],
   "fills": [],
-  "journal": [],
+  "journal": [
+    {
+      "date": "2026-06-19",
+      "type": "daily-run",
+      "summary": "Juneteenth — market closed. Alpaca API blocked by network egress policy. Research completed. Intended trades for Mon June 22: MRVL (S&P 500 inclusion catalyst, ~84 shares @ $312, stop ~$249) and NVDA (AI leader pullback, ~127 shares @ $205, stop ~$164). Cannot execute until API access is restored."
+    }
+  ],
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
@@ -72,67 +63,135 @@
     "sectorConc": 0
   },
   "strategy": {
-    "name": "Aggressive Momentum (Paper)",
-    "desc": "Short-to-medium-hold momentum and breakout trades in high-beta names, leveraged sector ETFs, and crypto proxies. Rides relative strength with trailing stops; cuts losers fast. Aggressive sizing inside hard guardrails — paper only.",
+    "name": "Aggressive Momentum Quality (Paper)",
+    "desc": "Short-to-medium-hold momentum and breakout trades in high-conviction large/mid-cap stocks and broad ETFs. Rides relative strength with 20% trailing stops; cuts losers fast at −12%. Quality floor: price ≥ $10, real revenue, liquid. No leveraged/inverse ETFs, no crypto.",
     "rules": [
-      "Enter on a breakout above a 20-day base with above-average volume and positive relative strength.",
-      "Size by risk: shares = (10% × equity) ÷ (entry − stop), capped at 40% of equity per name.",
-      "Initial stop below the breakout pivot; switch to an ~18% trailing stop once +8% in profit.",
-      "Take partial profit at +6–8%; let the remainder trail.",
-      "No new entries if the daily loss halt (−10%) is hit; flatten and stop for the month at −30%.",
-      "Leveraged ETFs and crypto sized smaller — leverage already amplifies the move."
+      "Enter on breakout or 2+ triggers: momentum, oversold snap, dated catalyst.",
+      "Size by risk: shares = (7% × equity) ÷ (entry − stop), capped at 30% per name.",
+      "NEUTRAL regime (VIX 16–24): trim sizing by ~25%. RISK-OFF (VIX >24): high-conviction only.",
+      "20% trailing stop on every entry — never remove.",
+      "No new entries if daily loss halt (−8%) is hit; flatten at −25% MTD.",
+      "Quality only: large/mid-cap, price ≥ $10, real revenue. No leveraged ETFs, no crypto."
     ]
   },
-  "signals": [],
-  "movers": {
-    "gainers": [],
-    "losers": [],
-    "active": []
-  },
-  "tickers": {},
-  "mode": "auto",
-  "spyCurve": [
-    100,
-    101.7,
-    102.25
+  "signals": [
+    {
+      "ticker": "MRVL",
+      "side": "BUY",
+      "conviction": 78,
+      "entry": 312.00,
+      "stop": 249.60,
+      "target": 345.00,
+      "targetHigh": 385.00,
+      "sharesIntended": 84,
+      "costIntended": 26208,
+      "pctOfEquity": 26.2,
+      "status": "PENDING — awaiting API access",
+      "thesis": "S&P 500 inclusion June 22 → forced passive fund buying. AI data center ASIC and networking chips. B.Riley $345 / KeyBanc $385 targets. Risk: 55% run already priced in; may sell off post-inclusion.",
+      "catalyst": "S&P 500 index addition at close June 22, 2026",
+      "regime": "Neutral"
+    },
+    {
+      "ticker": "NVDA",
+      "side": "BUY",
+      "conviction": 85,
+      "entry": 205.00,
+      "stop": 164.00,
+      "target": 299.00,
+      "targetHigh": 350.00,
+      "sharesIntended": 127,
+      "costIntended": 26035,
+      "pctOfEquity": 26.0,
+      "status": "PENDING — awaiting API access",
+      "thesis": "Pulled back 13% from ATH ($236.54). Forward P/E 25× — reasonable vs growth. 62 analysts Strong Buy, avg target $299 (+46%). AI chip demand from hyperscalers accelerating. Blackwell architecture dominant.",
+      "catalyst": "AI infrastructure spending cycle; earnings season Jul 2026",
+      "regime": "Neutral"
+    },
+    {
+      "ticker": "QQQ",
+      "side": "BUY",
+      "conviction": 65,
+      "entry": 722.00,
+      "stop": 577.00,
+      "target": 800.00,
+      "targetHigh": 863.00,
+      "sharesIntended": 26,
+      "costIntended": 18772,
+      "pctOfEquity": 18.8,
+      "status": "PENDING — awaiting API access (3rd priority)",
+      "thesis": "Broad Nasdaq tech exposure. 1% dip on Fed hold is a buying opportunity. Avg analyst 12-month target $863 (+19.5%). Diversifies away from pure-semi concentration.",
+      "catalyst": "Tech sector re-rating; Fed rate cut cycle if inflation cools",
+      "regime": "Neutral"
+    }
   ],
+  "movers": {
+    "gainers": [
+      {"ticker": "MRVL", "pct": 8.5, "note": "S&P 500 inclusion announced + analyst upgrades"},
+      {"ticker": "SMH", "pct": 4.5, "note": "Semiconductor ETF at fresh high; AI chip demand"},
+      {"ticker": "AMD", "pct": 3.2, "note": "AI infrastructure momentum; 130% YTD"}
+    ],
+    "losers": [
+      {"ticker": "QQQ", "pct": -1.01, "note": "Fed held rates steady (June 17)"},
+      {"ticker": "SPY", "pct": -0.5, "note": "Pullback from June 2 ATH of $759.57"}
+    ],
+    "active": [
+      {"ticker": "NVDA", "note": "Down ~13% from ATH $236.54; avg analyst target $299; Strong Buy"},
+      {"ticker": "MRVL", "note": "S&P 500 entry June 22; up 55% since late May; $311.51 close"}
+    ]
+  },
+  "tickers": {
+    "SPY": {"price": 746.74, "date": "2026-06-18", "note": "ATH 759.57 on June 2"},
+    "QQQ": {"price": 722.51, "date": "2026-06-17", "note": "Down 1.01% on Fed hold"},
+    "NVDA": {"priceEst": 205.0, "ath": 236.54, "athDate": "2026-05-14", "note": "est; ~13% off ATH"},
+    "MRVL": {"price": 311.51, "date": "2026-06-18", "note": "S&P 500 inclusion June 22"},
+    "VIX": {"price": 16.41, "date": "2026-06-16", "note": "NEUTRAL (16-24 band)"}
+  },
+  "mode": "auto",
+  "spyCurve": [100, 101.7, 102.25, 102.05],
   "readiness": {
     "ready": false,
     "passed": 1,
     "total": 5,
     "checks": [
-      {
-        "label": "≥ 30 closed trades",
-        "pass": false,
-        "detail": "0 closed"
-      },
-      {
-        "label": "Positive expectancy",
-        "pass": false,
-        "detail": "$0/trade"
-      },
-      {
-        "label": "Profit factor ≥ 1.3",
-        "pass": false,
-        "detail": "0"
-      },
-      {
-        "label": "Max drawdown < 20%",
-        "pass": true,
-        "detail": "0%"
-      },
-      {
-        "label": "Beats S&P over window",
-        "pass": false,
-        "detail": "-2.2% vs SPY"
-      }
+      {"label": "≥ 30 closed trades", "pass": false, "detail": "0 closed"},
+      {"label": "Positive expectancy", "pass": false, "detail": "$0/trade"},
+      {"label": "Profit factor ≥ 1.3", "pass": false, "detail": "0"},
+      {"label": "Max drawdown < 20%", "pass": true, "detail": "0%"},
+      {"label": "Beats S&P over window", "pass": false, "detail": "-2.4% vs SPY"}
     ]
   },
   "proposals": {
-    "total": 0,
-    "proposed": 0,
+    "total": 1,
+    "proposed": 1,
     "rejected": 0,
-    "recent": []
+    "recent": [
+      {
+        "date": "2026-06-19",
+        "type": "infrastructure",
+        "proposal": "Add paper-api.alpaca.markets and data.alpaca.markets to network egress allowlist in the claude.ai/code remote environment settings. Without this, Bull cannot verify account state or place orders.",
+        "status": "PENDING_CJ_ACTION",
+        "priority": "CRITICAL"
+      }
+    ]
   },
-  "alerts": []
+  "alerts": [
+    {
+      "level": "CRITICAL",
+      "type": "infrastructure",
+      "date": "2026-06-19",
+      "message": "Alpaca API unreachable from execution environment. Network egress policy blocks paper-api.alpaca.markets. CJ must add this host to the egress allowlist. Until fixed: no trade execution, no position verification."
+    },
+    {
+      "level": "INFO",
+      "type": "market",
+      "date": "2026-06-19",
+      "message": "Market closed today (Juneteenth). Next trading day: Monday June 22."
+    },
+    {
+      "level": "OPPORTUNITY",
+      "type": "signal",
+      "date": "2026-06-19",
+      "message": "MRVL joins S&P 500 at close June 22. Passive fund buying pressure. Pre-position intended but blocked pending API fix."
+    }
+  ]
 }
