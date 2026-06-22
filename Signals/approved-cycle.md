@@ -1,56 +1,89 @@
-# Approved cycle — 2026-06-19 (auto-scan · Aggressive)
-*Markets closed June 19 (Juneteenth). All prices reference June 17–18 closes. Next live session: Monday June 22, 2026.*
+# Approved cycle — 2026-06-22 (auto-scan · Aggressive)
 
 ---
 
-## Regime
+## Bull's Approved Cycle — Week of June 22, 2026
 
-**Conditionally risk-on — stretched but anchored by AI capex cycle.**
-
-- Fed held rates **UNCHANGED** June 18 (less hawkish than June 17 "rate-hike scare" implied) → S&P/Nasdaq bounced hard June 18.
-- US–Iran peace framework signed June 18 → oil reversing lower; energy names face a near-term headwind.
-- Goldman risk-appetite indicator at **99th percentile** since 1991 — market is stretched; concentration is narrow (only ~17% of S&P constituents outperforming the cap-weighted index over the past month). Pullback risk is elevated, but the AI capex cycle ($754B hyperscaler spend in 2026, +83% YoY) provides a structural earnings anchor.
-- Sector rotation visible: **Financials #2 sector** the week of June 16–18 as tech sold off, then re-bid June 18.
-- **SMH +72% YTD** — semiconductors remain dominant AI infrastructure theme.
-
-**Current book:** AMD · DAL · NVDA — 3/8 slots used, 5 open. Semis already ~30–40% of equity; 60% sector cap binding on any additional semi addition.
+*Scanned June 22, 2026 premarket. All prices are June 20 close / June 22 premarket where available.*
 
 ---
 
-## Watchlist — Monday June 22 candidates
+### Regime: NEUTRAL — recovering, but be choosy
 
-- **AVGO** · Momentum breakout + earnings catalyst · Broadcom Q2 AI revenue +143% YoY to $10.8B; $100B+ AI chip revenue guided for FY27 (six hyperscaler custom-chip customers: Anthropic, Google, Meta, OpenAI, + 2 more); Wells Fargo upgraded to Overweight; stock gained +5.31% on June 17's down-tape day for tech; 12-mo consensus target ~$522 (+27% from ~$411). Best-in-class AI semiconductor exposure not already in the book. · Entry: $405–$418 (consolidation continuation or first intraday dip Monday) · Stop: ~$328–$334 (~20% trail) · ⚠️ *Adds to semi sector — verify AMD+NVDA combined weight before sizing; cap AVGO so total semis stay under 60%; consider half-slot (3.5% equity risk) if already near the limit*
+VIX ~**16.8** (June 19 close) — just above the risk-on threshold (< 16) per the strategy playbook. Per rules: trim new sizes ~25% and be choosier on entries.
 
-- **JPM** · Sector rotation + quality-trend · Financials rotated in hard June 16–18 as tech sold off; rate-hike environment structurally widens net-interest-margin; IB backlog at 4-year high per JPMorgan's own commentary; JPM took on Apple Card from Goldman (adds $20B portfolio, quality customers); buyback capacity class-leading among money-centers; clean diversification leg away from tech. · Entry: $300–$310 (buy the level or modest Monday dip) · Stop: ~$244–$248 (~20% trail)
+S&P 500 and Nasdaq both recovered last week (+0.93% and +2.43% respectively) after the mid-June Fed scare. Fed **held rates unchanged** but nearly half of FOMC members now expect at least one hike before year-end → hawkish lean. US–Iran peace talks actively progressing → oil sliding (WTI –0.73% to $75.30 premarket June 22) → **Energy is a headwind**, don't add energy exposure. Dow futures slipping on Iran talk jitters. Premarket: mega-cap tech (PLTR –1.5%, MAGS ETF –0.72%) soft.
 
-- **LLY** · Quality-trend / defensive compounder · Eli Lilly's GLP-1 franchise (Mounjaro/Zepbound) is a secular multi-year revenue compounder uncorrelated to Fed/Iran/AI noise; healthcare provides ballast to a tech-heavy book; can be held 1–5 years with conviction; no near-term catalyst overhang. Healthcare sector valuations remain relatively discounted vs. tech. · Entry: $900–$930 zone (verify Monday open) · Stop: ~$720–$744 (~20% trail)
-
-- **INTC** · Catalyst trade — lower conviction, half-size only · Trump announced Intel will design and build chips domestically with Apple — a major fundamental reversal for a deeply beaten-down name (+3.67% on news day); if the deal materializes it's a multi-quarter domestic-semi revenue ramp priced into a company the market had written off. Risk: Intel's multi-year execution track record; treat as a catalyst trade, not a thesis hold. · Entry: near the news-day breakout level (verify Monday pre-market; **do not chase if gap-up exceeds 5%**) · Stop: ~20% trailing · *Max 3.5% equity risk (half a standard slot)*
+**Key week-of catalysts:** FedEx earnings **June 23** after-close; Micron earnings **June 24** after-close.
 
 ---
 
-## Pass / avoid this cycle
+### Book snapshot (June 22 open)
 
-- **META / MSFT / GOOGL** — all broke below June lows in the June 17 Fed selloff; no confirmed technical base; MSFT -14.67% YTD and below its 200-day MA
-- **HPE** — blew out Q2 earnings June 1 (+40% YoY revenue), stock ATH'd at $64 on June 2, now ~$47 (-27% in 2 weeks); too violent a reversal to enter as a swing; wait for base formation
-- **AMZN** — AWS/AI thesis intact (BofA Buy, $310 target) but FTC antitrust trial + capex-skepticism overhang creates no clean technical entry right now; watchlist for a later cycle
-- **V (Visa)** — JPM's top fintech pick for 2026 ($398 target, +20% upside from ~$330); technically consolidating but no immediate catalyst; watchlist if financials keep rotating
-- **SMH** — strong (+72% YTD) but adds semi concentration on top of AMD + NVDA already held; AVGO is a better single-name expression of the same thesis with more alpha potential
-- **Energy (XOM / CVX / XLE)** — Iran peace deal = oil price reversal headwind; revisit if oil finds a floor
-- **SOXL / TQQQ / any 3× leveraged ETF** — permanently excluded per profile
+| Position | Size | Unrealized | Sector |
+|---|---|---|---|
+| NVDA | ~$29,918 (~30%) | +0.3% | Semis/Tech |
+| DAL | ~$29,884 (~30%) | –0.2% | Industrials |
+| AMD | ~$29,018 (~29%) | –2.3% | Semis/Tech |
+| **Cash** | **~$10,524 (~10.5%)** | — | — |
+
+**3/8 slots used. Cash = buffer minimum — no room for a full new position without a stop-out.**
+- Semi sector: AMD + NVDA ≈ **59%** → AT the 60% cap. **No new semis until one closes.**
+- Industrials: DAL ≈ **30%** → 30% of headroom used toward 60% sector cap.
+- New candidates **activate when a trailing stop fires** on NVDA, DAL, or AMD.
+
+All three positions have trailing stop orders live on Alpaca. Equity ~$99,807.
 
 ---
 
-**Slot count:** 4 candidates (INTC at half-size) → max 7 of 8 positions if all entered, 1 slot held in reserve.
+### Candidates (ranked by priority)
+
+- **JPM** · *Quality-trend / sector rotation* · Financials are the cleanest diversification leg from a semi-heavy book; rate-hike signal structurally widens NIM; IB backlog at 4-year high; Apple Card's $20B portfolio acquired; best buyback capacity in banking. Pulled back ~2.5% from ATH ($333.46, June 17) — still inside the uptrend. 0% overlap with current holdings. **Top priority for first open slot.** · Entry: $318–$328 · Stop: ~$262 (~20% trail) · *No sector constraint*
+
+- **LLY** · *Quality compounder / healthcare ballast* · GLP-1 franchise (Mounjaro/Zepbound) is a secular multi-year growth story uncorrelated to Fed/semi/geopolitical noise; Novo Nordisk's new Wegovy approvals confirm the category, not threaten it; healthcare is entirely absent from the current book. Price ~$1,098–$1,103 (note: prior cycle's $900–$930 entry was stale — **update: current entry is ~$1,090–$1,120**). 20 analysts Buy consensus. **Second priority.** · Entry: $1,090–$1,120 · Stop: ~$875 (~20% trail) · *No sector constraint*
+
+- **FDX** · *Pre-earnings catalyst + momentum* · FedEx reports Q4 FY2026 earnings **June 23 after-close** (tomorrow). Four straight EPS beats; consensus EPS $5.91 on $24.18B revenue. Stock ~$336–$342 vs analyst target $412 (+21% upside). 17/21 analysts Strong Buy. Post-Freight spin-off reduces complexity → margin story into FY2027. ⚠️ **Industrials sector overlap with DAL (~30%)** — keep FDX modest so combined Industrials stays under 60%. **Enter only pre-June 23 close or on a post-earnings gap-up if clean.** · Entry: $335–$345 premarket or open June 22 · Stop: ~$270 (~20% trail) · *Industrials sector: verify DAL+FDX < 60% before entry*
+
+- **TSM** · *Momentum breakout* · Taiwan Semi clearing its 52-week high ($465.22) with a +6.94% surge on June 18; up 3.87% over two weeks. TSM is the foundry for NVDA, AMD, Apple, AVGO — the AI capex supercycle flows through them. New 10-yr Arizona packaging deal with Amkor. $1.98T market cap. Strong Buy signal from 17 analysts; 12-month target ~$473. ⚠️ **SEMI SECTOR CAP — do not enter while AMD + NVDA are both open.** Activate when either stops out. · Entry: $462–$478 · Stop: ~$370 (~20% trail) · *Semi cap: gate on AMD/NVDA exit*
+
+- **AVGO** · *Pullback-in-uptrend* · Broadcom pulled back ~17% from its June 3 ATH ($495) after Q2 earnings were in-line but 2027 guidance disappointed lofty street hopes — thesis intact. AI chip revenue +143% YoY to $10.8B; $100B+ AI revenue guided for FY27; six hyperscaler customers. 26 analysts Buy, consensus target $501. Price ~$411 — right in the prior cycle's $405–$418 entry zone. ⚠️ **SEMI SECTOR CAP — same gate as TSM.** · Entry: $405–$420 · Stop: ~$330 (~20% trail) · *Semi cap: gate on AMD/NVDA exit*
 
 ---
 
-Sources:
-- [Stock Market Today June 17 — S&P 500, Nasdaq Plummet on Fed Rate-Hike Signal](https://www.thestreet.com/stock-market-today/stock-market-today-dow-jones-sp-500-nasdaq-updates-june-17-2026)
-- [Stock Market Today June 18 — Russell 2000, Nasdaq Rise After Fed Surprise + US Ends Iran Blockade](https://www.thestreet.com/stock-market-today/stock-market-today-dow-jones-sp-500-nasdaq-updates-june-18-2026)
-- [Broadcom Q2 2026 Earnings — AI Revenue +143% YoY, Record Results](https://www.cnbc.com/2026/06/03/broadcom-avgo-earnings-report-q2-2026.html)
-- [HPE Skyrockets 30% on Biggest Earnings Beat Since 2018](https://www.cnbc.com/2026/06/01/hpe-stock-earnings-q2.html)
-- [Semiconductor Stocks Rally Amid AI Infrastructure Growth (SMH +72% YTD)](https://www.gurufocus.com/news/8905089/semiconductor-stocks-rally-amid-ai-infrastructure-growth)
-- [Goldman Sachs Risk-Appetite Indicator at 99th Percentile](https://www.goldmansachs.com/insights/articles/s-and-p-500-forecast-to-climb-as-earnings-growth-powers-stocks-higher)
-- [JPMorgan Sees 2026 Clean Slate for Fintech, Names Visa Top Pick](https://finance.yahoo.com/news/jpmorgan-sees-2026-clean-slate-152032736.html)
-- [2026 Mid-Year Outlook: U.S. Stocks and Economy — Schwab](https://www.schwab.com/learn/story/us-stock-market-outlook)
+### Earnings watch — do NOT enter today (binary events)
+
+- **MU (Micron)** · Earnings **June 24 after-close**. MU +4–8% premarket June 22 on pre-earnings excitement. Gross margin may break 80%; HBM supply sold out through 2026; Bernstein, Rosenblatt ($1,200), Wedbush ($1,300) all raising targets. All 27 covering analysts are Buy with no Sells. ⚠️ **Three constraints: semi sector cap, cash at buffer, binary earnings event.** Re-evaluate the morning of June 25 — if beats + strong guidance + gap-up holds → add to watchlist for entry on the first orderly pullback to VWAP or the 8-EMA if a semi slot has opened.
+
+---
+
+### Pass this cycle
+
+**INTC** — up ~260% YTD; Trump/Apple chip catalyst fully priced; do not chase at $139 after a 10× move from $37. · **Energy** — Iran deal progress = structural oil headwind. · **META / MSFT / GOOGL** — no clean entry per prior cycle; revisit on a confirmed base. · **AMZN** — thesis intact but FTC + capex overhang; no clean entry. · **SOXL / TQQQ / 3×** — permanently excluded.
+
+---
+
+### Slot math
+
+| Slot | Name | Status |
+|---|---|---|
+| 1 (open) | JPM | Activate when stop-out frees capital |
+| 2 (open) | LLY | Activate when stop-out frees capital |
+| 3 (open) | FDX | Pre-earnings enter June 22 if cash clears; watch sector cap |
+| 4 (open) | TSM | Gate: AMD or NVDA must stop out first |
+| 5 (open) | AVGO | Gate: AMD or NVDA must stop out first |
+| 6–8 (reserve) | — | Hold; revisit after June 24 MU print |
+
+**Capital note:** Cash at ~10.5% = buffer minimum. No new entries without a stop-out or deliberate partial trim of an existing winner. FDX is the only name potentially enterable today given its small per-share sizing relative to cash.
+
+---
+
+### Sources
+
+- [Stock Market Today June 22, 2026 — Dow futures slip on Iran talks](https://www.thestreet.com/stock-market-today/stock-market-today-dow-jones-sp-500-nasdaq-updates-june-22-2026)
+- [Micron Earnings Preview June 24 — HBM Supercycle Test](https://www.techtimes.com/articles/318228/20260611/micron-earnings-preview-june-24-tests-whether-hbm-supercycle-real-cresting.htm)
+- [Micron Q3 Preview — Gross Margin to Break 80%?](https://www.tradingkey.com/analysis/stocks/us-stocks/261979099-micron-q3-earnings-preview-gross-margin-expected-break-80-mark-tradingkey)
+- [FedEx Q4 FY2026 Earnings Preview — June 23](https://www.tradingkey.com/analysis/stocks/us-stocks/261975257-fedex-stock-forecast-q4-earnings-preview-network-2-0-freight-spin-off-tradingkey)
+- [Intel Up ~260% in 2026 — Apple Deal Analysis](https://www.tikr.com/blog/intel-is-up-around-260-in-2026-with-the-stock-at-134-is-there-anything-left-after-the-apple-deal)
+- [TSM Breakout Above 52-Week High — Benzinga June 22](https://www.benzinga.com/trading-ideas/movers/26/06/60009009/whats-going-on-with-taiwan-semiconductor-stock-monday-3)
+- [VIX at 16.78 — Market Mirror 2026](https://www.vtmarkets.com/opinion/the-volatility-index-explained-a-market-mirror-for-2026/)
+- [Top Momentum Stocks June 2026](https://finance.yahoo.com/markets/stocks/articles/best-momentum-stocks-buy-june-141500405.html)
