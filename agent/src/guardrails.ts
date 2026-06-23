@@ -14,9 +14,10 @@ export interface Rules {
   trailPercent?: number;
   dailyHaltPct?: number;
   monthlyKillPct?: number;
+  maxDrawdownFromPeakPct?: number; // halt new entries when equity falls this % below the trailing peak
 }
 
-export const AGGRESSIVE_PAPER: Rules = { name: "Aggressive", maxPositionPct: 0.30, maxOpen: 8, minPrice: 10, riskPerTradePct: 7, trailPercent: 20, dailyHaltPct: 8, monthlyKillPct: 25 };
+export const AGGRESSIVE_PAPER: Rules = { name: "Aggressive", maxPositionPct: 0.20, maxOpen: 6, minPrice: 10, riskPerTradePct: 5, trailPercent: 20, dailyHaltPct: 5, monthlyKillPct: 20, maxDrawdownFromPeakPct: 15 };
 export const STEADY_PAPER: Rules = { name: "Steady", maxPositionPct: 0.15, maxOpen: 4, minPrice: 5, riskPerTradePct: 4, trailPercent: 10, dailyHaltPct: 5, monthlyKillPct: 15 };
 
 /** Pick the rulebook for a risk profile ("aggressive" | "steady"). Defaults to aggressive. */
@@ -42,6 +43,7 @@ export function validateOrders(orders: OrderRequest[], book: BookState, rules: R
     if (!order.symbol || !/^[A-Z][A-Z0-9.\/-]{0,9}$/.test(order.symbol)) reasons.push("bad symbol");
     if (!(order.qty > 0)) reasons.push("qty must be > 0");
     if (!(order.est_price > 0)) reasons.push("est_price required (> 0)");
+    if (order.type && !["market", "limit"].includes(order.type)) reasons.push(`order type "${order.type}" not allowed — equities only (market/limit), no options/derivatives`);
 
     if (order.side === "buy") {
       if (order.est_price < rules.minPrice) reasons.push(`price < $${rules.minPrice} quality floor`);
@@ -62,4 +64,26 @@ export function validateOrders(orders: OrderRequest[], book: BookState, rules: R
 
     return { order, ok: reasons.length === 0, reasons };
   });
+}
+
+/** Risk-halt context (Bull v3): the numbers that gate whether Bill opens NEW positions this cycle. */
+export interface HaltCtx {
+  dayPnlPct: number;                   // today's equity change %
+  monthPnlPct: number | null;          // month-to-date %; null when unknown
+  drawdownFromPeakPct: number | null;  // % below the trailing-window equity peak (≤ 0); null when unknown
+}
+
+/**
+ * Hard risk halt — returns a reason to STOP opening new positions, or null to proceed. The daily-loss gate
+ * (from the account) is always checked and stops a bad day cold; monthly + drawdown are checked only when
+ * known (null = data unavailable → skip that gate, never block on a data hiccup). Pure + testable.
+ */
+export function haltReason(c: HaltCtx, rules: Rules = AGGRESSIVE_PAPER): string | null {
+  const daily = -(rules.dailyHaltPct ?? 8);
+  const monthly = -(rules.monthlyKillPct ?? 25);
+  const dd = -(rules.maxDrawdownFromPeakPct ?? 15);
+  if (c.dayPnlPct <= daily) return `daily-loss halt: ${c.dayPnlPct.toFixed(1)}% ≤ ${daily}% today`;
+  if (c.monthPnlPct != null && c.monthPnlPct <= monthly) return `monthly kill-switch: ${c.monthPnlPct.toFixed(1)}% MTD ≤ ${monthly}%`;
+  if (c.drawdownFromPeakPct != null && c.drawdownFromPeakPct <= dd) return `drawdown halt: ${c.drawdownFromPeakPct.toFixed(1)}% from peak ≤ ${dd}%`;
+  return null;
 }

@@ -10,7 +10,7 @@ const check = (name: string, cond: boolean) => { (cond ? pass++ : fail++); conso
 const good: OrderRequest = { symbol: "AMD", side: "buy", qty: 50, type: "limit", limit_price: 150, est_price: 150, trail_percent: 18, thesis: "breakout" };
 check("SUCCESS: clean buy validates", validateOrders([good], book)[0].ok === true);
 
-// FAIL: oversized (60% of equity > 40%), and a separate one missing a stop, and a sub-$2 name.
+// FAIL: oversized (60% of equity > 20% cap), and a separate one missing a stop, and a sub-$2 name.
 const oversized: OrderRequest = { symbol: "TSLA", side: "buy", qty: 300, type: "market", est_price: 200, trail_percent: 18 };
 check("FAIL: oversized position rejected", validateOrders([oversized], book)[0].ok === false);
 const noStop: OrderRequest = { symbol: "NVDA", side: "buy", qty: 10, type: "market", est_price: 120 };
@@ -18,14 +18,14 @@ check("FAIL: buy without stop rejected", validateOrders([noStop], book)[0].reaso
 const penny: OrderRequest = { symbol: "XYZ", side: "buy", qty: 100, type: "market", est_price: 1.2, trail_percent: 18 };
 check("FAIL: sub-$2 rejected", validateOrders([penny], book)[0].reasons.some(r => /quality floor/.test(r)));
 
-// FAIL: exceeding max open. AGGRESSIVE_PAPER caps at 8; book already has 2 open, so 7 new buys → 9 > 8.
+// FAIL: exceeding max open. AGGRESSIVE_PAPER caps at 6; book already has 2 open, so 7 new buys → 9 > 6.
 const overMax = Array.from({ length: 7 }, (_, i): OrderRequest => ({ symbol: `AA${i}`, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 }));
 check("FAIL: max-open exceeded once projected open passes the cap", validateOrders(overMax, book).some(v => v.reasons.some(r => /max .* open/.test(r))));
 
 // INVALID buys must NOT consume open slots: an order that fails another check is rejected + never placed,
-// so it can't push later VALID buys over maxOpen. Book has 6 open; cap is 8 → room for exactly 2 valid buys.
+// so it can't push later VALID buys over maxOpen. Book has 4 open; cap is 6 → room for exactly 2 valid buys.
 // The 3 leading invalid buys (no stop) used to each bump the projected count, wrongly rejecting both valids.
-const capBook = { equity: 100_000, openCount: 6 };
+const capBook = { equity: 100_000, openCount: 4 };
 const noStopBuy = (s: string): OrderRequest => ({ symbol: s, side: "buy", qty: 1, type: "market", est_price: 50 });
 const validBuy = (s: string): OrderRequest => ({ symbol: s, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 });
 const mixed = validateOrders([noStopBuy("AA"), noStopBuy("BB"), noStopBuy("CC"), validBuy("DD"), validBuy("EE")], capBook);

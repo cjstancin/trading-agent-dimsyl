@@ -7,8 +7,9 @@ import "./load-env.js";
 import { readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
-import { paperSnapshot, placePaperOrder, latestPrice, type OrderRequest } from "./alpaca.js";
-import { validateOrders, rulesFor, type BookState } from "./guardrails.js";
+import { paperSnapshot, placePaperOrder, latestPrice, getPortfolioHistory, type OrderRequest } from "./alpaca.js";
+import { validateOrders, rulesFor, haltReason, type BookState } from "./guardrails.js";
+import { buildEquityCurve, type PortfolioHistory } from "./equity-curve.js";
 import { getMode, autoExecAllowed } from "./mode.js";
 import { getProfile } from "./profile.js";
 import { appendProposals } from "./ledger.js";
@@ -68,9 +69,42 @@ const openCount = Array.isArray(snap.positions) ? snap.positions.length : 0;
 const book: BookState = { equity, openCount };
 const rules = rulesFor(getProfile());
 
+// ── HARD RISK HALT (Bull v3) ── enforce the daily-loss / monthly-kill / drawdown limits BEFORE proposing
+// anything. They were descriptive-only before; now a bad day/month/drawdown actually stops NEW entries.
+// Daily P&L is from the account (equity vs prior close); monthly + drawdown from portfolio history
+// (best-effort — a fetch failure leaves those gates open, but the daily gate always fires).
+if (!dryRun) {
+  const lastEq = Number(acct.last_equity ?? 0);
+  const dayPnlPct = lastEq > 0 ? ((equity - lastEq) / lastEq) * 100 : 0;
+  let monthPnlPct: number | null = null;
+  let drawdownFromPeakPct: number | null = null;
+  try {
+    const curve = buildEquityCurve((await getPortfolioHistory("1M", "1D")) as PortfolioHistory);
+    if (curve.length) {
+      const monthStart = curve[0].equity;
+      const peak = Math.max(equity, ...curve.map((p) => p.equity));
+      if (monthStart > 0) monthPnlPct = ((equity - monthStart) / monthStart) * 100;
+      if (peak > 0) drawdownFromPeakPct = ((equity - peak) / peak) * 100;
+    }
+  } catch { /* portfolio-history fetch failed → leave monthly/drawdown null; daily halt still enforced */ }
+  const halt = haltReason({ dayPnlPct, monthPnlPct, drawdownFromPeakPct }, rules);
+  if (halt) {
+    await sendDiscord(
+      `🛑 **Bill — risk halt, NO new entries**\n${halt}\nEquity $${equity.toFixed(0)} · day ${dayPnlPct.toFixed(1)}%` +
+        (monthPnlPct != null ? ` · MTD ${monthPnlPct.toFixed(1)}%` : "") +
+        (drawdownFromPeakPct != null ? ` · DD ${drawdownFromPeakPct.toFixed(1)}%` : "") +
+        `\n(Existing positions keep their trailing stops; only NEW buys are blocked.)`,
+      { channel: "bull", username: "Bill the Bull" },
+    );
+    console.log(JSON.stringify({ ok: true, halted: true, reason: halt, equity, dayPnlPct, monthPnlPct, drawdownFromPeakPct }));
+    process.exit(0);
+  }
+}
+
 const prompt = `You are Bill the Bull, CJ's trading agent (paper account). Convert the APPROVED trade cycle below into concrete orders.
 Rulebook limits (${rules.name}): risk ~${rules.riskPerTradePct}% equity/trade, max ${Math.round(rules.maxPositionPct * 100)}% per position, max ${rules.maxOpen} open, price ≥ $${rules.minPrice}, a protective trailing stop (~${rules.trailPercent}%) on EVERY buy. Current equity ≈ $${equity}, open positions ≈ ${openCount}.
-QUALITY UNIVERSE ONLY: liquid US large/mid-cap stocks + liquid non-leveraged ETFs. NEVER propose penny stocks (< $${rules.minPrice}), leveraged/inverse ETFs (SOXL/TQQQ/3x), crypto, or meme/pump names. Horizon 1 week–5 years; let winners run.
+QUALITY UNIVERSE ONLY: liquid US large/mid-cap stocks + liquid non-leveraged ETFs. NEVER propose penny stocks (< $${rules.minPrice}), leveraged/inverse ETFs (SOXL/TQQQ/3x), crypto, meme/pump names, OR options/calls/puts/futures/derivatives — equities & ETFs only. Horizon 1 week–5 years; let winners run.
+ACCOUNT SIZE ≈ $${equity}: positions are WHOLE shares (no fractional), so only propose names where ≥1 share fits the ${Math.round(rules.maxPositionPct * 100)}% cap (≈ $${Math.round(rules.maxPositionPct * equity)}). On a small account favor liquid quality names + sector ETFs priced below that so a real position + protective stop is possible; skip names too expensive to size.
 
 APPROVED CYCLE:
 ${approved}
@@ -97,6 +131,12 @@ if (parseError) {
   console.error(JSON.stringify({ ok: false, parseError, costUsd }));
   process.exit(1);
 }
+
+// Options/derivative insurance (Bull v3): the schema is market/limit-only, but strip + log anything that
+// isn't a plain equity order before sizing/placing — belt-and-suspenders to the guardrail type-check.
+const dropped = proposed.filter((o) => o.type && !["market", "limit"].includes(o.type));
+if (dropped.length) console.warn(`[bill] dropped ${dropped.length} non-equity order(s): ${dropped.map((o) => `${o.symbol}/${o.type}`).join(", ")}`);
+proposed = proposed.filter((o) => !o.type || ["market", "limit"].includes(o.type));
 
 // Ground every buy in the LIVE price and size deterministically (the model picks the name + stop + thesis;
 // the CODE sizes it from the real price + risk formula). This kills mis-sizing from hallucinated prices.
