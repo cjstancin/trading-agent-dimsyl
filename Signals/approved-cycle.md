@@ -1,60 +1,61 @@
-# Approved cycle — 2026-06-23 (auto-scan · Aggressive)
+# Approved cycle — 2026-06-23 (PM scan · Aggressive)
+
+**Regime: NEUTRAL.** VIX ~17.28 (+3% on day). Market under pressure — S&P -1.4%, Nasdaq -2.7% on Asian chip-stock contagion (Korean semis cratered, spread to US tech). Not a full risk-off break; more a "be choosy" day. Financials, Materials, and Industrials holding relative strength.
+
+**Book: FULL (8/8).** AMD · ANET · DAL · META · MSFT · MU · NVDA · XLE — all slots occupied with trailing stops. Ready queue only; no entry without a slot opening.
 
 ---
 
-## Bull's Approved Cycle — June 23, 2026
+## Ready queue (ranked)
 
-**Regime: NEUTRAL (stressed)** · S&P −1.3% · Nasdaq −4.0% (−828 pts) · KOSPI −10% (chip-stock contagion) · MU −9% premarket ahead of earnings · Oil ~$74 stabilizing post Iran-deal framework · VIX likely 20+ · Trim-sizing stance, no new entries until slots open organically.
-
-> **Book is at max 8/8: AMD, ANET, DAL, META, MSFT, MU, NVDA, XLE. No new entries today. Everything below is the prioritized ready queue + slot-trigger watchpoints.**
-
----
-
-### Slot Triggers — Watch these before anything else
-
-- **MU (reports June 24 after close)** · Already down ~9% in today's premarket on pre-earnings profit-taking; options pricing ±17% one-day move. Beat consensus $20.25 EPS + guide intact + gap-hold June 25 = thesis intact, HOLD. Miss or forward guide cut = evaluate exit → semi slot opens for AVGO/TSM. Today's flush may be front-loaded fear — do not panic-sell into the print.
-
-- **XLE exit review** · Iran-deal framework signed June 18; Hormuz open; oil at $74 and drifting lower. Energy thesis weakens if WTI breaks $70 — that is the hard line to watch. If oil stays above $70 and XLE holds, ride it. If oil breaks below $70, XLE is first exit candidate and frees a slot.
-
-- **FDX (reports tonight after close)** · Consensus $5.95 EPS; 4-quarter beat streak; post-Freight-spinoff focus on high-margin express. **No entry today.** If beats and holds the gap June 24 open: entry zone $345–$360 on June 25. Stop: ~$275. Miss or guidance cut → pass entirely.
+| Priority | Ticker | Setup | Entry Zone | Stop |
+|---|---|---|---|---|
+| P1 — any slot | **JPM** | Financials emerging leader; July 14 earnings catalyst | $325–$333 | ~$265 |
+| P1 — any slot | **LLY** | GLP-1 compounder; healthcare outperform 2026; in zone | $1,090–$1,120 | ~$880 |
+| P1 — any slot | **AVGO** | JPM "aggressive buyers" call (Overweight, $580 PT, 38% upside); AI ASIC / TPU v9 2nm confirmed; today's contagion dip is the entry gift | $405–$420 | ~$330 |
+| P1 — FDX trigger | **FDX** | Reports TONIGHT (June 23 AH); 4 consecutive beats; Earnings ESP +3.76%; avg PT $412 vs ~$327 now; freight spin-off removes drag | $329–$342 | ~$262 |
+| P2 — semi slot | **TSM** | 52-week high leader, slight dip on contagion; foundry oligopoly; AI capex still strong | $462–$478 | ~$375 |
+| P3 — watch | **SMCI** | Vera Rubin NVL4 breakout today (+16%); first analyst upgrade in months (GF→Buy $48); NVDA tier-1 rack partner; real AI-server revenue; wait 1–2 sessions for gap confirmation | ~$38–$42 | ~$31 |
 
 ---
 
-### Priority 1 — First slot (any name)
+## Slot triggers — act on these first
 
-- **JPM** · *Quality-trend / financials rotation* · Value rotation accelerating today as tech dumps; JPM is where smart money is rotating. Trading ~$328, just off ATH $338 hit June 18 — slight pullback into zone. July 14 earnings catalyst; IB backlog at 4-year high; NIM expansion intact. Execute first when any non-semi slot opens. · Entry: $325–$333 · Stop: ~$265
-
-- **LLY** · *Quality compounder / in zone now* · $1,102 today — sitting in the entry zone. Zero healthcare exposure in book; pure diversifier. Foundayo (unrestricted oral GLP-1) launch ongoing, retatrutide 2027 pipeline adds another leg. +11.7% past month, analyst target $1,229. Priority 1b alongside JPM. · Entry: $1,090–$1,120 · Stop: ~$880
-
----
-
-### Priority 2 — Semi slot (AMD or MU exits)
-
-- **AVGO** · *Pullback-in-uptrend / AI conviction* · Peaked at ATH $495 on June 3, now ~$392–$414 (~17% pullback) — right in entry zone. AI revenue +106% YoY; 6 hyperscaler custom ASIC contracts; JPMorgan saying "aggressive buyer" at these levels. Premier semi add if MU disappoints tomorrow. · Entry: $405–$420 · Stop: ~$330
-
-- **TSM** · *Momentum leader / AI foundry* · Hit fresh 52-week high $476.79 today before pulling back to ~$457 after-hours. 44% YTD; all major MAs pointing up; Susquehanna target $575; 17 analysts Strong Buy, 0 Sell. Slightly extended on a risk-off day — prefer entry on a pullback, not chasing the high. · Entry: $462–$478 · Stop: ~$375
+1. **FDX tonight (June 23 AH):** Entry activates **June 24 morning only** if FDX beats EPS ≥$5.91 AND stock opens/holds above ~$329. Miss or gap-down = skip, no chase. FDX now replaces the earlier "$345–$360" zone — stock has drifted to $327.
+2. **MU June 24 AH:** Beat + stock holds = keep MU and its slot. Miss / guidance cut = **exit MU → immediately enter AVGO** (first call) or TSM (second). AVGO is the cleanest swap: same semi exposure, thesis stronger.
+3. **XLE oil watch:** Exit signal is Brent crude breaking below $70. Brent currently ~$74 on Iran deal drift — approaching but not triggered. Hold XLE; check oil at each session open.
 
 ---
 
-### Priority 3 — Post-earnings conditional
+## Sizing reminder (NEUTRAL regime — no reduction)
+`shares = (0.07 × $94,332) ÷ (entry − stop)` → cap at 30% of equity (~$28,300).
 
-- **FDX** · *Post-earnings catalyst* · Entry activates June 25 only on a confirmed beat + gap-hold. Post-beat entry zone: $345–$360 · Stop: ~$275
+| Ticker | Risk $ | Entry–Stop spread | Shares | Est. position |
+|---|---|---|---|---|
+| JPM | $6,603 | $333–$265 = $68 | ~97 sh | ~$32,300 → cap 85 sh (~$28,300) |
+| LLY | $6,603 | $1,105–$880 = $225 | ~29 sh | ~$32,000 → cap 25 sh (~$27,600) |
+| AVGO | $6,603 | $412–$330 = $82 | ~80 sh | ~$33,000 → cap 68 sh (~$28,000) |
+| FDX | $6,603 | $335–$262 = $73 | ~90 sh | ~$30,200 → cap 84 sh (~$28,200) |
+| TSM | $6,603 | $470–$375 = $95 | ~69 sh | ~$32,400 → cap 60 sh (~$28,200) |
+| SMCI | $6,603 | $40–$31 = $9 | ~733 sh | ~$29,300 → cap 707 sh (~$28,300) |
+
+*All at or very near the 30% cap — size down to cap, not up to formula, per the rulebook.*
 
 ---
 
-**Hard passes (unchanged):** GOOGL (legal + $85B dilution, thesis broken), SOXL/TQQQ/3× (permanent exclude), INTC (catalyst fully priced), CRWV/RKLB (too speculative), any name < $10.
+## Context on existing positions
+
+- **MU** +1.9% unrealized, +6.6% today — pre-earnings run. Tomorrow's print is the test. Keep trailing stop tight.
+- **XLE** +1.0% unrealized — oil $74, exit signal is $70. Holding.
+- **MSFT** −2.9% unrealized — AI capex concerns + today's selloff. Thesis (Azure AI) intact; trailing stop is the safety. No manual exit.
+- **META** −1.3% unrealized — growth thesis intact; trailing stop in place.
+- **ANET / AMD / DAL / NVDA** — all in profit or near flat; stops in place.
 
 ---
 
-Sources:
-- [Stock Market Today June 23 — TheStreet](https://www.thestreet.com/stock-market-today/stock-market-today-dow-jones-sp-500-nasdaq-updates-june-23-2026)
-- [S&P 500 Futures Under Pressure June 23 — 24/7 Wall St.](https://247wallst.com/investing/2026/06/23/stock-market-live-june-23-2026-sp-500-spy-futures-under-significant-pressure/)
-- [Iran Deal / Oil Markets — Al Jazeera](https://www.aljazeera.com/economy/2026/6/18/oil-prices-fall-stocks-rally-as-us-iran-sign-framework-to-end-war)
-- [Micron June 24 Earnings Preview — TradingKey](https://www.tradingkey.com/analysis/stocks/us-stocks/261975340-mu-q3-earnings-preview-june-2026-tradingkey)
-- [Micron Earnings: HBM, AI Memory — IndMoney](https://www.indmoney.com/blog/us-stocks/micron-earnings-preview-hbm-ai-memory-mu-stock)
-- [FedEx Q4 2026 Earnings Preview — AlphaStreet](https://news.alphastreet.com/fedex-q4-2026-earnings-preview-june-23-street-expects-5-95-eps/)
-- [LLY Price & GLP-1 Outlook — Public.com](https://public.com/stocks/lly/forecast-price-target)
-- [TSM Hits 52-Week High — Benzinga](https://www.benzinga.com/markets/tech/26/06/53079458/taiwan-semiconductor-becomes-worlds-ninth-most-valuable-company)
-- [AVGO Pullback & AI Thesis — Yahoo Finance](https://finance.yahoo.com/markets/stocks/articles/best-ai-stocks-buy-june-190700600.html)
-- [JPM at All-Time High — MarketBeat](https://www.marketbeat.com/stocks/NYSE/JPM/chart/)
-- [2026 Mid-Year Outlook — Charles Schwab](https://www.schwab.com/learn/story/us-stock-market-outlook)
+## What changed vs June 22 cycle
+
+- **AVGO upgraded to P1:** JPMorgan's aggressive buy call + chip contagion dip strengthens the entry case materially.
+- **FDX entry zone reset:** Stock drifted from $345–$360 to ~$327 pre-earnings. New zone reflects actual price.
+- **SMCI added as P3/watch:** Vera Rubin catalyst + upgrade. Not entering on a gap day; watching for 1–2 session base.
+- **Regime ticked up slightly** (VIX 17.28 from ~16) but stays NEUTRAL — no sizing change needed.
