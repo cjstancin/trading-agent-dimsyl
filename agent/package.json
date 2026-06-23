@@ -7,6 +7,7 @@
   "scripts": {
     "premarket": "tsx src/run-premarket.ts",
     "refresh": "tsx src/refresh-status.ts",
+    "heartbeat": "tsx src/run-heartbeat.ts",
     "execute": "tsx src/run-execute.ts",
     "scan": "tsx src/run-scan.ts",
     "reallocate": "tsx src/run-reallocate.ts",
