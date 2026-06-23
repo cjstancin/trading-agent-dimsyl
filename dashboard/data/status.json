@@ -1,15 +1,15 @@
 {
-  "updated": "2026-06-14 03:25 UTC (live Alpaca PAPER)",
+  "updated": "2026-06-23 21:11 UTC (live Alpaca PAPER)",
   "isSample": false,
   "profile": "Aggressive",
   "regime": "Risk-on",
-  "equity": 100000,
-  "cash": 100000,
-  "buyingPower": 400000,
+  "equity": 1000,
+  "cash": 1000,
+  "buyingPower": 1000,
   "dayPnlPct": 0,
   "dayPnlUsd": 0,
   "monthPnlPct": 0,
-  "vsSpyPct": -2.2,
+  "vsSpyPct": 0,
   "stats": {
     "winRate": 0,
     "trades": 0,
@@ -28,7 +28,7 @@
     "status": "Auto",
     "uptime": "11d 4h",
     "version": "v0.4.2-paper",
-    "lastRun": "2026-06-14 03:25 UTC",
+    "lastRun": "2026-06-23 21:11 UTC",
     "nextRun": "Today 14:45 ET",
     "heartbeat": [
       0.4,
@@ -48,16 +48,14 @@
     "profile": "Aggressive"
   },
   "equityCurve": [
-    100000,
-    100000,
-    100000
+    1000
   ],
   "caps": {
-    "riskPerTrade": 10,
-    "maxPosition": 40,
-    "trailingStop": 18,
-    "dailyHalt": 10,
-    "monthlyKill": 30
+    "riskPerTrade": 5,
+    "maxPosition": 20,
+    "trailingStop": 20,
+    "dailyHalt": 5,
+    "monthlyKill": 20
   },
   "positions": [],
   "openOrders": [],
@@ -66,7 +64,7 @@
   "risk": {
     "drawdown": 0,
     "maxDD": 0,
-    "peakEquity": 100000,
+    "peakEquity": 1000,
     "grossExposure": 0,
     "largestPos": 0,
     "sectorConc": 0
@@ -91,11 +89,7 @@
   },
   "tickers": {},
   "mode": "auto",
-  "spyCurve": [
-    100,
-    101.7,
-    102.25
-  ],
+  "spyCurve": [],
   "readiness": {
     "ready": false,
     "passed": 1,
@@ -124,7 +118,7 @@
       {
         "label": "Beats S&P over window",
         "pass": false,
-        "detail": "-2.2% vs SPY"
+        "detail": "+0% vs SPY"
       }
     ]
   },
@@ -134,5 +128,47 @@
     "rejected": 0,
     "recent": []
   },
-  "alerts": []
+  "alerts": [],
+  "rolling": {
+    "last10": {
+      "window": 10,
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "winRate": 0,
+      "avgWin": 0,
+      "avgLoss": 0,
+      "expectancy": 0
+    },
+    "last20": {
+      "window": 20,
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "winRate": 0,
+      "avgWin": 0,
+      "avgLoss": 0,
+      "expectancy": 0
+    }
+  },
+  "attribution": {
+    "bySetup": {},
+    "byTimeOfDay": {},
+    "byDayOfWeek": {}
+  },
+  "excursion": {
+    "trades": 0,
+    "avgMaePct": 0,
+    "avgMaeUsd": 0,
+    "avgMfePct": 0,
+    "avgMfeUsd": 0,
+    "captureRatio": 0
+  },
+  "equityCurveSeries": [
+    {
+      "date": "2026-06-23",
+      "equity": 1000,
+      "dayPnl": 0
+    }
+  ]
 }
