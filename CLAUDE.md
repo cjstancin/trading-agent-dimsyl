@@ -52,7 +52,7 @@ Discord notifications are implemented in `scripts/notify-discord.mjs`. Never han
 
 ### Twice-daily health check (permanent)
 `node scripts/health-check.mjs` validates `dashboard/data/status.json` (parses, has `equity`/`positions`, not still `isSample`) and posts a 🟢/🟠 heartbeat to Discord. Exit 0 = healthy, 1 = attention. **Runs twice daily** via:
-- **Now (local):** Windows Scheduled Task `Bull-HealthCheck` at ~09:00 & ~16:30 (created for CJ; set user env var `DISCORD_WEBHOOK_URL` so it actually posts). Runs whenever the PC is on.
+- **Fleet (VPS):** Bill runs under systemd timers — `bill-open`/`bill-mid`/`bill-close` fire the trade cycle (Mon–Fri ET) and `bill-heartbeat` posts a monitoring beat every ~5 min during market hours (replaces the old local Windows Scheduled Task; set `DISCORD_WEBHOOK_URL` in the run environment so the health check actually posts).
 - **24/7 (cloud):** a Netlify scheduled function (cron `0 13,21 * * *`) — ships with the auth/backend.
 
 ### Testing convention (enterprise) — always 3 cases: SUCCESS / FAIL / NULL

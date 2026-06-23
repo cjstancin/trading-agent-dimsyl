@@ -1,4 +1,4 @@
-# Bill Agent — Setup (paper trading specialist, runs on your PC)
+# Bill Agent — Setup (paper trading specialist, runs on the VPS via systemd timers)
 
 Same Agent SDK template as Go, scoped to the trading specialist. Bill loads his rulebook from `Trading-Agent/CLAUDE.md`, reads the **Alpaca PAPER** account read-only, and posts a pre-market brief to **#trade-bot** as "Bill".
 
@@ -27,14 +27,14 @@ npm run premarket
 ```
 Returns JSON `{ ok, posted, paperConnected, costUsd, numTurns }`. If `paperConnected:false`, check the Alpaca keys — the brief still posts and says the book is "not connected".
 
-## Schedule it (Windows Task Scheduler, ~8:30am weekdays)
-```
-Program:    C:\Program Files\nodejs\npm.cmd
-Arguments:  run premarket
-Start in:   C:\Users\stanc\OneDrive\Documents\Obsidian\AIBrain\Trading-Agent\agent
-Trigger:    Weekly, Mon–Fri, 8:30 AM
-```
-Same local pattern as Go. Move to homelab / Managed Agents later for PC-off operation.
+## Scheduling (VPS systemd timers)
+Bill runs on the VPS under systemd timers (Mon–Fri, US/Eastern) — no longer a local PC task:
+- `bill-open` — ~9:30 ET: pre-market brief → scan → execute (`agent/run-open.sh`).
+- `bill-mid` — ~12:30 ET: re-scan → execute (`agent/run-mid.sh`).
+- `bill-close` — ~16:00 ET: reconcile → refresh → journal → EOD report (`agent/run-close.sh`).
+- `bill-heartbeat` — every ~5 min during market hours: monitoring beat to SAMS (`npm run heartbeat`), so the Port shows Bill online + monitoring between fires.
+
+Each `run-*.sh` `cd`s into `agent/` and chains the npm scripts above, logging to `agent/logs/`.
 
 ## Next for Bill (deliberately not in this build)
 - A **gated execution ritual**: read `Signals/approved-cycle.md`, place **paper** orders with stops per the rulebook, journal + commit. This gets its own opt-in + SUCCESS/FAIL/NULL tests before it ever runs unattended.
