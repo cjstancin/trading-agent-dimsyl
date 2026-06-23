@@ -14,7 +14,7 @@ const WEBHOOK_RE = /^https:\/\/(?:[a-z]+\.)?discord(?:app)?\.com\/api\/(?:v\d+\/
 
 const CHANNEL_DEFAULTS = {
   bull:  { env: 'DISCORD_WEBHOOK_BULL',  username: 'Bull' },
-  go:    { env: 'DISCORD_WEBHOOK_GO',    username: 'Go' },
+  go:    { env: 'DISCORD_WEBHOOK_GO',    username: 'Monopoly' },
   atlas: { env: 'DISCORD_WEBHOOK_ATLAS', username: 'Atlas' },
 };
 
