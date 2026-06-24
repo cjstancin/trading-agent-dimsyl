@@ -21,11 +21,14 @@ installSafetyNet("bill-execute");
 const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
 
 const APPROVED = fileURLToPath(new URL("../../Signals/approved-cycle.md", import.meta.url));
+const PLAN = fileURLToPath(new URL("../../Signals/planned-orders.json", import.meta.url));
 const PENDING = fileURLToPath(new URL("../../memory/pending-orders.md", import.meta.url));
 const TRADELOG = fileURLToPath(new URL("../../memory/trade-log.md", import.meta.url));
 
 const mode = getMode();
 const dryRun = process.argv.includes("--dry-run") || process.env.BILL_DRY_RUN === "1";
+const planOnly = process.argv.includes("--plan-only"); // 9:15 bill-brief: run the LLM propose + persist the plan; place NOTHING.
+const fromPlan = process.argv.includes("--from-plan"); // 9:30 bill-open: load the 9:15 plan + skip the LLM so orders fire at the bell.
 if (mode === "off" && !dryRun) {
   console.log(JSON.stringify({ ok: true, skipped: true, reason: "mode=off" }));
   process.exit(0);
@@ -73,7 +76,9 @@ const rules = rulesFor(getProfile());
 // anything. They were descriptive-only before; now a bad day/month/drawdown actually stops NEW entries.
 // Daily P&L is from the account (equity vs prior close); monthly + drawdown from portfolio history
 // (best-effort — a fetch failure leaves those gates open, but the daily gate always fires).
-if (!dryRun) {
+// Skipped for --plan-only: at 9:15 the daily P&L is ~0 (market closed) and the 9:30 open run enforces
+// the halt authoritatively before any placement — so planning is never gated and CJ gets one alert, not two.
+if (!dryRun && !planOnly) {
   const lastEq = Number(acct.last_equity ?? 0);
   const dayPnlPct = lastEq > 0 ? ((equity - lastEq) / lastEq) * 100 : 0;
   let monthPnlPct: number | null = null;
@@ -101,7 +106,31 @@ if (!dryRun) {
   }
 }
 
-const prompt = `You are Bill the Bull, CJ's trading agent (paper account). Convert the APPROVED trade cycle below into concrete orders.
+// ── obtain the proposed orders ──
+let proposed: OrderRequest[] = [];
+let costUsd = 0;
+let usedPlan = false;
+
+// FAST OPEN (--from-plan, the 9:30 bill-open run): load the orders the 9:15 brief pre-computed and SKIP
+// the LLM call so buys submit within seconds of the bell. The plan fixes only the SELECTION — sizing,
+// guardrails and the risk halt all still run live below against the real opening price. Falls back to a
+// live proposal if the plan is missing or isn't from today (i.e. the 9:15 run failed).
+if (fromPlan) {
+  try {
+    const plan = JSON.parse(readFileSync(PLAN, "utf8")) as { date?: string; orders?: OrderRequest[] };
+    if (plan.date === new Date().toISOString().slice(0, 10) && Array.isArray(plan.orders)) {
+      proposed = plan.orders;
+      usedPlan = true;
+      console.log(`[bill] --from-plan: loaded ${proposed.length} pre-computed order(s) from the 9:15 plan`);
+    }
+  } catch { /* missing / corrupt → fall through to a live proposal */ }
+  if (!usedPlan) console.warn("[bill] --from-plan: planned-orders.json missing/stale → proposing live instead");
+}
+
+// Live proposal (plain execute, --plan-only, or the --from-plan fallback): the model converts the approved
+// cycle into concrete orders. The model only PROPOSES — sizing + guardrail validation are deterministic, below.
+if (!usedPlan) {
+  const prompt = `You are Bill the Bull, CJ's trading agent (paper account). Convert the APPROVED trade cycle below into concrete orders.
 Rulebook limits (${rules.name}): risk ~${rules.riskPerTradePct}% equity/trade, max ${Math.round(rules.maxPositionPct * 100)}% per position, max ${rules.maxOpen} open, price ≥ $${rules.minPrice}, a protective trailing stop (~${rules.trailPercent}%) on EVERY buy. Current equity ≈ $${equity}, open positions ≈ ${openCount}.
 QUALITY UNIVERSE ONLY: liquid US large/mid-cap stocks + liquid non-leveraged ETFs. NEVER propose penny stocks (< $${rules.minPrice}), leveraged/inverse ETFs (SOXL/TQQQ/3x), crypto, meme/pump names, OR options/calls/puts/futures/derivatives — equities & ETFs only. Horizon 1 week–5 years; let winners run.
 ACCOUNT SIZE ≈ $${equity}: positions are WHOLE shares (no fractional), so only propose names where ≥1 share fits the ${Math.round(rules.maxPositionPct * 100)}% cap (≈ $${Math.round(rules.maxPositionPct * equity)}). On a small account favor liquid quality names + sector ETFs priced below that so a real position + protective stop is possible; skip names too expensive to size.
@@ -113,23 +142,18 @@ Output ONLY a JSON array (no prose, no markdown fence) of orders in this exact s
 [{"symbol":"AAPL","side":"buy","qty":10,"type":"limit","limit_price":195.0,"est_price":195.0,"trail_percent":${rules.trailPercent},"thesis":"one line","confidence":72,"setup":"momentum breakout"}]
 Use "market" type only when you intend a market order (still include est_price = your expected fill). Size per the risk formula and the caps. If nothing qualifies, output [].`;
 
-const { text, costUsd } = await runAgent(prompt);
-
-// Parse the model's proposal robustly: take the first JSON array in the output.
-let proposed: OrderRequest[] = [];
-let parseError = "";
-try {
-  const m = text.match(/\[[\s\S]*\]/);
-  proposed = m ? (JSON.parse(m[0]) as OrderRequest[]) : [];
-} catch (e) {
-  parseError = String(e instanceof Error ? e.message : e);
-}
-
-if (parseError) {
-  // Safety: if we can't parse structured orders, never place anything — fall back to a gated text proposal.
-  await sendDiscord(`⚠️ Bill couldn't structure orders (parse error). Raw proposal:\n${text.slice(0, 1500)}`, { channel: "bull", username: "Bill the Bull" });
-  console.error(JSON.stringify({ ok: false, parseError, costUsd }));
-  process.exit(1);
+  const res = await runAgent(prompt);
+  costUsd = res.costUsd;
+  // Parse the model's proposal robustly: take the first JSON array in the output.
+  try {
+    const m = res.text.match(/\[[\s\S]*\]/);
+    proposed = m ? (JSON.parse(m[0]) as OrderRequest[]) : [];
+  } catch (e) {
+    // Safety: if we can't parse structured orders, never place anything — fall back to a gated text proposal.
+    await sendDiscord(`⚠️ Bill couldn't structure orders (parse error). Raw proposal:\n${res.text.slice(0, 1500)}`, { channel: "bull", username: "Bill the Bull" });
+    console.error(JSON.stringify({ ok: false, parseError: String(e instanceof Error ? e.message : e), costUsd }));
+    process.exit(1);
+  }
 }
 
 // Options/derivative insurance (Bull v3): the schema is market/limit-only, but strip + log anything that
@@ -137,6 +161,15 @@ if (parseError) {
 const dropped = proposed.filter((o) => o.type && !["market", "limit"].includes(o.type));
 if (dropped.length) console.warn(`[bill] dropped ${dropped.length} non-equity order(s): ${dropped.map((o) => `${o.symbol}/${o.type}`).join(", ")}`);
 proposed = proposed.filter((o) => !o.type || ["market", "limit"].includes(o.type));
+
+// --plan-only (9:15 bill-brief): persist the proposal for the 9:30 open run, then STOP — no sizing, no
+// validation, no placement. The open run (--from-plan) sizes on the live open price + enforces the risk
+// halt and guardrails before placing. If the plan never lands, --from-plan proposes live as a fallback.
+if (planOnly) {
+  writeFileSync(PLAN, JSON.stringify({ date: new Date().toISOString().slice(0, 10), generatedAt: new Date().toISOString(), profile: getProfile(), mode, orders: proposed }, null, 2));
+  console.log(JSON.stringify({ ok: true, planOnly: true, planned: proposed.length, wrote: "Signals/planned-orders.json", costUsd }, null, 2));
+  process.exit(0);
+}
 
 // Ground every buy in the LIVE price and size deterministically (the model picks the name + stop + thesis;
 // the CODE sizes it from the real price + risk formula). This kills mis-sizing from hallucinated prices.

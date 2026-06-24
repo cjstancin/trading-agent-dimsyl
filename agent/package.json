@@ -9,6 +9,8 @@
     "refresh": "tsx src/refresh-status.ts",
     "heartbeat": "tsx src/run-heartbeat.ts",
     "execute": "tsx src/run-execute.ts",
+    "plan": "tsx src/run-execute.ts --plan-only",
+    "execute:open": "tsx src/run-execute.ts --from-plan",
     "scan": "tsx src/run-scan.ts",
     "reallocate": "tsx src/run-reallocate.ts",
     "journal": "tsx src/run-journal.ts",

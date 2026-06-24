@@ -15,6 +15,7 @@ agent/*.log
 agent/logs/
 *.log
 Signals/approved-cycle.md
+Signals/planned-orders.json
 Signals/realloc-candidates.json
 memory/ledger.jsonl
 memory/journal.jsonl
