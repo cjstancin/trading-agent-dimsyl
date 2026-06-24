@@ -206,17 +206,22 @@ if (mode === "gated" || !autoExecAllowed()) {
 // protective trailing stop (Alpaca rejects a sell while the matching buy is still open). If the buy
 // fills but the stop is skipped (timeout / non-filled terminal status), we surface stopSkippedReason
 // in the Discord wrap so CJ sees the unprotected position immediately.
-const results: Array<{ symbol: string; ok: boolean; error?: string; stopSkippedReason?: string }> = [];
-for (const o of valid) {
-  try {
-    const r = await placePaperOrder(o);
-    results.push({ symbol: o.symbol, ok: true, stopSkippedReason: r.stopSkippedReason });
-    const stopNote = r.stopSkippedReason ? ` (stop SKIPPED: ${r.stopSkippedReason})` : ` stop ${o.trail_percent}%`;
-    appendFileSync(TRADELOG, `- ${new Date().toISOString()} PLACED ${o.side} ${o.qty} ${o.symbol} @ ${o.type}${stopNote} — ${o.thesis ?? ""}\n`);
-  } catch (e) {
-    results.push({ symbol: o.symbol, ok: false, error: String(e instanceof Error ? e.message : e) });
-  }
-}
+// CONCURRENT placement: every buy is submitted at once so they all hit within a second of the open.
+// The old sequential loop made each order wait up to 45s for its own fill before the next buy was even
+// submitted — so a 3-order day didn't fully fill until ~90s past the open, missing the opening move.
+// Orders are independent (distinct symbols, idempotency-keyed), and each order's protective trailing
+// stop still attaches inside placePaperOrder once its own buy fills.
+const results: Array<{ symbol: string; ok: boolean; error?: string; stopSkippedReason?: string }> =
+  await Promise.all(valid.map(async (o) => {
+    try {
+      const r = await placePaperOrder(o);
+      const stopNote = r.stopSkippedReason ? ` (stop SKIPPED: ${r.stopSkippedReason})` : ` stop ${o.trail_percent}%`;
+      appendFileSync(TRADELOG, `- ${new Date().toISOString()} PLACED ${o.side} ${o.qty} ${o.symbol} @ ${o.type}${stopNote} — ${o.thesis ?? ""}\n`);
+      return { symbol: o.symbol, ok: true, stopSkippedReason: r.stopSkippedReason };
+    } catch (e) {
+      return { symbol: o.symbol, ok: false, error: String(e instanceof Error ? e.message : e) };
+    }
+  }));
 const placed = results.filter((r) => r.ok);
 const unprotected = placed.filter((r) => r.stopSkippedReason);
 await sendDiscord(
