@@ -18,8 +18,10 @@ export interface RiskConfig {
   maxLeverage: number;         // vol-target leverage cap (1.0 = cash account, no margin)
 }
 
+// MODERATE risk profile (CJ, 2026-06-25): 1.5% risk/trade, 10% portfolio-heat ceiling — disciplined but
+// meaningfully deployed (~6–8 positions), more aggressive than the textbook 6%/1% but far from reckless.
 export const DEFAULT_RISK: RiskConfig = {
-  riskPerTradePct: 1, maxPortfolioHeatPct: 6, maxNamePct: 20, maxSectorPct: 30,
+  riskPerTradePct: 1.5, maxPortfolioHeatPct: 10, maxNamePct: 20, maxSectorPct: 30,
   targetVolPct: 15, kellyFraction: 0.5, atrMult: 3, atrPeriod: 22, maxLeverage: 1,
 };
 
