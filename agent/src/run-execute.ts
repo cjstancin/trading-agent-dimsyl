@@ -7,7 +7,8 @@ import "./load-env.js";
 import { readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
-import { paperSnapshot, placePaperOrder, latestPrice, getPortfolioHistory, getBars, type OrderRequest } from "./alpaca.js";
+import { paperSnapshot, placePaperOrder, latestPrice, getPortfolioHistory, getBars, getTradableSymbols, type OrderRequest } from "./alpaca.js";
+import { isTrustedTicker, normalizeTicker } from "./news-guard.js";
 import { validateOrders, rulesFor, haltReason, type BookState } from "./guardrails.js";
 import { atrFromBars, atrStop, sizeByRisk, riskGate, DEFAULT_RISK, type OpenPosition } from "./risk-engine.js";
 import { setPositionTrail, readPositionTrails } from "./synthetic-stops.js";
@@ -163,6 +164,17 @@ Use type "market"; est_price = your expected fill. The CODE sizes each position 
 const dropped = proposed.filter((o) => o.type && !["market", "limit"].includes(o.type));
 if (dropped.length) console.warn(`[bill] dropped ${dropped.length} non-equity order(s): ${dropped.map((o) => `${o.symbol}/${o.type}`).join(", ")}`);
 proposed = proposed.filter((o) => !o.type || ["market", "limit"].includes(o.type));
+
+// News-hardening (Bull v5): cross-check every proposed ticker against Alpaca's authoritative tradable set —
+// drops hallucinated symbols + homoglyph-misrouted tickers from poisoned news. Fail-open (API down → skip).
+const tradable = await getTradableSymbols();
+const beforeGuard = proposed.length;
+proposed = proposed.filter((o) => {
+  if (isTrustedTicker(o.symbol, tradable)) { o.symbol = normalizeTicker(o.symbol); return true; }
+  console.warn(`[bill] news-guard dropped untrusted ticker "${o.symbol}"`);
+  return false;
+});
+if (proposed.length < beforeGuard) console.warn(`[bill] news-guard dropped ${beforeGuard - proposed.length} ticker(s) (not tradable / suspicious)`);
 
 // --plan-only (9:15 bill-brief): persist the proposal for the 9:30 open run, then STOP — no sizing, no
 // validation, no placement. The open run (--from-plan) sizes on the live open price + enforces the risk

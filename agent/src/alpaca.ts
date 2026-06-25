@@ -173,6 +173,21 @@ export async function sellQty(symbol: string, qty: number): Promise<{ ok: boolea
   }
 }
 
+// Authoritative set of active, tradable US-equity symbols (Alpaca /v2/assets). Cached per process. Used by
+// the news guard to cross-check LLM-proposed tickers (reject hallucinated / homoglyph-misrouted symbols).
+// Returns an empty set on failure → callers treat that as "skip the membership check" (fail-open, never block trading).
+let _tradableCache: Set<string> | null = null;
+export async function getTradableSymbols(): Promise<Set<string>> {
+  if (_tradableCache) return _tradableCache;
+  try {
+    const assets = (await get("/v2/assets?status=active&asset_class=us_equity")) as Array<Record<string, unknown>>;
+    const set = new Set<string>();
+    for (const a of Array.isArray(assets) ? assets : []) if (a.tradable) set.add(String(a.symbol).toUpperCase());
+    if (set.size > 0) _tradableCache = set;
+    return set;
+  } catch { return new Set<string>(); }
+}
+
 // For measurement (Bull v2): fills for the blotter + ledger reconciliation, and the equity curve.
 export const getActivities = (type = "FILL") => get(`/v2/account/activities/${encodeURIComponent(type)}`);
 export const getClosedOrders = (limit = 200) => get(`/v2/orders?status=closed&limit=${limit}&direction=desc`);

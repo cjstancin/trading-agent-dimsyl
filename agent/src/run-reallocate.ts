@@ -14,7 +14,8 @@
 import "./load-env.js";
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { paperSnapshot, placePaperOrder, latestPrice, closePosition, waitForOrderTerminal, getAccount, getPortfolioHistory, getBars, sellQty, type OrderRequest } from "./alpaca.js";
+import { paperSnapshot, placePaperOrder, latestPrice, closePosition, waitForOrderTerminal, getAccount, getPortfolioHistory, getBars, sellQty, getTradableSymbols, type OrderRequest } from "./alpaca.js";
+import { isTrustedTicker, normalizeTicker } from "./news-guard.js";
 import { findWinners, parseTrims, buildTrimPrompt } from "./profit-trim.js";
 import { rulesFor, validateOrders, haltReason } from "./guardrails.js";
 import { atrFromBars, atrStop, sizeByRisk, riskGate, DEFAULT_RISK, type OpenPosition } from "./risk-engine.js";
@@ -133,6 +134,9 @@ if (execute && candidates.length === 0) {
   candidates = g.candidates;
   genCostUsd = g.costUsd;
 }
+// News-hardening: drop untrusted candidate tickers (homoglyph / hallucinated) before planning swaps.
+const tradableSet = await getTradableSymbols();
+candidates = candidates.filter((c) => isTrustedTicker(c.symbol, tradableSet)).map((c) => ({ ...c, symbol: normalizeTicker(c.symbol) }));
 
 const plan = planReallocation(holdings, candidates, { maxOpen: rules.maxOpen });
 
