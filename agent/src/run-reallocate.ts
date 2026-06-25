@@ -14,7 +14,8 @@
 import "./load-env.js";
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { paperSnapshot, placePaperOrder, latestPrice, closePosition, waitForOrderTerminal, getAccount, getPortfolioHistory, type OrderRequest } from "./alpaca.js";
+import { paperSnapshot, placePaperOrder, latestPrice, closePosition, waitForOrderTerminal, getAccount, getPortfolioHistory, sellQty, type OrderRequest } from "./alpaca.js";
+import { findWinners, parseTrims, buildTrimPrompt } from "./profit-trim.js";
 import { rulesFor, validateOrders, haltReason, sizeBuyQty } from "./guardrails.js";
 import { getProfile } from "./profile.js";
 import { getMode, autoExecAllowed } from "./mode.js";
@@ -156,6 +157,33 @@ if (!willPlace) {
 // book, stops still protect it).
 const ages = await holdingAgesDays(holdings.map((h) => h.symbol));
 const rankingLines = formatRankingLines(rankHoldings(holdings, ages), rules);
+
+// ── NEWS-AWARE PROFIT TRIM (Bull v4) ── bank part of any winner past the profit trigger, sized by CURRENT
+// sentiment: trim more if the pop's spent, less/none if it's still running. Selling-only (de-risking) → runs
+// even on a halt day, before the laggard rotation. The remainder keeps its synthetic trailing stop.
+const winners = findWinners(positions, rules.profitTriggerPct ?? 15);
+if (winners.length) {
+  let watchlistForTrim = "";
+  try { watchlistForTrim = readFileSync(APPROVED, "utf8").trim(); } catch { /* optional context */ }
+  const tRes = await runAgent(buildTrimPrompt(winners, watchlistForTrim));
+  genCostUsd += tRes.costUsd;
+  const trims = parseTrims(tRes.text).filter((t) => t.trimFraction > 0);
+  const trimLines: string[] = [];
+  for (const t of trims) {
+    const w = winners.find((x) => x.symbol === t.symbol.toUpperCase());
+    if (!w) continue;
+    const sellShares = Math.round(w.qty * t.trimFraction * 1e4) / 1e4;
+    if (!(sellShares > 0)) continue;
+    try {
+      await sellQty(w.symbol, sellShares);
+      appendFileSync(TRADELOG, `- ${new Date().toISOString()} PROFIT-TRIM sold ${sellShares} ${w.symbol} (${Math.round(t.trimFraction * 100)}% of position) @ +${w.gainPct.toFixed(1)}% — ${t.reason}\n`);
+      trimLines.push(`  💰 ${w.symbol} +${w.gainPct.toFixed(1)}% → trimmed ${Math.round(t.trimFraction * 100)}% · ${t.reason}`);
+    } catch (e) {
+      trimLines.push(`  ⚠️ ${w.symbol} trim FAILED: ${String(e instanceof Error ? e.message : e)}`);
+    }
+  }
+  if (trimLines.length) await sendDiscord([`💰 **Bill — profit trims (auto · ${rules.name})**`, ...trimLines].join("\n").slice(0, 1990), { channel: "bull", username: "Bill the Bull" });
+}
 
 const lastEq = Number(acct.last_equity ?? 0);
 const dayPnlPct = lastEq > 0 ? ((equity - lastEq) / lastEq) * 100 : 0;

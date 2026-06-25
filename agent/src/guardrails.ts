@@ -17,11 +17,12 @@ export interface Rules {
   maxDrawdownFromPeakPct?: number; // halt new entries when equity falls this % below the trailing peak
   fractional?: boolean;            // allow fractional/notional sizing (Alpaca: market + TIF=day only; no broker trailing stop → synthetic)
   coreCount?: number;              // # of high-conviction "core" names that take the bulk of capital; the rest are smaller satellites
+  profitTriggerPct?: number;       // unrealized gain (%) at which the news-aware profit-trim considers banking part of a winner
 }
 
 // Fractional + 10-slot book: ~6 high-conviction CORE names take the bulk, up to 4 smaller SATELLITES round it out.
 // maxPositionPct is the per-name ceiling for a max-conviction core name; sizeBuyQty scales lower-conviction names down.
-export const AGGRESSIVE_PAPER: Rules = { name: "Aggressive", maxPositionPct: 0.20, maxOpen: 10, minPrice: 10, riskPerTradePct: 5, trailPercent: 20, dailyHaltPct: 5, monthlyKillPct: 20, maxDrawdownFromPeakPct: 15, fractional: true, coreCount: 6 };
+export const AGGRESSIVE_PAPER: Rules = { name: "Aggressive", maxPositionPct: 0.20, maxOpen: 10, minPrice: 10, riskPerTradePct: 5, trailPercent: 20, dailyHaltPct: 5, monthlyKillPct: 20, maxDrawdownFromPeakPct: 15, fractional: true, coreCount: 6, profitTriggerPct: 15 };
 export const STEADY_PAPER: Rules = { name: "Steady", maxPositionPct: 0.15, maxOpen: 4, minPrice: 5, riskPerTradePct: 4, trailPercent: 10, dailyHaltPct: 5, monthlyKillPct: 15 };
 
 /** Pick the rulebook for a risk profile ("aggressive" | "steady"). Defaults to aggressive. */

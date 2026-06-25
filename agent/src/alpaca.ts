@@ -158,6 +158,21 @@ export async function closePosition(symbol: string): Promise<{ ok: boolean; orde
   return { ok: true, order, canceledStops };
 }
 
+/** Market-sell a specific (possibly fractional) qty of a long position — used for PARTIAL profit trims
+ *  (sell into strength, keep the rest running). Fractional sells are market + TIF=day + marked-long on Alpaca.
+ *  Idempotency-keyed; a duplicate within 24h is a safe no-op. Caller must size qty ≤ the held quantity. */
+export async function sellQty(symbol: string, qty: number): Promise<{ ok: boolean; order?: any; idempotent?: boolean }> {
+  if (!(qty > 0)) return { ok: false };
+  const coid = billOrderId(symbol, "trim");
+  try {
+    const order = await post("/v2/orders", { symbol, qty, side: "sell", type: "market", time_in_force: "day", client_order_id: coid });
+    return { ok: true, order };
+  } catch (e) {
+    if (e instanceof DuplicateClientOrderIdError) return { ok: true, idempotent: true };
+    throw e;
+  }
+}
+
 // For measurement (Bull v2): fills for the blotter + ledger reconciliation, and the equity curve.
 export const getActivities = (type = "FILL") => get(`/v2/account/activities/${encodeURIComponent(type)}`);
 export const getClosedOrders = (limit = 200) => get(`/v2/orders?status=closed&limit=${limit}&direction=desc`);
