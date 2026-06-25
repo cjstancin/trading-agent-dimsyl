@@ -20,6 +20,7 @@ import { getProfile } from "./profile.js";
 import { getMode, autoExecAllowed } from "./mode.js";
 import { readLedger, appendProposals } from "./ledger.js";
 import { planReallocation, type Holding, type Candidate } from "./reallocate.js";
+import { rankHoldings, formatRankingLines, holdingAgesDays } from "./run-rank.js";
 import { runAgent } from "./agent.js";
 import { buildEquityCurve, type PortfolioHistory } from "./equity-curve.js";
 import { installSafetyNet } from "./http-utils.js";
@@ -149,8 +150,13 @@ if (!willPlace) {
   process.exit(0);
 }
 
-// ── AUTO-EXECUTE ── risk halt gates the BUY side: a bad day/month/drawdown means stand down → skip
-// rotation entirely (don't sell-without-rebuy; a halt should freeze the book, stops still protect it).
+// ── AUTO-EXECUTE ── First build the holding RANKING (CJ wants to SEE how every name ranks + why it's
+// kept) — posted to #trade-bot each pass alongside the decision. Then act. Risk halt gates the BUY side:
+// a bad day/month/drawdown means stand down → skip rotation (don't sell-without-rebuy; a halt freezes the
+// book, stops still protect it).
+const ages = await holdingAgesDays(holdings.map((h) => h.symbol));
+const rankingLines = formatRankingLines(rankHoldings(holdings, ages), rules);
+
 const lastEq = Number(acct.last_equity ?? 0);
 const dayPnlPct = lastEq > 0 ? ((equity - lastEq) / lastEq) * 100 : 0;
 let monthPnlPct: number | null = null;
@@ -166,10 +172,12 @@ try {
 } catch { /* leave null — the daily gate still fires */ }
 const halt = haltReason({ dayPnlPct, monthPnlPct, drawdownFromPeakPct }, rules);
 if (halt) {
+  await sendDiscord([...rankingLines, "", `⏸️ Rotation skipped — risk halt: ${halt}. (Existing trailing stops still protect the book.)`].join("\n").slice(0, 1990), { channel: "bull", username: "Bill the Bull" });
   console.log(JSON.stringify({ ok: true, mode, skippedReason: `risk halt: ${halt}`, proposedSwaps: plan.swaps.length, costUsd: genCostUsd }));
   process.exit(0);
 }
 if (plan.swaps.length === 0) {
+  await sendDiscord([...rankingLines, "", "✅ No swap — held the book (no fresh idea beat the weakest by ≥15 conviction today)."].join("\n").slice(0, 1990), { channel: "bull", username: "Bill the Bull" });
   console.log(JSON.stringify({ ok: true, mode, placed: 0, proposedSwaps: 0, candidates: candidates.length, notes: plan.notes, costUsd: genCostUsd }, null, 2));
   process.exit(0);
 }
@@ -212,7 +220,9 @@ for (const s of plan.swaps) {
 
 const done = results.filter((r) => r.ok);
 const body = [
-  `🔁 **Bill the Bull — rotated ${done.length}/${results.length} (auto · ${rules.name})**`,
+  ...rankingLines,
+  "",
+  `🔁 **Rotated ${done.length}/${results.length} (auto · ${rules.name})**`,
   ...results.map((r) =>
     r.ok
       ? `  ✅ SELL ${r.sell} → BUY ${r.buy}${r.stopSkippedReason ? " ⚠️ stop pending (reconcile)" : ""}`
