@@ -7,8 +7,10 @@ import "./load-env.js";
 import { readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
-import { paperSnapshot, placePaperOrder, latestPrice, getPortfolioHistory, type OrderRequest } from "./alpaca.js";
-import { validateOrders, rulesFor, haltReason, sizeBuyQty, type BookState } from "./guardrails.js";
+import { paperSnapshot, placePaperOrder, latestPrice, getPortfolioHistory, getBars, type OrderRequest } from "./alpaca.js";
+import { validateOrders, rulesFor, haltReason, type BookState } from "./guardrails.js";
+import { atrFromBars, atrStop, sizeByRisk, riskGate, DEFAULT_RISK, type OpenPosition } from "./risk-engine.js";
+import { setPositionTrail, readPositionTrails } from "./synthetic-stops.js";
 import { buildEquityCurve, type PortfolioHistory } from "./equity-curve.js";
 import { getMode, autoExecAllowed } from "./mode.js";
 import { getProfile } from "./profile.js";
@@ -133,7 +135,7 @@ if (!usedPlan) {
   const prompt = `You are Bill the Bull, CJ's trading agent (paper account). Convert the APPROVED trade cycle below into concrete orders.
 Rulebook limits (${rules.name}): max ${Math.round(rules.maxPositionPct * 100)}% per position, up to ${rules.maxOpen} total open (~${rules.coreCount ?? 6} core + satellites), price ≥ $${rules.minPrice}, a protective ~${rules.trailPercent}% trailing stop on EVERY buy (enforced in code). Current equity ≈ $${equity}, open positions ≈ ${openCount}.
 QUALITY UNIVERSE ONLY: liquid US large/mid-cap stocks + liquid non-leveraged ETFs. NEVER propose penny stocks (< $${rules.minPrice}), leveraged/inverse ETFs (SOXL/TQQQ/3x), crypto, meme/pump names, OR options/calls/puts/futures/derivatives — equities & ETFs only. Horizon 1 week–5 years; let winners run.
-FRACTIONAL SIZING: positions are sized in FRACTIONAL shares from a ~$${equity} book, so ANY quality name is reachable regardless of share price (NVDA + other high-priced names included) — never skip a name for being "too expensive." Build a CONVICTION-TIERED book of UP TO ${rules.maxOpen} names: ~${rules.coreCount ?? 6} high-conviction CORE names you want the most capital in (confidence 70–95), plus optionally a few smaller SATELLITE names (confidence ~45–65) only if you genuinely like them. Quality + conviction over filling slots — a few strong names beats ${rules.maxOpen} mediocre ones; fine to pick fewer or none. Set "confidence" HONESTLY: the code sizes each position from it (100 = full ${Math.round(rules.maxPositionPct * 100)}% cap, 50 = half).
+FRACTIONAL SIZING: positions are sized in FRACTIONAL shares from a ~$${equity} book, so ANY quality name is reachable regardless of share price (NVDA + other high-priced names included) — never skip a name for being "too expensive." Build a CONVICTION-TIERED book of UP TO ${rules.maxOpen} names: ~${rules.coreCount ?? 6} high-conviction CORE names you want the most capital in (confidence 70–95), plus optionally a few smaller SATELLITE names (confidence ~45–65) only if you genuinely like them. Quality over filling slots — a few strong names beats ${rules.maxOpen} mediocre ones; fine to pick fewer or none. Give an honest "confidence" (0–100) used to RANK ideas and decide which make the cut. You do NOT size positions: a deterministic risk engine sizes every buy itself from volatility + a fixed ~1% risk budget and caps it against portfolio limits.
 
 APPROVED CYCLE:
 ${approved}
@@ -174,15 +176,38 @@ if (planOnly) {
 // Ground every buy in the LIVE price and size deterministically (the model picks the name + stop + thesis;
 // the CODE sizes it from the real price + risk formula). This kills mis-sizing from hallucinated prices.
 const round = (x: number, d = 2) => Math.round(x * 10 ** d) / 10 ** d;
+const rcfg = DEFAULT_RISK;
+// Live book for the portfolio-risk gate: each open position's ~open-risk ≈ its trail% × market value.
+const trailsNow = readPositionTrails();
+const openPositions: OpenPosition[] = (Array.isArray(snap.positions) ? snap.positions : []).map((p: any) => {
+  const mv = Number(p.market_value ?? 0);
+  const tr = (trailsNow[String(p.symbol ?? "").toUpperCase()] ?? (rules.trailPercent ?? 20)) / 100;
+  return { symbol: String(p.symbol ?? ""), marketValue: mv, riskDollars: Math.max(0, mv * tr) };
+});
+// ── PHASE 1: the deterministic RISK ENGINE owns sizing + the portfolio override (the LLM only proposed the name).
+// Per buy: ATR-based stop (vol-scaled) → risk-based size (1% of equity ÷ stop distance) → riskGate caps it vs the
+// per-name / sector / portfolio-heat limits. The per-position trail% (= the stop distance) is persisted so the
+// synthetic-stop monitor protects each name at its OWN level (not a flat 20%).
 for (const o of proposed) {
   if (o.side !== "buy") continue;
   const live = await latestPrice(o.symbol);
-  if (live && live > 0) {
-    o.est_price = round(live);
-    o.qty = sizeBuyQty(live, equity, rules, o.confidence ?? 100); // conviction-scaled (guardrails.ts) — reused by the reallocator
-    if (rules.fractional) { o.fractional = true; o.type = "market"; } // fractional → market+day, synthetic stop (placePaperOrder)
-    else if (o.type === "limit") o.limit_price = round(live * 1.01); // whole-share near-market limit
-  }
+  if (!live || live <= 0) { o.qty = 0; continue; }
+  o.est_price = round(live);
+  let atr = 0;
+  try {
+    const end = new Date(); const start = new Date(end.getTime() - 45 * 864e5);
+    atr = atrFromBars(await getBars(o.symbol, start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)), rcfg.atrPeriod);
+  } catch { /* no bars → 15% fallback stop below */ }
+  const rawStop = atr > 0 ? atrStop(live, atr, rcfg) : live * 0.85;
+  const stop = Math.min(rawStop, live * 0.97); // floor the stop at 3% so a too-tight stop can't blow up the size
+  o.trail_percent = Math.min(35, Math.max(3, round(((live - stop) / live) * 100)));
+  o.type = "market";
+  o.fractional = !!rules.fractional;
+  const sized = sizeByRisk(equity, live, stop, rcfg);
+  const gated = riskGate({ symbol: o.symbol, sector: (o as { sector?: string }).sector, price: live, stopPrice: stop, shares: sized }, { equity, positions: openPositions }, rcfg);
+  o.qty = gated.shares;
+  if (gated.reasons.length) console.log(`[bill] ${o.symbol}: ${sized}→${gated.shares} sh @ trail ${o.trail_percent}% (${gated.reasons.join("; ")})`);
+  if (gated.ok) openPositions.push({ symbol: o.symbol, marketValue: gated.shares * live, riskDollars: gated.shares * (live - stop) });
 }
 
 const checked = validateOrders(proposed, book, rules);
@@ -245,6 +270,7 @@ const results: Array<{ symbol: string; ok: boolean; error?: string; stopSkippedR
   await Promise.all(valid.map(async (o) => {
     try {
       const r = await placePaperOrder(o);
+      setPositionTrail(o.symbol, o.trail_percent ?? rules.trailPercent ?? 20); // persist this name's ATR trail for the synthetic-stop monitor
       const stopNote = !r.stopSkippedReason
         ? ` stop ${o.trail_percent}%`
         : /synthetic|fractional/i.test(r.stopSkippedReason) ? ` (protected by synthetic stop)` : ` (⚠️ stop SKIPPED: ${r.stopSkippedReason})`;

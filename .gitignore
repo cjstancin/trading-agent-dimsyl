@@ -23,6 +23,7 @@ memory/pending-orders.md
 memory/pending-reallocation.md
 memory/trade-log.md
 memory/stops.json
+memory/position-trails.json
 
 # Node
 agent/node_modules/

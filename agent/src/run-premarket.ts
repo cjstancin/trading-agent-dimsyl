@@ -8,7 +8,7 @@ import { getMode } from "./mode.js";
 import { isMarketDayToday } from "./market-calendar.js";
 import { rulesFor } from "./guardrails.js";
 import { getProfile } from "./profile.js";
-import { readState, positionLines } from "./synthetic-stops.js";
+import { readState, positionLines, readPositionTrails } from "./synthetic-stops.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-premarket");
@@ -71,7 +71,7 @@ if (isError || !text.trim()) {
 let brief = text.trim();
 const rawPos = Array.isArray(snap.positions) ? (snap.positions as Array<Record<string, unknown>>) : [];
 if (rawPos.length) {
-  const lines = positionLines(rawPos, readState(), rulesFor(getProfile()).trailPercent ?? 20);
+  const lines = positionLines(rawPos, readState(), rulesFor(getProfile()).trailPercent ?? 20, readPositionTrails());
   brief += `\n\n📊 Positions — bought · now · stop:\n` + lines.map((l) => "• " + l).join("\n");
 }
 const posted = await sendDiscord(brief, { channel: "bull", username: "Bill the Bull" });

@@ -58,6 +58,24 @@ export function sizeByRisk(equity: number, price: number, stopPrice: number, cfg
   return Math.max(0, r4(Math.min(riskShares, capShares)));
 }
 
+// ───────────────────────── volatility (ATR) ─────────────────────────
+
+export interface Bar { h: number; l: number; c: number; }
+
+/** Average True Range over `period` from ascending daily bars. TR = max(high−low, |high−prevClose|,
+ *  |low−prevClose|); ATR = mean of the last `period` TRs. Returns 0 if there aren't enough bars (caller
+ *  falls back to a default % stop). The volatility input for ATR-based stops + vol sizing. */
+export function atrFromBars(bars: Bar[], period = 22): number {
+  if (!Array.isArray(bars) || bars.length < period + 1) return 0;
+  const trs: number[] = [];
+  for (let i = 1; i < bars.length; i++) {
+    const pc = bars[i - 1].c;
+    trs.push(Math.max(bars[i].h - bars[i].l, Math.abs(bars[i].h - pc), Math.abs(bars[i].l - pc)));
+  }
+  const last = trs.slice(-period);
+  return last.reduce((a, b) => a + b, 0) / last.length;
+}
+
 // ───────────────────────── stops (volatility-based) ─────────────────────────
 
 /** Chandelier long stop = highest-high(N) − ATR(N)×mult. Trails up with the high; replaces a flat % trail. */

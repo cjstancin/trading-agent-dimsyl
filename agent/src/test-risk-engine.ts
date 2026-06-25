@@ -1,5 +1,5 @@
 // Tests for the deterministic risk engine (no network). Run: npm run test:risk-engine
-import { inverseVolWeights, volTargetLeverage, fractionalKelly, sizeByRisk, chandelierStop, atrStop, riskGate, regimeOn, DEFAULT_RISK } from "./risk-engine.js";
+import { inverseVolWeights, volTargetLeverage, fractionalKelly, sizeByRisk, chandelierStop, atrStop, riskGate, regimeOn, atrFromBars, DEFAULT_RISK } from "./risk-engine.js";
 
 let pass = 0, fail = 0;
 const check = (name: string, cond: boolean) => { (cond ? pass++ : fail++); console.log(`${cond ? "PASS" : "FAIL"} — ${name}`); };
@@ -45,6 +45,13 @@ check("riskGate: per-sector cap binds ($200 room / $100 = 2 sh)",
 check("regimeOn: price ≥ 200MA → risk-on", regimeOn(105, 100) === true);
 check("regimeOn: price < 200MA → risk-off", regimeOn(95, 100) === false);
 check("regimeOn: unknown MA → risk-on (don't block)", regimeOn(100, 0) === true);
+
+// ATR from bars: TRs of [3,2] over period 2 → 2.5; too few bars → 0
+{
+  const bars = [{ h: 10, l: 8, c: 9 }, { h: 12, l: 9, c: 11 }, { h: 13, l: 11, c: 12 }];
+  check("atrFromBars: mean of last-N true ranges (→2.5)", atrFromBars(bars, 2) === 2.5);
+  check("atrFromBars: too few bars → 0", atrFromBars(bars, 22) === 0);
+}
 
 // config sanity
 check("DEFAULT_RISK: 1% risk, 6% heat, half-Kelly", DEFAULT_RISK.riskPerTradePct === 1 && DEFAULT_RISK.maxPortfolioHeatPct === 6 && DEFAULT_RISK.kellyFraction === 0.5);
