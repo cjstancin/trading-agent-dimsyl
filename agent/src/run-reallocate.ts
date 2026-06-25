@@ -1,8 +1,9 @@
 // Bill's REALLOCATION ritual — the intraday "cut the laggard, fund a better idea" loop.
 //   Advisory (default, `npm run reallocate`): reads the book + candidate ideas (from a file/CLI arg),
 //     prints/posts a swap plan, places NOTHING. Back-compatible.
-//   --execute (`npm run reallocate:auto`, the hourly bill-realloc timer): GENERATES fresh candidate ideas
-//     from today's researched watchlist, plans swaps, and ACTS per the off/gated/auto toggle:
+//   --execute (`npm run reallocate:auto`, the hourly bill-realloc timer): RE-RESEARCHES the morning
+//     watchlist with CURRENT data (web search) → fresh candidates re-scored on today's price/news (a
+//     played-out catalyst gets downgraded), plans swaps, and ACTS per the off/gated/auto toggle:
 //       off   → nothing.
 //       gated → DM the proposed swap to #trade-bot; place nothing.
 //       auto (+ BILL_ALLOW_AUTO_EXEC=1) → SELL the weak holding (cancels its stop + liquidates), then
@@ -83,26 +84,31 @@ const holdings: Holding[] = positions.map((p) => ({
   score: lastConfidence(String(p.symbol)),
 }));
 
-// Generate fresh rotation candidates from today's researched watchlist (the approved cycle) + the live
-// book. Only used in --execute when no explicit file/CLI candidates are supplied. The model PROPOSES
-// names + honest convictions; the deterministic planner decides whether any clears the swap bar.
+// FRESH intraday RE-RESEARCH (the core of CJ's ask): each rotation re-validates this morning's watchlist
+// with CURRENT data via web search — confirming names are still good to own RIGHT NOW, downgrading any whose
+// catalyst already PLAYED OUT (already ran on the news / popped past the entry → less upside left, rotate
+// elsewhere), and surfacing fresh movers. The morning convictions are NOT trusted as-is; the model re-scores
+// from today's price action + news. Only used in --execute when no explicit file/CLI candidates are supplied.
 async function generateCandidates(): Promise<{ candidates: Candidate[]; costUsd: number }> {
-  let approved = "";
-  try { approved = readFileSync(APPROVED, "utf8").trim(); } catch { /* may not exist */ }
+  let watchlist = "";
+  try { watchlist = readFileSync(APPROVED, "utf8").trim(); } catch { /* may not exist */ }
   const cap = Math.round(rules.maxPositionPct * equity);
   const bookLines = holdings.length
     ? holdings.map((h) => `  • ${h.symbol}: ${(h.unrealizedPlPct * 100).toFixed(1)}% unreal, $${h.marketValue.toFixed(0)}${typeof h.score === "number" ? `, conv@entry ${h.score}` : ""}`).join("\n")
     : "  (no open positions)";
-  const prompt = `You are Bill the Bull (paper account) running an INTRADAY rotation check — hunting a "bad apple" to swap for a clearly better idea.
+  const prompt = `You are Bill the Bull (paper account) running an INTRADAY rotation check — deciding whether to swap a weak holding for a better idea RIGHT NOW. Quality over churn.
+
+RE-RESEARCH WITH CURRENT DATA — do NOT trust this morning's view. USE WEB SEARCH to check, as of right now: today's price action + intraday move, any news/catalyst since the open, and the market regime (risk-on/off). A name whose catalyst has already PLAYED OUT (already ran on the news, or popped through its entry zone) has less upside left → downgrade it or drop it in favor of a name still setting up. Also surface fresh movers that weren't on the morning list.
+
+This morning's watchlist (names to RE-VALIDATE from today's data — re-score them, do NOT copy the morning convictions):
+${watchlist || "(none — research the market fresh)"}
+
 Current book (equity ≈ $${equity.toFixed(0)}, ${holdings.length}/${rules.maxOpen} slots):
 ${bookLines}
 
-Today's researched watchlist (the approved cycle):
-${approved || "(none)"}
-
-Propose the TOP 2–3 BEST NEW ideas RIGHT NOW — names NOT already held — that you'd rotate INTO over the coming days if you freed a slot by selling a laggard. Quality US large/mid-cap stocks + liquid non-leveraged ETFs only; price ≥ $${rules.minPrice}; must fit WHOLE shares within the ${Math.round(rules.maxPositionPct * 100)}% cap (≈ $${cap}); NO penny / leveraged / inverse / crypto / options. Prefer names from the watchlist; you may add a stronger current name with a clear catalyst.
-Give an HONEST 0–100 conviction — only an idea beating a holding's strength by ≥15 points triggers a swap, so do NOT inflate. One-line thesis + a short setup label each.
-Output ONLY a JSON array (no prose / no fence): [{"symbol":"NVDA","conviction":85,"thesis":"…","setup":"momentum breakout"}]. If nothing clearly beats the current book, output [].`;
+Propose the TOP 2–3 BEST ideas to rotate INTO right now — names NOT already held. Quality US large/mid-cap stocks + liquid non-leveraged ETFs only; price ≥ $${rules.minPrice}; must fit WHOLE shares within the ${Math.round(rules.maxPositionPct * 100)}% cap (≈ $${cap}); NO penny / leveraged / inverse / crypto / options.
+Give an HONEST 0–100 conviction reflecting TODAY's setup (only an idea beating a holding's strength by ≥15 points triggers a swap, so do NOT inflate). One-line thesis grounded in CURRENT data + a short setup label.
+Output ONLY a JSON array (no prose / no fence): [{"symbol":"NVDA","conviction":85,"thesis":"… (current)","setup":"momentum breakout"}]. If nothing clearly beats the current book today, output [].`;
   try {
     const res = await runAgent(prompt);
     const m = res.text.match(/\[[\s\S]*\]/);
