@@ -1,0 +1,3 @@
+# cached price data (re-fetchable via `python backtest.py --refresh`)
+data/
+# generated outputs are committed (RESULTS.md, equity_curve.csv) — keep them
