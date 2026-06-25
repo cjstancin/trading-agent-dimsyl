@@ -95,7 +95,9 @@ const ready = readiness(m);
 const mode = getMode();
 const rules = rulesFor(getProfile());
 const dayPnlPct = lastEquity > 0 ? round(((equity - lastEquity) / lastEquity) * 100, 2) : 0;
-const alerts = computeAlerts({ dayPnlPct, monthPnlPct: m.monthPnlPct, drawdown: m.risk.drawdown, largestPos });
+const alertObjs = computeAlerts({ dayPnlPct, monthPnlPct: m.monthPnlPct, drawdown: m.risk.drawdown, largestPos });
+const alerts = alertObjs.map((a) => a.text); // full current set → status.json (dashboard banner shows live state)
+const alertKeys = alertObjs.map((a) => a.key); // active alert types → next cycle de-dups against these
 const botStatus = mode === "off" ? "Stopped" : mode === "auto" ? "Auto" : "Running";
 const stamp = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
 
@@ -132,15 +134,20 @@ const next = {
   caps: { riskPerTrade: rules.riskPerTradePct, maxPosition: Math.round((rules.maxPositionPct ?? 0.4) * 100), trailingStop: rules.trailPercent, dailyHalt: rules.dailyHaltPct, monthlyKill: rules.monthlyKillPct },
   risk: { drawdown: m.risk.drawdown, maxDD: m.risk.maxDD, peakEquity: m.risk.peakEquity, grossExposure, largestPos, sectorConc: 0 },
   alerts,
+  alertKeys,
 };
 
 writeFileSync(STATUS, JSON.stringify(next, null, 2) + "\n");
 
-// Post any risk alerts to Discord — real-time risk co-pilot (Bull v2 #7).
-if (alerts.length) {
+// Post risk alerts to Discord — but only on TRANSITION into a state (per-key de-dup vs the previous cycle),
+// so a persistent condition pings once, not every 5-min refresh. status.json.alerts still lists ALL active
+// alerts for the dashboard; only newly-active ones reach #trade-bot.
+const prevKeys = Array.isArray(prev.alertKeys) ? (prev.alertKeys as string[]) : [];
+const freshAlerts = alertObjs.filter((a) => !prevKeys.includes(a.key));
+if (freshAlerts.length) {
   try {
     const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
-    await sendDiscord("🐂 **Bill the Bull — risk alert**\n" + alerts.join("\n"), { channel: "bull", username: "Bill the Bull" });
+    await sendDiscord("🐂 **Bill the Bull — risk alert**\n" + freshAlerts.map((a) => a.text).join("\n"), { channel: "bull", username: "Bill the Bull" });
   } catch { /* notifier optional */ }
 }
 console.log(
