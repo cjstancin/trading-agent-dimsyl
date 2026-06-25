@@ -13,6 +13,7 @@
     "execute:open": "tsx src/run-execute.ts --from-plan",
     "scan": "tsx src/run-scan.ts",
     "reallocate": "tsx src/run-reallocate.ts",
+    "reallocate:auto": "tsx src/run-reallocate.ts --execute",
     "journal": "tsx src/run-journal.ts",
     "eod-report": "tsx src/run-eod-report.ts",
     "port:review": "tsx src/run-port-review.ts",

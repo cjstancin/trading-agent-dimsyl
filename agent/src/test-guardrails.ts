@@ -1,5 +1,5 @@
 // SUCCESS / FAIL / NULL test for the guardrail validator (no network). Run: npm run test:guardrails
-import { validateOrders, AGGRESSIVE_PAPER } from "./guardrails.js";
+import { validateOrders, sizeBuyQty, AGGRESSIVE_PAPER } from "./guardrails.js";
 import type { OrderRequest } from "./alpaca.js";
 
 const book = { equity: 100_000, openCount: 2 };
@@ -32,6 +32,11 @@ const mixed = validateOrders([noStopBuy("AA"), noStopBuy("BB"), noStopBuy("CC"),
 check("CAP: invalid buys are still rejected (missing stop)", mixed.slice(0, 3).every(v => v.ok === false));
 check("CAP: invalid buys don't consume slots → both valid buys pass", mixed[3].ok === true && mixed[4].ok === true);
 check("CAP: neither valid buy is mismarked as over-cap", !mixed[3].reasons.concat(mixed[4].reasons).some(r => /max .* open/.test(r)));
+
+// sizeBuyQty (shared by executor + reallocator): whole-share size = min(risk-budget, position-cap), floored.
+check("SIZE: position cap binds on a large account", sizeBuyQty(100, 100_000, AGGRESSIVE_PAPER) === 200);
+check("SIZE: small account sizes to whole shares within cap", sizeBuyQty(100, 1000, AGGRESSIVE_PAPER) === 2);
+check("SIZE: zero/invalid price or equity → 0 shares", sizeBuyQty(0, 100_000, AGGRESSIVE_PAPER) === 0 && sizeBuyQty(100, 0, AGGRESSIVE_PAPER) === 0);
 
 // NULL: empty proposal → empty result, no throw.
 check("NULL: empty array → []", JSON.stringify(validateOrders([], book)) === "[]");

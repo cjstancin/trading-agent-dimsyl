@@ -23,6 +23,19 @@ export const STEADY_PAPER: Rules = { name: "Steady", maxPositionPct: 0.15, maxOp
 /** Pick the rulebook for a risk profile ("aggressive" | "steady"). Defaults to aggressive. */
 export function rulesFor(profile: string): Rules { return profile === "steady" ? STEADY_PAPER : AGGRESSIVE_PAPER; }
 
+/** Deterministic WHOLE-share size for a buy at `live` price: the smaller of the risk-budget size
+ *  (riskPerTradePct of equity ÷ the stop distance) and the position cap (maxPositionPct of equity).
+ *  Shared by the executor AND the reallocator so a buy is sized identically wherever it originates
+ *  (the model picks the name + stop; the CODE sizes it from the real price). Returns floored shares ≥ 0. */
+export function sizeBuyQty(live: number, equity: number, rules: Rules = AGGRESSIVE_PAPER): number {
+  if (!(live > 0) || !(equity > 0)) return 0;
+  const trailPct = (rules.trailPercent ?? 20) / 100;
+  const riskPct = (rules.riskPerTradePct ?? 7) / 100;
+  const riskShares = trailPct > 0 ? (riskPct * equity) / (live * trailPct) : 0;
+  const capShares = (rules.maxPositionPct * equity) / live;
+  return Math.max(0, Math.floor(Math.min(riskShares, capShares)));
+}
+
 export interface BookState {
   equity: number;
   openCount: number; // current open positions

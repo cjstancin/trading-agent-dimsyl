@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
 import { paperSnapshot, placePaperOrder, latestPrice, getPortfolioHistory, type OrderRequest } from "./alpaca.js";
-import { validateOrders, rulesFor, haltReason, type BookState } from "./guardrails.js";
+import { validateOrders, rulesFor, haltReason, sizeBuyQty, type BookState } from "./guardrails.js";
 import { buildEquityCurve, type PortfolioHistory } from "./equity-curve.js";
 import { getMode, autoExecAllowed } from "./mode.js";
 import { getProfile } from "./profile.js";
@@ -174,16 +174,12 @@ if (planOnly) {
 // Ground every buy in the LIVE price and size deterministically (the model picks the name + stop + thesis;
 // the CODE sizes it from the real price + risk formula). This kills mis-sizing from hallucinated prices.
 const round = (x: number, d = 2) => Math.round(x * 10 ** d) / 10 ** d;
-const trailPct = (rules.trailPercent ?? 20) / 100;
-const riskPct = (rules.riskPerTradePct ?? 7) / 100;
 for (const o of proposed) {
   if (o.side !== "buy") continue;
   const live = await latestPrice(o.symbol);
   if (live && live > 0) {
     o.est_price = round(live);
-    const riskShares = trailPct > 0 ? (riskPct * equity) / (live * trailPct) : 0;
-    const capShares = (rules.maxPositionPct * equity) / live;
-    o.qty = Math.max(0, Math.floor(Math.min(riskShares, capShares)));
+    o.qty = sizeBuyQty(live, equity, rules); // shared risk-budget/cap sizing (guardrails.ts) — reused by the reallocator
     if (o.type === "limit") o.limit_price = round(live * 1.01); // near-market, not a hallucinated limit
   }
 }

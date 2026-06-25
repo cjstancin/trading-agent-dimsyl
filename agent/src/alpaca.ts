@@ -124,6 +124,40 @@ export async function waitForOrderTerminal(
     await new Promise((r) => setTimeout(r, interval));
   }
 }
+/** Cancel one open order by id. 404 (gone) / 422 (uncancelable, already terminal) are treated as a
+ *  successful no-op — the desired end-state (order not working) already holds. Never throws. */
+export async function cancelOrder(orderId: string): Promise<boolean> {
+  try {
+    const res = await withTimeout((signal) => fetch(`${BASE}/v2/orders/${encodeURIComponent(orderId)}`, {
+      method: "DELETE", headers: authHeaders(), signal,
+    }), ALPACA_TIMEOUT_MS);
+    return res.ok || res.status === 404 || res.status === 422;
+  } catch { return false; }
+}
+
+/** Liquidate the FULL paper position in `symbol` at market — the rotation/swap SELL leg. First explicitly
+ *  cancels the symbol's open orders (the protective trailing stop) so the liquidation can't conflict or
+ *  leave an orphan stop, then DELETEs the position (also with cancel_orders=true as a belt-and-suspenders).
+ *  404 = already flat (safe no-op). Returns the liquidation order so the caller can poll it via
+ *  waitForOrderTerminal before re-buying (freed buying power settles on fill). Paper-guarded by BASE. */
+export async function closePosition(symbol: string): Promise<{ ok: boolean; order?: any; alreadyFlat?: boolean; canceledStops: number }> {
+  const sym = symbol.toUpperCase();
+  let canceledStops = 0;
+  try {
+    const open = (await getOpenOrders()) as any[];
+    for (const o of Array.isArray(open) ? open : []) {
+      if (o?.id && String(o.symbol).toUpperCase() === sym) { if (await cancelOrder(String(o.id))) canceledStops++; }
+    }
+  } catch { /* if listing fails, the DELETE below still requests cancel of related orders */ }
+  const res = await withTimeout((signal) => fetch(`${BASE}/v2/positions/${encodeURIComponent(sym)}?cancel_orders=true`, {
+    method: "DELETE", headers: authHeaders(), signal,
+  }), ALPACA_TIMEOUT_MS);
+  if (res.status === 404) return { ok: true, alreadyFlat: true, canceledStops };
+  if (!res.ok) { const t = await res.text().catch(() => ""); throw new Error(`Alpaca DELETE position ${sym} → ${res.status}: ${t.slice(0, 160)}`); }
+  const order = await res.json().catch(() => null);
+  return { ok: true, order, canceledStops };
+}
+
 // For measurement (Bull v2): fills for the blotter + ledger reconciliation, and the equity curve.
 export const getActivities = (type = "FILL") => get(`/v2/account/activities/${encodeURIComponent(type)}`);
 export const getClosedOrders = (limit = 200) => get(`/v2/orders?status=closed&limit=${limit}&direction=desc`);
