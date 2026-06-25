@@ -131,7 +131,7 @@ if (fromPlan) {
 // cycle into concrete orders. The model only PROPOSES — sizing + guardrail validation are deterministic, below.
 if (!usedPlan) {
   const prompt = `You are Bill the Bull, CJ's trading agent (paper account). Convert the APPROVED trade cycle below into concrete orders.
-Rulebook limits (${rules.name}): max ${Math.round(rules.maxPositionPct * 100)}% per position, up to ${rules.maxOpen} open, price ≥ $${rules.minPrice}, a protective ~${rules.trailPercent}% trailing stop on EVERY buy (enforced in code). Current equity ≈ $${equity}, open positions ≈ ${openCount}.
+Rulebook limits (${rules.name}): max ${Math.round(rules.maxPositionPct * 100)}% per position, up to ${rules.maxOpen} total open (~${rules.coreCount ?? 6} core + satellites), price ≥ $${rules.minPrice}, a protective ~${rules.trailPercent}% trailing stop on EVERY buy (enforced in code). Current equity ≈ $${equity}, open positions ≈ ${openCount}.
 QUALITY UNIVERSE ONLY: liquid US large/mid-cap stocks + liquid non-leveraged ETFs. NEVER propose penny stocks (< $${rules.minPrice}), leveraged/inverse ETFs (SOXL/TQQQ/3x), crypto, meme/pump names, OR options/calls/puts/futures/derivatives — equities & ETFs only. Horizon 1 week–5 years; let winners run.
 FRACTIONAL SIZING: positions are sized in FRACTIONAL shares from a ~$${equity} book, so ANY quality name is reachable regardless of share price (NVDA + other high-priced names included) — never skip a name for being "too expensive." Build a CONVICTION-TIERED book of UP TO ${rules.maxOpen} names: ~${rules.coreCount ?? 6} high-conviction CORE names you want the most capital in (confidence 70–95), plus optionally a few smaller SATELLITE names (confidence ~45–65) only if you genuinely like them. Quality + conviction over filling slots — a few strong names beats ${rules.maxOpen} mediocre ones; fine to pick fewer or none. Set "confidence" HONESTLY: the code sizes each position from it (100 = full ${Math.round(rules.maxPositionPct * 100)}% cap, 50 = half).
 
@@ -245,7 +245,9 @@ const results: Array<{ symbol: string; ok: boolean; error?: string; stopSkippedR
   await Promise.all(valid.map(async (o) => {
     try {
       const r = await placePaperOrder(o);
-      const stopNote = r.stopSkippedReason ? ` (stop SKIPPED: ${r.stopSkippedReason})` : ` stop ${o.trail_percent}%`;
+      const stopNote = !r.stopSkippedReason
+        ? ` stop ${o.trail_percent}%`
+        : /synthetic|fractional/i.test(r.stopSkippedReason) ? ` (protected by synthetic stop)` : ` (⚠️ stop SKIPPED: ${r.stopSkippedReason})`;
       appendFileSync(TRADELOG, `- ${new Date().toISOString()} PLACED ${o.side} ${o.qty} ${o.symbol} @ ${o.type}${stopNote} — ${o.thesis ?? ""}\n`);
       return { symbol: o.symbol, ok: true, stopSkippedReason: r.stopSkippedReason };
     } catch (e) {
@@ -253,10 +255,14 @@ const results: Array<{ symbol: string; ok: boolean; error?: string; stopSkippedR
     }
   }));
 const placed = results.filter((r) => r.ok);
-const unprotected = placed.filter((r) => r.stopSkippedReason);
+// "Unprotected" = a buy whose BROKER stop was genuinely skipped (fill timeout / non-fill) on a WHOLE-share
+// order. Fractional buys carry "…protected by the synthetic trailing stop" — they ARE protected (the refresh
+// sweep), so never flag them as unprotected or suggest backfill-stops (which can't even run on fractional).
+const isSynthetic = (reason?: string) => !!reason && /synthetic|fractional/i.test(reason);
+const unprotected = placed.filter((r) => r.stopSkippedReason && !isSynthetic(r.stopSkippedReason));
 await sendDiscord(
-  `🐂 **Bill the Bull — orders placed (auto · ${rules.name})**\n${placed.map((r) => (r.stopSkippedReason ? "⚠️ " : "✅ ") + r.symbol).join("  ") || "none"}` +
-    (unprotected.length ? `\n⚠️ UNPROTECTED (run \`npm run backfill-stops\` to add trailing stops): ${unprotected.map((r) => r.symbol).join(", ")}` : "") +
+  `🐂 **Bill the Bull — orders placed (auto · ${rules.name})**\n${placed.map((r) => (r.stopSkippedReason && !isSynthetic(r.stopSkippedReason) ? "⚠️ " : "✅ ") + r.symbol).join("  ") || "none"}` +
+    (unprotected.length ? `\n⚠️ UNPROTECTED — whole-share stop skipped (run \`npm run backfill-stops\`): ${unprotected.map((r) => r.symbol).join(", ")}` : "") +
     (results.some((r) => !r.ok) ? `\n❌ ${results.filter((r) => !r.ok).map((r) => `${r.symbol}: ${r.error}`).join("; ")}` : ""),
   { channel: "bull", username: "Bill the Bull" }
 );

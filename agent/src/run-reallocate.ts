@@ -211,7 +211,8 @@ for (const s of plan.swaps) {
       confidence: buy.confidence ?? null, setup: buy.setup ?? null, outcome: "open",
     }]);
     const r = await placePaperOrder(buy);
-    appendFileSync(TRADELOG, `- ${new Date().toISOString()} ROTATE-BUY ${buy.qty} ${buy.symbol} @ market${r.stopSkippedReason ? ` (stop SKIPPED: ${r.stopSkippedReason})` : ` stop ${buy.trail_percent}%`} — ${buy.thesis ?? ""}\n`);
+    const rStopNote = !r.stopSkippedReason ? ` stop ${buy.trail_percent}%` : /synthetic|fractional/i.test(r.stopSkippedReason) ? ` (protected by synthetic stop)` : ` (⚠️ stop SKIPPED: ${r.stopSkippedReason})`;
+    appendFileSync(TRADELOG, `- ${new Date().toISOString()} ROTATE-BUY ${buy.qty} ${buy.symbol} @ market${rStopNote} — ${buy.thesis ?? ""}\n`);
     results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: true, stopSkippedReason: r.stopSkippedReason });
   } catch (e) {
     results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: false, error: String(e instanceof Error ? e.message : e) });
@@ -225,7 +226,7 @@ const body = [
   `🔁 **Rotated ${done.length}/${results.length} (auto · ${rules.name})**`,
   ...results.map((r) =>
     r.ok
-      ? `  ✅ SELL ${r.sell} → BUY ${r.buy}${r.stopSkippedReason ? " ⚠️ stop pending (reconcile)" : ""}`
+      ? `  ✅ SELL ${r.sell} → BUY ${r.buy}${r.stopSkippedReason && !/synthetic|fractional/i.test(r.stopSkippedReason) ? " ⚠️ stop pending" : ""}`
       : `  ⚠️ ${r.sell}→${r.buy} — ${r.soldOnly ? "SOLD but buy failed" : "failed"}: ${r.error}`,
   ),
 ].join("\n");

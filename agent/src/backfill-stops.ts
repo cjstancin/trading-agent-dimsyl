@@ -1,7 +1,9 @@
-// One-off recovery ritual: for every OPEN paper position that has NO matching open trailing-stop
-// sell order, place one with BILL_TRAIL_PCT (default 20). Idempotent — re-running is safe; orders
-// already covered are skipped. Use it after a partial fail (e.g. today's race where the buy was
-// still open when the stop was rejected).
+// One-off recovery ritual for WHOLE-SHARE positions: for every OPEN whole-share paper position that has NO
+// matching open trailing-stop sell order, place one with BILL_TRAIL_PCT (default 20). Idempotent — re-running
+// is safe; covered positions are skipped. FRACTIONAL positions are SKIPPED automatically — Alpaca rejects
+// broker stops on fractional qty; they're protected by the SYNTHETIC trailing stop (refresh-status.ts), so
+// you NEVER need to run this for fractional buys. Use after a whole-share partial fail (buy still open when
+// its stop was rejected).
 //   npm run backfill-stops               # uses BILL_TRAIL_PCT or 20% default
 //   BILL_TRAIL_PCT=15 npm run backfill-stops
 import "./load-env.js";
@@ -31,6 +33,7 @@ for (const p of positions || []) {
   const qty = Math.abs(Number(p.qty || 0));
   const isLong = String(p.side || "").toLowerCase() === "long";
   if (!isLong || qty <= 0) { results.push({ sym, skipped: true, reason: "not long or zero qty" }); continue; }
+  if (qty !== Math.floor(qty)) { results.push({ sym, skipped: true, reason: "fractional — protected by the synthetic stop (Alpaca rejects broker stops on fractional)" }); continue; }
   if (trailingStopsBySymbol.has(sym)) { results.push({ sym, skipped: true, reason: "already has trailing stop" }); continue; }
   try {
     const stop: any = await placeTrailingStop(sym, qty, trailPct);
