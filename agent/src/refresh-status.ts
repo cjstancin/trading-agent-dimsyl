@@ -15,9 +15,13 @@ import { getMode } from "./mode.js";
 import { getProfile } from "./profile.js";
 import { rulesFor } from "./guardrails.js";
 import { excursionSummary, type ExcursionTrade } from "./excursion-stats.js";
+import { isMarketDayToday } from "./market-calendar.js";
+import { runSyntheticStops } from "./synthetic-stops.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-refresh");
+
+const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
 
 const STATUS = fileURLToPath(new URL("../../dashboard/data/status.json", import.meta.url));
 
@@ -146,10 +150,23 @@ const prevKeys = Array.isArray(prev.alertKeys) ? (prev.alertKeys as string[]) : 
 const freshAlerts = alertObjs.filter((a) => !prevKeys.includes(a.key));
 if (freshAlerts.length) {
   try {
-    const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
     await sendDiscord("🐂 **Bill the Bull — risk alert**\n" + freshAlerts.map((a) => a.text).join("\n"), { channel: "bull", username: "Bill the Bull" });
   } catch { /* notifier optional */ }
 }
+
+// Synthetic trailing-stop sweep (Bull v4): the protective stop for FRACTIONAL positions (Alpaca won't attach
+// a broker stop to fractional qty). Peak-tracks every holding; market-sells any that fell trailPercent below
+// its peak (auto mode + trading day). Runs each refresh tick (5-min during market hours).
+try {
+  const marketOpen = (await isMarketDayToday()).open;
+  await runSyntheticStops({
+    rawPositions,
+    trailPct: rules.trailPercent ?? 20,
+    mode,
+    marketOpen,
+    alert: (msg) => sendDiscord(msg, { channel: "bull", username: "Bill the Bull" }),
+  });
+} catch (e) { console.warn("[bill] synthetic-stop sweep failed:", String(e instanceof Error ? e.message : e)); }
 console.log(
   JSON.stringify(
     {

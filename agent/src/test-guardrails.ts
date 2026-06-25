@@ -18,8 +18,8 @@ check("FAIL: buy without stop rejected", validateOrders([noStop], book)[0].reaso
 const penny: OrderRequest = { symbol: "XYZ", side: "buy", qty: 100, type: "market", est_price: 1.2, trail_percent: 18 };
 check("FAIL: sub-$2 rejected", validateOrders([penny], book)[0].reasons.some(r => /quality floor/.test(r)));
 
-// FAIL: exceeding max open. AGGRESSIVE_PAPER caps at 6; book already has 2 open, so 7 new buys → 9 > 6.
-const overMax = Array.from({ length: 7 }, (_, i): OrderRequest => ({ symbol: `AA${i}`, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 }));
+// FAIL: exceeding max open. AGGRESSIVE_PAPER caps at 10; book already has 2 open, so 9 new buys → 11 > 10.
+const overMax = Array.from({ length: 9 }, (_, i): OrderRequest => ({ symbol: `AA${i}`, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 }));
 check("FAIL: max-open exceeded once projected open passes the cap", validateOrders(overMax, book).some(v => v.reasons.some(r => /max .* open/.test(r))));
 
 // INVALID buys must NOT consume open slots: an order that fails another check is rejected + never placed,
@@ -33,10 +33,13 @@ check("CAP: invalid buys are still rejected (missing stop)", mixed.slice(0, 3).e
 check("CAP: invalid buys don't consume slots → both valid buys pass", mixed[3].ok === true && mixed[4].ok === true);
 check("CAP: neither valid buy is mismarked as over-cap", !mixed[3].reasons.concat(mixed[4].reasons).some(r => /max .* open/.test(r)));
 
-// sizeBuyQty (shared by executor + reallocator): whole-share size = min(risk-budget, position-cap), floored.
-check("SIZE: position cap binds on a large account", sizeBuyQty(100, 100_000, AGGRESSIVE_PAPER) === 200);
-check("SIZE: small account sizes to whole shares within cap", sizeBuyQty(100, 1000, AGGRESSIVE_PAPER) === 2);
-check("SIZE: zero/invalid price or equity → 0 shares", sizeBuyQty(0, 100_000, AGGRESSIVE_PAPER) === 0 && sizeBuyQty(100, 0, AGGRESSIVE_PAPER) === 0);
+// sizeBuyQty: conviction-scaled position cap; fractional precision for the aggressive profile.
+check("SIZE: full-conviction core takes the position cap", sizeBuyQty(100, 100_000, AGGRESSIVE_PAPER, 100) === 200);
+check("SIZE: default conviction (100) = full cap", sizeBuyQty(100, 100_000, AGGRESSIVE_PAPER) === 200);
+check("SIZE: lower conviction scales the size down (50 → half)", sizeBuyQty(100, 1000, AGGRESSIVE_PAPER, 50) === 1);
+check("SIZE: fractional reaches a $900 name on a $1k book", sizeBuyQty(900, 1000, AGGRESSIVE_PAPER, 100) === 0.2222);
+check("SIZE: a 50-conv satellite gets ~half a core", sizeBuyQty(900, 1000, AGGRESSIVE_PAPER, 50) === 0.1111);
+check("SIZE: zero/invalid price or equity → 0", sizeBuyQty(0, 100_000, AGGRESSIVE_PAPER) === 0 && sizeBuyQty(100, 0, AGGRESSIVE_PAPER) === 0);
 
 // NULL: empty proposal → empty result, no throw.
 check("NULL: empty array → []", JSON.stringify(validateOrders([], book)) === "[]");

@@ -15,25 +15,33 @@ export interface Rules {
   dailyHaltPct?: number;
   monthlyKillPct?: number;
   maxDrawdownFromPeakPct?: number; // halt new entries when equity falls this % below the trailing peak
+  fractional?: boolean;            // allow fractional/notional sizing (Alpaca: market + TIF=day only; no broker trailing stop → synthetic)
+  coreCount?: number;              // # of high-conviction "core" names that take the bulk of capital; the rest are smaller satellites
 }
 
-export const AGGRESSIVE_PAPER: Rules = { name: "Aggressive", maxPositionPct: 0.20, maxOpen: 6, minPrice: 10, riskPerTradePct: 5, trailPercent: 20, dailyHaltPct: 5, monthlyKillPct: 20, maxDrawdownFromPeakPct: 15 };
+// Fractional + 10-slot book: ~6 high-conviction CORE names take the bulk, up to 4 smaller SATELLITES round it out.
+// maxPositionPct is the per-name ceiling for a max-conviction core name; sizeBuyQty scales lower-conviction names down.
+export const AGGRESSIVE_PAPER: Rules = { name: "Aggressive", maxPositionPct: 0.20, maxOpen: 10, minPrice: 10, riskPerTradePct: 5, trailPercent: 20, dailyHaltPct: 5, monthlyKillPct: 20, maxDrawdownFromPeakPct: 15, fractional: true, coreCount: 6 };
 export const STEADY_PAPER: Rules = { name: "Steady", maxPositionPct: 0.15, maxOpen: 4, minPrice: 5, riskPerTradePct: 4, trailPercent: 10, dailyHaltPct: 5, monthlyKillPct: 15 };
 
 /** Pick the rulebook for a risk profile ("aggressive" | "steady"). Defaults to aggressive. */
 export function rulesFor(profile: string): Rules { return profile === "steady" ? STEADY_PAPER : AGGRESSIVE_PAPER; }
 
-/** Deterministic WHOLE-share size for a buy at `live` price: the smaller of the risk-budget size
- *  (riskPerTradePct of equity ÷ the stop distance) and the position cap (maxPositionPct of equity).
- *  Shared by the executor AND the reallocator so a buy is sized identically wherever it originates
- *  (the model picks the name + stop; the CODE sizes it from the real price). Returns floored shares ≥ 0. */
-export function sizeBuyQty(live: number, equity: number, rules: Rules = AGGRESSIVE_PAPER): number {
+/** Deterministic size (shares) for a buy at `live` price: the smaller of the risk-budget size
+ *  (riskPerTradePct of equity ÷ the stop distance) and the CONVICTION-scaled position cap. A max-conviction
+ *  (100) name gets the full maxPositionPct cap; a 50-conviction satellite gets half, etc. — so the top ~core
+ *  names dominate and the 7th–10th are smaller satellites. Shared by the executor AND the reallocator so a buy
+ *  sizes identically wherever it originates. Fractional profiles keep 4-dp precision (buy 0.33 of a $900 name);
+ *  whole-share profiles floor to integers. Returns ≥ 0. */
+export function sizeBuyQty(live: number, equity: number, rules: Rules = AGGRESSIVE_PAPER, conviction = 100): number {
   if (!(live > 0) || !(equity > 0)) return 0;
   const trailPct = (rules.trailPercent ?? 20) / 100;
   const riskPct = (rules.riskPerTradePct ?? 7) / 100;
-  const riskShares = trailPct > 0 ? (riskPct * equity) / (live * trailPct) : 0;
-  const capShares = (rules.maxPositionPct * equity) / live;
-  return Math.max(0, Math.floor(Math.min(riskShares, capShares)));
+  const convFactor = Math.max(0, Math.min(1, conviction / 100));
+  const riskShares = trailPct > 0 ? (riskPct * equity) / (live * trailPct) : Infinity;
+  const capShares = (rules.maxPositionPct * equity * convFactor) / live;
+  const raw = Math.max(0, Math.min(riskShares, capShares));
+  return rules.fractional ? Math.round(raw * 1e4) / 1e4 : Math.floor(raw);
 }
 
 export interface BookState {

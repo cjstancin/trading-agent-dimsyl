@@ -225,10 +225,11 @@ export interface OrderRequest {
   type: "market" | "limit";
   limit_price?: number;
   est_price: number;        // agent's expected fill price — used for guardrail sizing checks
-  trail_percent?: number;   // protective trailing stop attached on buys
+  trail_percent?: number;   // protective stop %. Whole-share → broker trailing stop; fractional → SYNTHETIC (refresh monitor)
   thesis?: string;
   confidence?: number;      // 0–100 conviction (Bull v2 #5)
   setup?: string;           // setup label, e.g. "momentum breakout" (Bull v2 #5)
+  fractional?: boolean;     // fractional/notional qty → place market+day, NO broker stop (Alpaca limit); synthetic stop protects
 }
 
 /** Place a PAPER entry order and (for buys) attach a protective trailing stop. Paper-guarded by BASE check above.
@@ -245,6 +246,22 @@ export async function placePaperOrder(o: OrderRequest): Promise<{ entry: any; st
   // 8 hex chars of randomness. If the harness retries (network blip, restart), the SECOND submission
   // returns a Duplicate sentinel we treat as success — Alpaca already has the order.
   const entryCoid = billOrderId(o.symbol, "buy");
+
+  // FRACTIONAL path: Alpaca only accepts fractional/notional qty as a MARKET order with TIF=day, and will
+  // NOT attach a broker trailing stop to it. So place the market order and skip the stop — protection is the
+  // SYNTHETIC trailing stop in the refresh ritual (peak-tracked, market-sell on breach). Idempotent on replay.
+  if (o.fractional) {
+    let fEntry: any;
+    let fIdempotent = false;
+    try {
+      fEntry = await post("/v2/orders", { symbol: o.symbol, qty: o.qty, side: o.side, type: "market", time_in_force: "day", client_order_id: entryCoid });
+    } catch (e) {
+      if (e instanceof DuplicateClientOrderIdError) { fIdempotent = true; fEntry = { client_order_id: entryCoid, status: "duplicate" }; }
+      else throw e;
+    }
+    return { entry: fEntry, stopSkippedReason: "fractional — protected by the synthetic trailing stop (no broker stop)", idempotent: fIdempotent };
+  }
+
   let entry: any;
   let idempotent = false;
   try {

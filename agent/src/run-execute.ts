@@ -131,16 +131,16 @@ if (fromPlan) {
 // cycle into concrete orders. The model only PROPOSES — sizing + guardrail validation are deterministic, below.
 if (!usedPlan) {
   const prompt = `You are Bill the Bull, CJ's trading agent (paper account). Convert the APPROVED trade cycle below into concrete orders.
-Rulebook limits (${rules.name}): risk ~${rules.riskPerTradePct}% equity/trade, max ${Math.round(rules.maxPositionPct * 100)}% per position, max ${rules.maxOpen} open, price ≥ $${rules.minPrice}, a protective trailing stop (~${rules.trailPercent}%) on EVERY buy. Current equity ≈ $${equity}, open positions ≈ ${openCount}.
+Rulebook limits (${rules.name}): max ${Math.round(rules.maxPositionPct * 100)}% per position, up to ${rules.maxOpen} open, price ≥ $${rules.minPrice}, a protective ~${rules.trailPercent}% trailing stop on EVERY buy (enforced in code). Current equity ≈ $${equity}, open positions ≈ ${openCount}.
 QUALITY UNIVERSE ONLY: liquid US large/mid-cap stocks + liquid non-leveraged ETFs. NEVER propose penny stocks (< $${rules.minPrice}), leveraged/inverse ETFs (SOXL/TQQQ/3x), crypto, meme/pump names, OR options/calls/puts/futures/derivatives — equities & ETFs only. Horizon 1 week–5 years; let winners run.
-ACCOUNT SIZE ≈ $${equity}: positions are WHOLE shares (no fractional), so only propose names where ≥1 share fits the ${Math.round(rules.maxPositionPct * 100)}% cap (≈ $${Math.round(rules.maxPositionPct * equity)}). On a small account favor liquid quality names + sector ETFs priced below that so a real position + protective stop is possible; skip names too expensive to size.
+FRACTIONAL SIZING: positions are sized in FRACTIONAL shares from a ~$${equity} book, so ANY quality name is reachable regardless of share price (NVDA + other high-priced names included) — never skip a name for being "too expensive." Build a CONVICTION-TIERED book of UP TO ${rules.maxOpen} names: ~${rules.coreCount ?? 6} high-conviction CORE names you want the most capital in (confidence 70–95), plus optionally a few smaller SATELLITE names (confidence ~45–65) only if you genuinely like them. Quality + conviction over filling slots — a few strong names beats ${rules.maxOpen} mediocre ones; fine to pick fewer or none. Set "confidence" HONESTLY: the code sizes each position from it (100 = full ${Math.round(rules.maxPositionPct * 100)}% cap, 50 = half).
 
 APPROVED CYCLE:
 ${approved}
 
-Output ONLY a JSON array (no prose, no markdown fence) of orders in this exact shape — include a "confidence" (0–100 conviction) and a short "setup" label (e.g. momentum breakout, mean-revert, earnings drift) on each:
-[{"symbol":"AAPL","side":"buy","qty":10,"type":"limit","limit_price":195.0,"est_price":195.0,"trail_percent":${rules.trailPercent},"thesis":"one line","confidence":72,"setup":"momentum breakout"}]
-Use "market" type only when you intend a market order (still include est_price = your expected fill). Size per the risk formula and the caps. If nothing qualifies, output [].`;
+Output ONLY a JSON array (no prose, no markdown fence) of orders in this exact shape — include an HONEST "confidence" (0–100 conviction, drives the dollar size) and a short "setup" label (e.g. momentum breakout, mean-revert, earnings drift) on each:
+[{"symbol":"NVDA","side":"buy","type":"market","est_price":900.0,"trail_percent":${rules.trailPercent},"thesis":"one line","confidence":82,"setup":"momentum breakout"}]
+Use type "market"; est_price = your expected fill. The CODE sizes each position (fractional shares) from your confidence — do NOT compute qty yourself. If nothing qualifies, output [].`;
 
   const res = await runAgent(prompt);
   costUsd = res.costUsd;
@@ -179,8 +179,9 @@ for (const o of proposed) {
   const live = await latestPrice(o.symbol);
   if (live && live > 0) {
     o.est_price = round(live);
-    o.qty = sizeBuyQty(live, equity, rules); // shared risk-budget/cap sizing (guardrails.ts) — reused by the reallocator
-    if (o.type === "limit") o.limit_price = round(live * 1.01); // near-market, not a hallucinated limit
+    o.qty = sizeBuyQty(live, equity, rules, o.confidence ?? 100); // conviction-scaled (guardrails.ts) — reused by the reallocator
+    if (rules.fractional) { o.fractional = true; o.type = "market"; } // fractional → market+day, synthetic stop (placePaperOrder)
+    else if (o.type === "limit") o.limit_price = round(live * 1.01); // whole-share near-market limit
   }
 }
 

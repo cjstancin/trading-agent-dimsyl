@@ -107,7 +107,7 @@ ${watchlist || "(none — research the market fresh)"}
 Current book (equity ≈ $${equity.toFixed(0)}, ${holdings.length}/${rules.maxOpen} slots):
 ${bookLines}
 
-Propose the TOP 2–3 BEST ideas to rotate INTO right now — names NOT already held. Quality US large/mid-cap stocks + liquid non-leveraged ETFs only; price ≥ $${rules.minPrice}; must fit WHOLE shares within the ${Math.round(rules.maxPositionPct * 100)}% cap (≈ $${cap}); NO penny / leveraged / inverse / crypto / options.
+Propose the TOP 2–3 BEST ideas to rotate INTO right now — names NOT already held. Quality US large/mid-cap stocks + liquid non-leveraged ETFs only; price ≥ $${rules.minPrice}; sized in FRACTIONAL shares so any price is reachable (NVDA-class included; per-name cap ${Math.round(rules.maxPositionPct * 100)}%); NO penny / leveraged / inverse / crypto / options.
 Give an HONEST 0–100 conviction reflecting TODAY's setup (only an idea beating a holding's strength by ≥15 points triggers a swap, so do NOT inflate). One-line thesis grounded in CURRENT data + a short setup label.
 Output ONLY a JSON array (no prose / no fence): [{"symbol":"NVDA","conviction":85,"thesis":"… (current)","setup":"momentum breakout"}]. If nothing clearly beats the current book today, output [].`;
   try {
@@ -196,9 +196,9 @@ for (const s of plan.swaps) {
     if (!live || live <= 0) { results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: false, soldOnly: true, error: "no live price for buy" }); continue; }
     let bp = equity;
     try { const a = (await getAccount()) as Record<string, unknown>; bp = Number(a.buying_power ?? a.cash ?? equity); } catch { /* fall back to equity ceiling */ }
-    let qty = sizeBuyQty(live, equity, rules);
-    if (bp > 0) qty = Math.min(qty, Math.floor(bp / live));
-    const buy: OrderRequest = { symbol: s.buy.symbol, side: "buy", qty, type: "market", est_price: round(live), trail_percent: rules.trailPercent, thesis: s.buy.thesis, confidence: s.buy.conviction, setup: s.buy.setup };
+    let qty = sizeBuyQty(live, equity, rules, s.buy.conviction);
+    if (bp > 0) { const affordable = rules.fractional ? Math.round((bp / live) * 1e4) / 1e4 : Math.floor(bp / live); qty = Math.min(qty, affordable); }
+    const buy: OrderRequest = { symbol: s.buy.symbol, side: "buy", qty, type: "market", est_price: round(live), trail_percent: rules.trailPercent, thesis: s.buy.thesis, confidence: s.buy.conviction, setup: s.buy.setup, fractional: !!rules.fractional };
     // Validate with the sold slot freed (openCount − 1) so the swap never trips the maxOpen cap.
     const checked = validateOrders([buy], { equity, openCount: Math.max(0, holdings.length - 1) }, rules)[0];
     if (!checked.ok) { results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: false, soldOnly: true, error: `buy rejected: ${checked.reasons.join("; ")}` }); continue; }
