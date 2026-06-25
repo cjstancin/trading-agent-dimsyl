@@ -14,9 +14,11 @@
 import "./load-env.js";
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { paperSnapshot, placePaperOrder, latestPrice, closePosition, waitForOrderTerminal, getAccount, getPortfolioHistory, sellQty, type OrderRequest } from "./alpaca.js";
+import { paperSnapshot, placePaperOrder, latestPrice, closePosition, waitForOrderTerminal, getAccount, getPortfolioHistory, getBars, sellQty, type OrderRequest } from "./alpaca.js";
 import { findWinners, parseTrims, buildTrimPrompt } from "./profit-trim.js";
-import { rulesFor, validateOrders, haltReason, sizeBuyQty } from "./guardrails.js";
+import { rulesFor, validateOrders, haltReason } from "./guardrails.js";
+import { atrFromBars, atrStop, sizeByRisk, riskGate, DEFAULT_RISK, type OpenPosition } from "./risk-engine.js";
+import { setPositionTrail, readPositionTrails } from "./synthetic-stops.js";
 import { getProfile } from "./profile.js";
 import { getMode, autoExecAllowed } from "./mode.js";
 import { readLedger, appendProposals } from "./ledger.js";
@@ -219,14 +221,29 @@ for (const s of plan.swaps) {
     if (sell.order?.id) await waitForOrderTerminal(String(sell.order.id), { timeoutMs: 45_000, intervalMs: 1_000 });
     appendFileSync(TRADELOG, `- ${new Date().toISOString()} ROTATE-SELL ${s.sell.symbol} (liquidated${sell.alreadyFlat ? " — already flat" : ""}, ${sell.canceledStops} stop(s) canceled) → fund ${s.buy.symbol}\n`);
 
-    // BUY leg: size on the LIVE price, capped by the buying power freed by the sell; validate; place + stop.
+    // BUY leg: the RISK ENGINE sizes it (ATR stop → 1.5% risk → riskGate caps vs per-name/sector/heat) —
+    // identical deterministic sizing to run-execute. The LLM only proposed the name. Capped by freed buying power.
     const live = await latestPrice(s.buy.symbol);
     if (!live || live <= 0) { results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: false, soldOnly: true, error: "no live price for buy" }); continue; }
     let bp = equity;
     try { const a = (await getAccount()) as Record<string, unknown>; bp = Number(a.buying_power ?? a.cash ?? equity); } catch { /* fall back to equity ceiling */ }
-    let qty = sizeBuyQty(live, equity, rules, s.buy.conviction);
-    if (bp > 0) { const affordable = rules.fractional ? Math.round((bp / live) * 1e4) / 1e4 : Math.floor(bp / live); qty = Math.min(qty, affordable); }
-    const buy: OrderRequest = { symbol: s.buy.symbol, side: "buy", qty, type: "market", est_price: round(live), trail_percent: rules.trailPercent, thesis: s.buy.thesis, confidence: s.buy.conviction, setup: s.buy.setup, fractional: !!rules.fractional };
+    let atr = 0;
+    try {
+      const end = new Date(); const start = new Date(end.getTime() - 45 * 864e5);
+      atr = atrFromBars(await getBars(s.buy.symbol, start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)), DEFAULT_RISK.atrPeriod);
+    } catch { /* no bars → 15% fallback */ }
+    const stop = Math.min(atr > 0 ? atrStop(live, atr, DEFAULT_RISK) : live * 0.85, live * 0.97);
+    const trailPct = Math.min(35, Math.max(3, round(((live - stop) / live) * 100)));
+    // heat-gate book = current positions MINUS the laggard we just sold, each by its own trail
+    const trailsNow = readPositionTrails();
+    const gateBook: OpenPosition[] = positions
+      .filter((p) => String(p.symbol ?? "").toUpperCase() !== s.sell.symbol.toUpperCase())
+      .map((p) => { const mv = Number(p.market_value ?? 0); return { symbol: String(p.symbol ?? ""), marketValue: mv, riskDollars: Math.max(0, mv * ((trailsNow[String(p.symbol ?? "").toUpperCase()] ?? (rules.trailPercent ?? 20)) / 100)) }; });
+    const gated = riskGate({ symbol: s.buy.symbol, price: live, stopPrice: stop, shares: sizeByRisk(equity, live, stop, DEFAULT_RISK) }, { equity, positions: gateBook }, DEFAULT_RISK);
+    let qty = gated.shares;
+    if (bp > 0) qty = Math.min(qty, rules.fractional ? Math.round((bp / live) * 1e4) / 1e4 : Math.floor(bp / live));
+    if (!(qty > 0)) { results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: false, soldOnly: true, error: `buy sized to 0 (${gated.reasons.join("; ") || "risk caps"})` }); continue; }
+    const buy: OrderRequest = { symbol: s.buy.symbol, side: "buy", qty, type: "market", est_price: round(live), trail_percent: trailPct, thesis: s.buy.thesis, confidence: s.buy.conviction, setup: s.buy.setup, fractional: !!rules.fractional };
     // Validate with the sold slot freed (openCount − 1) so the swap never trips the maxOpen cap.
     const checked = validateOrders([buy], { equity, openCount: Math.max(0, holdings.length - 1) }, rules)[0];
     if (!checked.ok) { results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: false, soldOnly: true, error: `buy rejected: ${checked.reasons.join("; ")}` }); continue; }
@@ -239,6 +256,7 @@ for (const s of plan.swaps) {
       confidence: buy.confidence ?? null, setup: buy.setup ?? null, outcome: "open",
     }]);
     const r = await placePaperOrder(buy);
+    setPositionTrail(buy.symbol, buy.trail_percent ?? rules.trailPercent ?? 20); // persist this name's ATR trail for the synthetic-stop monitor
     const rStopNote = !r.stopSkippedReason ? ` stop ${buy.trail_percent}%` : /synthetic|fractional/i.test(r.stopSkippedReason) ? ` (protected by synthetic stop)` : ` (⚠️ stop SKIPPED: ${r.stopSkippedReason})`;
     appendFileSync(TRADELOG, `- ${new Date().toISOString()} ROTATE-BUY ${buy.qty} ${buy.symbol} @ market${rStopNote} — ${buy.thesis ?? ""}\n`);
     results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: true, stopSkippedReason: r.stopSkippedReason });
