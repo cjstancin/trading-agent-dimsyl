@@ -260,8 +260,18 @@ const placed = results.filter((r) => r.ok);
 // sweep), so never flag them as unprotected or suggest backfill-stops (which can't even run on fractional).
 const isSynthetic = (reason?: string) => !!reason && /synthetic|fractional/i.test(reason);
 const unprotected = placed.filter((r) => r.stopSkippedReason && !isSynthetic(r.stopSkippedReason));
+// Per-buy line: bought-at + the protective stop level (entry × (1−trail)), so CJ sees in/stop at a glance.
+const ordBySym = new Map(valid.map((o) => [o.symbol, o]));
+const px = (n: number) => (n >= 100 ? n.toFixed(0) : n.toFixed(2));
+const placedLines = placed.map((r) => {
+  const o = ordBySym.get(r.symbol);
+  const prot = !(r.stopSkippedReason && !isSynthetic(r.stopSkippedReason));
+  const at = o ? ` @ $${px(o.est_price)}` : "";
+  const stop = o && o.trail_percent ? ` · stop ~$${px(o.est_price * (1 - o.trail_percent / 100))}` : "";
+  return `${prot ? "✅" : "⚠️"} ${r.symbol}${at}${stop}`;
+});
 await sendDiscord(
-  `🐂 **Bill the Bull — orders placed (auto · ${rules.name})**\n${placed.map((r) => (r.stopSkippedReason && !isSynthetic(r.stopSkippedReason) ? "⚠️ " : "✅ ") + r.symbol).join("  ") || "none"}` +
+  `🐂 **Bill the Bull — orders placed (auto · ${rules.name})**\n${placedLines.join("\n") || "none"}` +
     (unprotected.length ? `\n⚠️ UNPROTECTED — whole-share stop skipped (run \`npm run backfill-stops\`): ${unprotected.map((r) => r.symbol).join(", ")}` : "") +
     (results.some((r) => !r.ok) ? `\n❌ ${results.filter((r) => !r.ok).map((r) => `${r.symbol}: ${r.error}`).join("; ")}` : ""),
   { channel: "bull", username: "Bill the Bull" }

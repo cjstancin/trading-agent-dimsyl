@@ -36,7 +36,23 @@ export function evaluateStops(positions: StopPosition[], prev: StopState, trailP
   return { breaches, next };
 }
 
-const readState = (): StopState => { try { return JSON.parse(readFileSync(STATE, "utf8")) as StopState; } catch { return {}; } };
+export const readState = (): StopState => { try { return JSON.parse(readFileSync(STATE, "utf8")) as StopState; } catch { return {}; } };
+
+/** Per-position summary line: bought-at, current, unrealized %, and the live synthetic stop level
+ *  (peak × (1−trail)). Used by the pre-market brief + notifications so CJ sees entry / now / stop at a glance. */
+export function positionLines(rawPositions: Array<Record<string, unknown>>, state: StopState, trailPct: number): string[] {
+  const trail = Math.max(0, trailPct) / 100;
+  const fmt = (x: number) => (x >= 100 ? x.toFixed(0) : x.toFixed(2));
+  return rawPositions.map((p) => {
+    const sym = String(p.symbol ?? "");
+    const entry = Number(p.avg_entry_price ?? 0);
+    const cur = Number(p.current_price ?? 0);
+    const plpc = Number(p.unrealized_plpc ?? 0) * 100;
+    const peak = Math.max(state[sym.toUpperCase()]?.peak ?? entry, cur, entry);
+    const stop = peak * (1 - trail);
+    return `${sym}: in $${fmt(entry)} · now $${fmt(cur)} (${plpc >= 0 ? "+" : ""}${plpc.toFixed(1)}%) · stop $${fmt(stop)}`;
+  });
+}
 
 /** One synthetic-stop pass: peak-track every holding and (auto mode + market open) market-sell breaches. */
 export async function runSyntheticStops(opts: {

@@ -6,6 +6,9 @@ import { runAgent } from "./agent.js";
 import { paperSnapshot } from "./alpaca.js";
 import { getMode } from "./mode.js";
 import { isMarketDayToday } from "./market-calendar.js";
+import { rulesFor } from "./guardrails.js";
+import { getProfile } from "./profile.js";
+import { readState, positionLines } from "./synthetic-stops.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-premarket");
@@ -48,7 +51,7 @@ Also do (web search is primary for live data):
 - For each open paper position above, a one-line note (overnight move / any catalyst today).
 - You may read memory/strategy.md and Signals/approved-cycle.md (if present) for queued ideas.
 
-Write the brief as PLAIN TEXT, Discord-friendly, MAX 1800 characters:
+Write the brief as PLAIN TEXT, Discord-friendly, MAX 1400 characters (a precise per-position table — bought / now / stop — is auto-appended after your brief, so DON'T duplicate those numbers; just add catalyst/overnight color per position):
 🐂 Bill Pre-Market — ${today}
 💼 Paper book: equity $<n>, cash $<n>, <N> positions; open orders <N>  (if not connected, say so)
 📊 Open setup: <futures + regime + key levels>
@@ -63,6 +66,14 @@ if (isError || !text.trim()) {
   process.exit(1);
 }
 
-const posted = await sendDiscord(text, { channel: "bull", username: "Bill the Bull" });
+// Append a precise per-position table (bought / now / synthetic stop) — the numbers CJ wants at a glance,
+// computed deterministically (not LLM-rephrased) from the live snapshot + the synthetic-stop peaks.
+let brief = text.trim();
+const rawPos = Array.isArray(snap.positions) ? (snap.positions as Array<Record<string, unknown>>) : [];
+if (rawPos.length) {
+  const lines = positionLines(rawPos, readState(), rulesFor(getProfile()).trailPercent ?? 20);
+  brief += `\n\n📊 Positions — bought · now · stop:\n` + lines.map((l) => "• " + l).join("\n");
+}
+const posted = await sendDiscord(brief, { channel: "bull", username: "Bill the Bull" });
 console.log(JSON.stringify({ ok: posted.ok === true, posted, paperConnected: snap.connected, costUsd, numTurns }, null, 2));
 if (!posted.ok) process.exitCode = 1;
