@@ -23,8 +23,9 @@ const strong: Candidate[] = [{ symbol: "NVDA", conviction: 85, thesis: "AI capex
   check("SUCCESS: swaps into the candidate", plan.swaps[0]?.buy.symbol === "NVDA");
 }
 
-// FAIL (no swap): a marginal idea (40) doesn't beat WEAK (30) by the 15-pt edge → no swap, recorded as skipped.
-const marginal: Candidate[] = [{ symbol: "MRGN", conviction: 40 }];
+// FAIL (no swap): WEAK is score 30, down −5% → strength 20 (30 − 5%·2). A marginal idea (30) doesn't beat
+// it by the 15-pt edge (30 − 20 = 10 < 15) → no swap, recorded as skipped.
+const marginal: Candidate[] = [{ symbol: "MRGN", conviction: 30 }];
 {
   const plan = planReallocation(fullBook, marginal, book);
   check("FAIL: marginal idea → no swap", plan.needed && plan.swaps.length === 0);
@@ -71,6 +72,22 @@ const winnerBook: Holding[] = [
 
 // Strength fallback: no score → derived from P&L (flat = 50, −20% → 30).
 check("STRENGTH: no-score holding falls back to P&L proxy", Math.round(holdingStrength({ symbol: "X", marketValue: 1, unrealizedPlPct: -0.20 })) === 30);
+// Strength tilt (CJ "worst in book"): a high-conviction holding decays as it bleeds; a modest gain firms it.
+check("STRENGTH: live loss decays a high-conviction holding (78, −12% → 54)", Math.round(holdingStrength({ symbol: "B", marketValue: 1, unrealizedPlPct: -0.12, score: 78 })) === 54);
+check("STRENGTH: a modest gain firms strength (60, +4% → 64)", holdingStrength({ symbol: "G", marketValue: 1, unrealizedPlPct: 0.04, score: 60 }) === 64);
+
+// LOSS-TILT planner: a bleeding high-conviction name becomes the swap target even though its raw conviction
+// would have protected it. BLEED (78, −12% → strength 54) vs three flat 70s; FRESH (72) clears 72−54=18 ≥ 15.
+{
+  const bleeder: Holding[] = [
+    { symbol: "BLEED", marketValue: 9000, unrealizedPlPct: -0.12, score: 78 },
+    { symbol: "FLAT1", marketValue: 9000, unrealizedPlPct: 0.0, score: 70 },
+    { symbol: "FLAT2", marketValue: 9000, unrealizedPlPct: 0.0, score: 70 },
+    { symbol: "FLAT3", marketValue: 9000, unrealizedPlPct: 0.0, score: 70 },
+  ];
+  const plan = planReallocation(bleeder, [{ symbol: "FRESH", conviction: 72 }], book);
+  check("LOSS-TILT: a bleeding high-conviction name becomes the swap target", plan.swaps[0]?.sell.symbol === "BLEED");
+}
 
 // NULL: no candidates → graceful, needed=false, empty plan, no throw.
 {

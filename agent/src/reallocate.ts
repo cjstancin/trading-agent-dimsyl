@@ -6,6 +6,8 @@
 //
 // Conservative by design, honoring CLAUDE.md's hard rules:
 //   • "Let winners run" → a holding up more than protectWinnersAbovePct is PROTECTED, never swapped out.
+//   • "Worst in book" → strength is TILTED by live unrealized P&L, so a high-conviction name that keeps
+//     BLEEDING decays toward swappable (the real bad apple gets cut, not just the lowest-conviction name).
 //   • Quality over churn → at most maxSwapsPerCycle swaps per cycle.
 //   • A new idea must beat the weakest holding's strength by a real margin (minConvictionEdge) — no
 //     marginal rotation. If nothing clears the bar, the plan is empty (hold the current book).
@@ -52,11 +54,16 @@ export const DEFAULT_REALLOC: ReallocConfig = { minConvictionEdge: 15, maxSwapsP
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const round = (x: number, d = 2) => Math.round(x * 10 ** d) / 10 ** d;
 
-/** A holding's 0–100 strength. Uses the original conviction (score) when present; otherwise a
- *  thesis-health proxy from unrealized P&L: flat = 50, each +1% = +1 point (so −20% → 30, +30% → 80). */
+/** A holding's 0–100 strength — what the planner ranks "weakest" by. Anchored on the original conviction
+ *  (score) when present, then TILTED by live unrealized P&L so the "worst in book" is the actual bleeder:
+ *  losses cost 2 pts per 1% (a high-conviction name that keeps falling decays toward swappable), while a
+ *  modest gain firms strength +1 pt per 1% (capped +15; bigger winners are protected separately via
+ *  protectWinnersAbovePct). With no score we fall back to a pure P&L-health proxy (flat = 50). */
 export function holdingStrength(h: Holding): number {
-  if (typeof h.score === "number" && Number.isFinite(h.score) && h.score >= 0) return clamp(h.score, 0, 100);
-  return clamp(50 + h.unrealizedPlPct * 100, 0, 100);
+  const pnlPct = h.unrealizedPlPct * 100; // e.g. -12 for -12%
+  const tilt = pnlPct < 0 ? pnlPct * 2 : Math.min(pnlPct, 15);
+  if (typeof h.score === "number" && Number.isFinite(h.score) && h.score >= 0) return clamp(h.score + tilt, 0, 100);
+  return clamp(50 + pnlPct, 0, 100);
 }
 
 /**
