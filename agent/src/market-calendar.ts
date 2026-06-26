@@ -1,17 +1,19 @@
-// Bill's market-day guard. Bill's systemd timers fire Mon..Fri 09:30/12:30/16:00 ET, but NYSE has 10
-// full-close holidays a year. Without this guard, Bill burns SDK turns + posts useless Discord briefs
+// Bill's market-day guard. Bill's systemd timers fire Mon..Fri 09:15/09:30/12:30/16:00 ET, but NYSE has
+// 10 full-close holidays a year. Without this guard, Bill burns SDK turns + posts useless Discord briefs
 // on Juneteenth, Memorial Day, etc.
 //
-// Strategy: prefer Alpaca's live `/v2/clock` (it knows about every holiday + half-day), fall back to a
-// hardcoded NYSE calendar + weekday check if Alpaca is unreachable. The fallback is small and stays in
-// sync with the public schedule (review yearly).
+// Strategy: ask Alpaca's `/v2/calendar` whether TODAY is a trading session — it's authoritative (every
+// holiday + half-day) and, unlike `/v2/clock`, answers "is today a trading day?" independently of the
+// time of day. (The clock's next_open/next_close roll forward to TOMORROW the instant the 16:00 close
+// hits, so a clock-based "is today a session" check returned a false "closed all day" for anything
+// running at/after the close — which is exactly when the EOD wrap fires, so it skipped EVERY day. Fixed
+// 2026-06-26.) Fall back to a hardcoded NYSE calendar + weekday check if Alpaca is unreachable.
 import { withTimeout, DEFAULT_TIMEOUT_MS } from "./http-utils.js";
 
-interface ClockResponse {
-  is_open: boolean;
-  next_open: string;   // ISO timestamp
-  next_close: string;  // ISO timestamp
-  timestamp: string;   // ISO timestamp
+export interface CalendarDay {
+  date: string;  // YYYY-MM-DD (ET session date)
+  open: string;  // "HH:MM" ET session open  (e.g. "09:30")
+  close: string; // "HH:MM" ET session close (e.g. "16:00", or "13:00" on half-days)
 }
 
 const ALPACA_BASE = (process.env.ALPACA_BASE_URL || "https://paper-api.alpaca.markets")
@@ -25,16 +27,22 @@ function authHeaders(): Record<string, string> {
   return { "APCA-API-KEY-ID": id, "APCA-API-SECRET-KEY": secret };
 }
 
-async function getClock(): Promise<ClockResponse | null> {
+// Probe Alpaca's calendar for TODAY (ET). `reachable` distinguishes "API down" from "not a session":
+// reachable=false → couldn't reach Alpaca (caller falls back to the offline calendar); reachable=true
+// with day=null → Alpaca confirms today is NOT a trading session (weekend/holiday). Time-independent.
+async function getCalendarToday(): Promise<{ reachable: boolean; day: CalendarDay | null }> {
   try {
+    const today = dateKeyET();
     const r = await withTimeout(
-      (signal) => fetch(`${ALPACA_BASE}/v2/clock`, { headers: authHeaders(), signal }),
+      (signal) => fetch(`${ALPACA_BASE}/v2/calendar?start=${today}&end=${today}`, { headers: authHeaders(), signal }),
       DEFAULT_TIMEOUT_MS,
     );
-    if (!r.ok) return null;
-    return (await r.json()) as ClockResponse;
+    if (!r.ok) return { reachable: false, day: null };
+    const arr = (await r.json()) as CalendarDay[];
+    if (!Array.isArray(arr)) return { reachable: false, day: null };
+    return { reachable: true, day: arr.find((d) => d?.date === today) ?? null };
   } catch {
-    return null;
+    return { reachable: false, day: null };
   }
 }
 
@@ -121,6 +129,14 @@ export function isPastHalfDayCloseET(date: Date = new Date()): boolean {
   return etMinutesOfDay(date) >= HALF_DAY_CLOSE_MINUTES;
 }
 
+/** True if an Alpaca calendar close time ("HH:MM" ET) is before the regular 16:00 ET close → a half-day.
+ *  Fails safe to false (treat as a normal full session) if the string can't be parsed. */
+export function isEarlyCloseET(closeHHMM: string): boolean {
+  const m = /^(\d{1,2}):(\d{2})$/.exec((closeHHMM || "").trim());
+  if (!m) return false;
+  return Number(m[1]) * 60 + Number(m[2]) < 16 * 60;
+}
+
 export interface MarketDayCheck {
   open: boolean;
   reason: string;
@@ -129,34 +145,42 @@ export interface MarketDayCheck {
   halfDay: boolean; // true on NYSE 1pm early-close days (still a trading day)
 }
 
+export interface CalProbe { reachable: boolean; day: CalendarDay | null; }
+
 /**
- * Async — prefers Alpaca's live clock (authoritative; covers every holiday including ones Alpaca
- * adds later), falls back to the static NYSE holidays + weekday check if Alpaca is unreachable.
- * Returns { open: true } for any trading day (today's slot might be PRE-market, MID-day, or POST-close
- * — the trading day itself is still valid).
+ * Pure decision core (unit-tested, no network). Given a calendar probe + the offline signals, decide
+ * whether TODAY is a trading session. The calendar is authoritative when reachable; otherwise the static
+ * weekend/holiday calendar is the fallback. Returns { open: true } for the WHOLE trading day — pre-market,
+ * mid-session, or post-close — so the 16:00 ET EOD wrap correctly sees the day it just finished.
+ */
+export function decideMarketDay(opts: {
+  today: string; cal: CalProbe; weekend: boolean; holiday: boolean; halfDayStatic: boolean;
+}): MarketDayCheck {
+  const { today, cal, weekend, holiday, halfDayStatic } = opts;
+  if (cal.reachable) {
+    if (cal.day) {
+      const halfDay = halfDayStatic || isEarlyCloseET(cal.day.close);
+      return { open: true, reason: `Alpaca calendar: trading day (session ${cal.day.open}–${cal.day.close} ET)`, via: "alpaca", date: today, halfDay };
+    }
+    return { open: false, reason: "Alpaca calendar: not a trading session (weekend/holiday)", via: "alpaca", date: today, halfDay: false };
+  }
+  // Alpaca unreachable — offline heuristic.
+  if (weekend) return { open: false, reason: "weekend (offline calendar)", via: "fallback", date: today, halfDay: halfDayStatic };
+  if (holiday) return { open: false, reason: "NYSE full-close holiday (offline calendar)", via: "fallback", date: today, halfDay: halfDayStatic };
+  return { open: true, reason: "weekday, not a known holiday (offline calendar)", via: "fallback", date: today, halfDay: halfDayStatic };
+}
+
+/**
+ * Async — asks Alpaca's calendar whether TODAY (ET) is a trading session; authoritative + time-of-day
+ * independent (covers every holiday/half-day Alpaca knows). Falls back to the static NYSE holidays +
+ * weekday check if Alpaca is unreachable.
  */
 export async function isMarketDayToday(): Promise<MarketDayCheck> {
-  // halfDay comes from the static early-close calendar regardless of source — Alpaca's clock reports a
-  // trading day but doesn't flag the 1pm close in a single field we rely on, so we read it locally.
-  const halfDay = isHalfDayET();
-  const clock = await getClock();
-  if (clock != null) {
-    const today = dateKeyET(new Date(clock.timestamp));
-    const nextOpen = dateKeyET(new Date(clock.next_open));
-    const nextClose = dateKeyET(new Date(clock.next_close));
-    // Trading day if:
-    //  - market is currently open right now, OR
-    //  - next_open is today (haven't opened yet but will), OR
-    //  - next_close is today (already opened today, will close later)
-    const isTradingDay = clock.is_open || nextOpen === today || nextClose === today;
-    const reason = isTradingDay
-      ? clock.is_open ? "Alpaca clock: market OPEN now" : `Alpaca clock: trading day (opens ${clock.next_open})`
-      : `Alpaca clock: closed all day (next open ${clock.next_open})`;
-    return { open: isTradingDay, reason, via: "alpaca", date: today, halfDay };
-  }
-  // Fallback — Alpaca unreachable. Use the local heuristic.
-  const today = dateKeyET();
-  if (isWeekendET()) return { open: false, reason: "weekend (fallback)", via: "fallback", date: today, halfDay };
-  if (isKnownNyseHoliday()) return { open: false, reason: "NYSE full-close holiday (offline calendar)", via: "fallback", date: today, halfDay };
-  return { open: true, reason: "weekday, not a known holiday (fallback)", via: "fallback", date: today, halfDay };
+  return decideMarketDay({
+    today: dateKeyET(),
+    cal: await getCalendarToday(),
+    weekend: isWeekendET(),
+    holiday: isKnownNyseHoliday(),
+    halfDayStatic: isHalfDayET(),
+  });
 }

@@ -1,7 +1,7 @@
 // SUCCESS / FAIL / NULL tests for the market-calendar guard (no network — pure date math).
 // Covers the two closed-market signals Bill relies on to skip dead days: weekend + NYSE full-close
 // holiday, plus the 1pm early-close half-day logic. Run: npm run test:market-calendar
-import { isHalfDayET, isPastHalfDayCloseET, isKnownNyseHoliday, isWeekendET } from "./market-calendar.js";
+import { isHalfDayET, isPastHalfDayCloseET, isKnownNyseHoliday, isWeekendET, isEarlyCloseET, decideMarketDay } from "./market-calendar.js";
 
 let pass = 0, fail = 0;
 const check = (name: string, cond: boolean) => { (cond ? pass++ : fail++); console.log(`${cond ? "PASS" : "FAIL"} — ${name}`); };
@@ -72,6 +72,35 @@ check("TIME: 12:30 ET is before the 13:00 ET half-day close", isPastHalfDayClose
 check("TIME: 13:00 ET is at/after the half-day close", isPastHalfDayCloseET(new Date("2026-11-27T18:00:00Z")) === true);
 // 18:30Z = 13:30 ET → after close.
 check("TIME: 13:30 ET is past the half-day close", isPastHalfDayCloseET(new Date("2026-11-27T18:30:00Z")) === true);
+
+// --- isEarlyCloseET (half-day detection from an Alpaca calendar close time) ----------------------
+check("EARLY-CLOSE: 13:00 session close is an early close", isEarlyCloseET("13:00") === true);
+check("EARLY-CLOSE: 16:00 session close is NOT early", isEarlyCloseET("16:00") === false);
+check("EARLY-CLOSE: 15:59 is early", isEarlyCloseET("15:59") === true);
+check("EARLY-CLOSE: junk → false (fail safe to full session)", isEarlyCloseET("") === false);
+
+// --- decideMarketDay: THE EOD post-close regression (bug fixed 2026-06-26) -----------------------
+// The whole bug: the 16:00 ET EOD wrap asked Alpaca "is today a session?" the instant the market closed,
+// and the clock-based check answered "closed all day" because next_open/next_close had rolled to tomorrow.
+// The calendar is time-independent, so a session-day must read OPEN regardless of when we ask.
+const SESSION = { reachable: true, day: { date: "2026-06-25", open: "09:30", close: "16:00" } };
+check("DECIDE: calendar says today IS a session → open (post-close EOD no longer skips)",
+  decideMarketDay({ today: "2026-06-25", cal: SESSION, weekend: false, holiday: false, halfDayStatic: false }).open === true);
+check("DECIDE: calendar reachable but no session today (holiday) → closed",
+  decideMarketDay({ today: "2026-06-19", cal: { reachable: true, day: null }, weekend: false, holiday: true, halfDayStatic: false }).open === false);
+check("DECIDE: calendar half-day (13:00 close) flagged as halfDay",
+  decideMarketDay({ today: "2026-11-27", cal: { reachable: true, day: { date: "2026-11-27", open: "09:30", close: "13:00" } }, weekend: false, holiday: false, halfDayStatic: false }).halfDay === true);
+check("DECIDE: via=alpaca when calendar reachable",
+  decideMarketDay({ today: "2026-06-25", cal: SESSION, weekend: false, holiday: false, halfDayStatic: false }).via === "alpaca");
+// Offline fallback (Alpaca unreachable) — the static calendar carries it.
+check("DECIDE: offline weekday → open (fallback)",
+  decideMarketDay({ today: "2026-06-15", cal: { reachable: false, day: null }, weekend: false, holiday: false, halfDayStatic: false }).open === true);
+check("DECIDE: offline weekend → closed (fallback)",
+  decideMarketDay({ today: "2026-06-13", cal: { reachable: false, day: null }, weekend: true, holiday: false, halfDayStatic: false }).open === false);
+check("DECIDE: offline holiday → closed (fallback)",
+  decideMarketDay({ today: "2026-12-25", cal: { reachable: false, day: null }, weekend: false, holiday: true, halfDayStatic: false }).open === false);
+check("DECIDE: offline fallback marks via=fallback",
+  decideMarketDay({ today: "2026-06-15", cal: { reachable: false, day: null }, weekend: false, holiday: false, halfDayStatic: false }).via === "fallback");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
