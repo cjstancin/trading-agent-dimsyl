@@ -41,7 +41,7 @@ if (getMode() === "off") {
 const { sendDiscord } = await import("../../scripts/notify-discord.mjs" as string);
 
 const today = new Date().toLocaleDateString("en-US", {
-  weekday: "long", year: "numeric", month: "long", day: "numeric",
+  timeZone: "America/New_York", weekday: "long", year: "numeric", month: "long", day: "numeric",
 });
 
 // Live state — bounded reads, never crash the report.
@@ -56,8 +56,10 @@ const [snap, fills, closedOrders, portfolio] = await Promise.all([
   safe(() => getPortfolioHistory("1D", "5Min"), {} as any),
 ]);
 
-// Filter today's fills only (Alpaca returns recent activity; cap to today's date in ET).
-const isoToday = new Date().toISOString().slice(0, 10);
+// Filter today's fills only (Alpaca returns recent activity; cap to today's date in ET). Use the ET
+// calendar date, NOT UTC — RTH fills carry UTC timestamps whose calendar date equals the ET date, and
+// using UTC here would drop all of today's trades on any run after 8pm ET (e.g. a manual late run).
+const isoToday = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 const todaysFills = (Array.isArray(fills) ? fills : []).filter((f: any) => String(f?.transaction_time || f?.date || "").startsWith(isoToday));
 const todaysCloses = (Array.isArray(closedOrders) ? closedOrders : []).filter((o: any) => String(o?.filled_at || o?.updated_at || "").startsWith(isoToday));
 
