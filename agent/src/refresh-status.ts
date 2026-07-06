@@ -15,6 +15,7 @@ import { getMode } from "./mode.js";
 import { getProfile } from "./profile.js";
 import { rulesFor } from "./guardrails.js";
 import { excursionSummary, type ExcursionTrade } from "./excursion-stats.js";
+import { fetchSpyRegime, regimePill, renderRegimeLine } from "./regime.js";
 import { isMarketDayToday } from "./market-calendar.js";
 import { runSyntheticStops } from "./synthetic-stops.js";
 import { installSafetyNet } from "./http-utils.js";
@@ -95,6 +96,9 @@ try {
 // Portfolio-level excursion summary (avg MAE/MFE, capture ratio) over all journaled closes.
 const excursion = excursionSummary(excursionTrades);
 const fills = await recentFills();
+// Deterministic 200-DMA regime — replaces the old static/LLM-vibe "regime" pill with the computed value
+// (the same one the scan prompt + execute risk-off gate use). Fail-open: feed down → "Neutral".
+const regime = await fetchSpyRegime();
 const ready = readiness(m);
 const mode = getMode();
 const rules = rulesFor(getProfile());
@@ -111,6 +115,8 @@ const next = {
   isSample: false,
   profile: rules.name,
   mode,
+  regime: regimePill(regime),
+  regimeDetail: { ...regime, line: renderRegimeLine(regime) },
   equity: round(equity),
   cash: round(cash),
   buyingPower: round(num(acct.buying_power)),

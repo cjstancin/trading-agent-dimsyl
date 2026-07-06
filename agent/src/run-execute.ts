@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { runAgent } from "./agent.js";
 import { paperSnapshot, placePaperOrder, latestPrice, getPortfolioHistory, getBars, getTradableSymbols, type OrderRequest } from "./alpaca.js";
 import { isTrustedTicker, normalizeTicker } from "./news-guard.js";
+import { fetchSpyRegime, regimeBlockReason, ignoreRegime, renderRegimeLine } from "./regime.js";
 import { validateOrders, rulesFor, haltReason, type BookState } from "./guardrails.js";
 import { atrFromBars, atrStop, sizeByRisk, riskGate, DEFAULT_RISK, type OpenPosition } from "./risk-engine.js";
 import { setPositionTrail, readPositionTrails } from "./synthetic-stops.js";
@@ -75,6 +76,11 @@ const openCount = Array.isArray(snap.positions) ? snap.positions.length : 0;
 const book: BookState = { equity, openCount };
 const rules = rulesFor(getProfile());
 
+// Deterministic 200-DMA market regime (SPY level + slope) — the dormant risk-engine regime filter, now
+// live. Fetched once: it informs the proposal prompt AND drives the risk-off gate below. Fail-open
+// (feed down → neutral → no blocking). BULL_IGNORE_REGIME=1 skips the gate for a deliberate play.
+const regime = await fetchSpyRegime();
+
 // ── HARD RISK HALT (Bull v3) ── enforce the daily-loss / monthly-kill / drawdown limits BEFORE proposing
 // anything. They were descriptive-only before; now a bad day/month/drawdown actually stops NEW entries.
 // Daily P&L is from the account (equity vs prior close); monthly + drawdown from portfolio history
@@ -135,13 +141,14 @@ if (fromPlan) {
 if (!usedPlan) {
   const prompt = `You are Bill the Bull, CJ's trading agent (paper account). Convert the APPROVED trade cycle below into concrete orders.
 Rulebook limits (${rules.name}): max ${Math.round(rules.maxPositionPct * 100)}% per position, up to ${rules.maxOpen} total open (~${rules.coreCount ?? 6} core + satellites), price ≥ $${rules.minPrice}, a protective ~${rules.trailPercent}% trailing stop on EVERY buy (enforced in code). Current equity ≈ $${equity}, open positions ≈ ${openCount}.
+COMPUTED MARKET REGIME (SPY vs 200-DMA, deterministic): ${renderRegimeLine(regime)}.${regime.state === "risk-off" ? ` Risk-off: the CODE will drop any NEW long whose setup is not explicitly tagged "counter-trend" — only propose longs you'd defend as counter-trend, or nothing.` : ""}
 QUALITY UNIVERSE ONLY: liquid US large/mid-cap stocks + liquid non-leveraged ETFs. NEVER propose penny stocks (< $${rules.minPrice}), leveraged/inverse ETFs (SOXL/TQQQ/3x), crypto, meme/pump names, OR options/calls/puts/futures/derivatives — equities & ETFs only. Horizon 1 week–5 years; let winners run.
 FRACTIONAL SIZING: positions are sized in FRACTIONAL shares from a ~$${equity} book, so ANY quality name is reachable regardless of share price (NVDA + other high-priced names included) — never skip a name for being "too expensive." Build a CONVICTION-TIERED book of UP TO ${rules.maxOpen} names: ~${rules.coreCount ?? 6} high-conviction CORE names you want the most capital in (confidence 70–95), plus optionally a few smaller SATELLITE names (confidence ~45–65) only if you genuinely like them. Quality over filling slots — a few strong names beats ${rules.maxOpen} mediocre ones; fine to pick fewer or none. Give an honest "confidence" (0–100) used to RANK ideas and decide which make the cut. You do NOT size positions: a deterministic risk engine sizes every buy itself from volatility + a fixed ~1% risk budget and caps it against portfolio limits.
 
 APPROVED CYCLE:
 ${approved}
 
-Output ONLY a JSON array (no prose, no markdown fence) of orders in this exact shape — include an HONEST "confidence" (0–100 conviction, drives the dollar size) and a short "setup" label (e.g. momentum breakout, mean-revert, earnings drift) on each:
+Output ONLY a JSON array (no prose, no markdown fence) of orders in this exact shape — include an HONEST "confidence" (0–100 conviction, drives the dollar size) and a short "setup" label (e.g. momentum breakout, mean-revert, earnings drift, counter-trend) on each:
 [{"symbol":"NVDA","side":"buy","type":"market","est_price":900.0,"trail_percent":${rules.trailPercent},"thesis":"one line","confidence":82,"setup":"momentum breakout"}]
 Use type "market"; est_price = your expected fill. The CODE sizes each position (fractional shares) from your confidence — do NOT compute qty yourself. If nothing qualifies, output [].`;
 
@@ -175,6 +182,25 @@ proposed = proposed.filter((o) => {
   return false;
 });
 if (proposed.length < beforeGuard) console.warn(`[bill] news-guard dropped ${beforeGuard - proposed.length} ticker(s) (not tradable / suspicious)`);
+
+// 200-DMA REGIME GATE (deterministic): in a CONFIRMED risk-off regime (SPY below a falling 200-DMA),
+// drop NEW long entries unless the setup is explicitly counter-trend-tagged. Sells/exits are never
+// touched, sizing is untouched — this only filters which names may OPEN. BULL_IGNORE_REGIME=1 skips it.
+// Runs on every path (live proposal, --plan-only, --from-plan) since it sits before the plan write.
+const regimeBlocked: string[] = [];
+proposed = proposed.filter((o) => {
+  const reason = regimeBlockReason(o, regime, ignoreRegime());
+  if (!reason) return true;
+  regimeBlocked.push(o.symbol);
+  console.warn(`[bill] regime gate dropped ${o.symbol}: ${reason}`);
+  return false;
+});
+if (regimeBlocked.length && !dryRun && !planOnly) {
+  await sendDiscord(
+    `🛑 **Bill — regime gate (risk-off)**\nSPY $${regime.price} below falling 200-DMA $${regime.ma200} — blocked new long(s): ${regimeBlocked.join(", ")}\n(Counter-trend-tagged setups pass; BULL_IGNORE_REGIME=1 overrides. Existing positions + stops untouched.)`,
+    { channel: "bull", username: "Bill the Bull" },
+  );
+}
 
 // --plan-only (9:15 bill-brief): persist the proposal for the 9:30 open run, then STOP — no sizing, no
 // validation, no placement. The open run (--from-plan) sizes on the live open price + enforces the risk

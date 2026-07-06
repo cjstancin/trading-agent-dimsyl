@@ -9,6 +9,7 @@ import { isMarketDayToday } from "./market-calendar.js";
 import { rulesFor } from "./guardrails.js";
 import { getProfile } from "./profile.js";
 import { readState, positionLines, readPositionTrails } from "./synthetic-stops.js";
+import { fetchSpyRegime, renderRegimeLine } from "./regime.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-premarket");
@@ -39,6 +40,8 @@ const today = new Date().toLocaleDateString("en-US", {
 });
 
 const snap = await paperSnapshot();
+// Deterministic 200-DMA regime — the same computed value the scan prompt + execute risk-off gate use.
+const regime = await fetchSpyRegime();
 
 const prompt = `You are Bill, CJ's PAPER trading agent. Write his PRE-MARKET BRIEF for ${today}.
 This is a READ-ONLY run: analyze and write only — you place no orders.
@@ -47,7 +50,7 @@ LIVE ALPACA PAPER SNAPSHOT (read-only; ${snap.connected ? "connected" : "NOT con
 ${JSON.stringify(snap, null, 2)}
 
 Also do (web search is primary for live data):
-- Today's market-open setup: index futures, key levels for SPY/QQQ, the regime (risk-on/off), any major overnight headline.
+- Today's market-open setup: index futures, key levels for SPY/QQQ, any major overnight headline. The regime is COMPUTED deterministically (SPY vs 200-DMA): ${renderRegimeLine(regime)} — use this as THE regime, don't re-derive it.
 - For each open paper position above, a one-line note (overnight move / any catalyst today).
 - You may read memory/strategy.md and Signals/approved-cycle.md (if present) for queued ideas.
 
@@ -74,6 +77,8 @@ if (rawPos.length) {
   const lines = positionLines(rawPos, readState(), rulesFor(getProfile()).trailPercent ?? 20, readPositionTrails());
   brief += `\n\n📊 Positions — bought · now · stop:\n` + lines.map((l) => "• " + l).join("\n");
 }
+// Computed regime, appended deterministically (not LLM-rephrased) so the brief always carries the real value.
+brief += `\n\n📐 Regime (200-DMA, computed): ${renderRegimeLine(regime)}`;
 const posted = await sendDiscord(brief, { channel: "bull", username: "Bill the Bull" });
 console.log(JSON.stringify({ ok: posted.ok === true, posted, paperConnected: snap.connected, costUsd, numTurns }, null, 2));
 if (!posted.ok) process.exitCode = 1;
