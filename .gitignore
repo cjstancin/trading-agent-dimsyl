@@ -28,3 +28,9 @@ memory/position-trails.json
 # Node
 agent/node_modules/
 node_modules/
+
+# backtest v2 generated outputs (regenerated on the box)
+backtest/out/replay_attribution.json
+backtest/out/replay_equity.csv
+backtest/out/replay_trades.csv
+backtest/data/
