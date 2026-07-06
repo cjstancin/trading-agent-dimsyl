@@ -18,6 +18,18 @@ check("FAIL: buy without stop rejected", validateOrders([noStop], book)[0].reaso
 const penny: OrderRequest = { symbol: "XYZ", side: "buy", qty: 100, type: "market", est_price: 1.2, trail_percent: 18 };
 check("FAIL: sub-$2 rejected", validateOrders([penny], book)[0].reasons.some(r => /quality floor/.test(r)));
 
+// UNIVERSE: leveraged/inverse ETFs + crypto pairs are hard-rejected in code (not just prompt-excluded).
+const lev: OrderRequest = { symbol: "SOXL", side: "buy", qty: 10, type: "market", est_price: 30, trail_percent: 18 };
+check("FAIL: leveraged ETF (SOXL) rejected", validateOrders([lev], book)[0].reasons.some(r => /excluded universe: leveraged/.test(r)));
+const bear: OrderRequest = { symbol: "GDXBEAR", side: "buy", qty: 10, type: "market", est_price: 30, trail_percent: 18 };
+check("FAIL: leverage name-pattern (BEAR) rejected", validateOrders([bear], book)[0].reasons.some(r => /excluded universe: leveraged/.test(r)));
+const cryptoSlash: OrderRequest = { symbol: "BTC/USD", side: "buy", qty: 0.1, type: "market", est_price: 60_000, trail_percent: 18 };
+check("FAIL: crypto pair (BTC/USD) rejected", validateOrders([cryptoSlash], book)[0].reasons.some(r => /excluded universe: crypto/.test(r)));
+const cryptoFlat: OrderRequest = { symbol: "ETHUSD", side: "buy", qty: 1, type: "market", est_price: 3000, trail_percent: 18 };
+check("FAIL: crypto pair (ETHUSD) rejected", validateOrders([cryptoFlat], book)[0].reasons.some(r => /excluded universe: crypto/.test(r)));
+const aapl: OrderRequest = { symbol: "AAPL", side: "buy", qty: 10, type: "market", est_price: 210, trail_percent: 18 };
+check("SUCCESS: normal equity (AAPL) passes the universe check", validateOrders([aapl], book)[0].ok === true);
+
 // FAIL: exceeding max open. AGGRESSIVE_PAPER caps at 10; book already has 2 open, so 9 new buys → 11 > 10.
 const overMax = Array.from({ length: 9 }, (_, i): OrderRequest => ({ symbol: `AA${i}`, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 }));
 check("FAIL: max-open exceeded once projected open passes the cap", validateOrders(overMax, book).some(v => v.reasons.some(r => /max .* open/.test(r))));

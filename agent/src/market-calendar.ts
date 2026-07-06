@@ -129,6 +129,13 @@ export function isPastHalfDayCloseET(date: Date = new Date()): boolean {
   return etMinutesOfDay(date) >= HALF_DAY_CLOSE_MINUTES;
 }
 
+/** True if the ET wall-clock time is inside the regular session (09:30–16:00, or 09:30–13:00 on half-days).
+ *  Time-of-day only — pair with isMarketDayToday() to know whether TODAY is a trading day at all. */
+export function isDuringSessionET(halfDay = false, date: Date = new Date()): boolean {
+  const m = etMinutesOfDay(date);
+  return m >= 9 * 60 + 30 && m < (halfDay ? HALF_DAY_CLOSE_MINUTES : 16 * 60);
+}
+
 /** True if an Alpaca calendar close time ("HH:MM" ET) is before the regular 16:00 ET close → a half-day.
  *  Fails safe to false (treat as a normal full session) if the string can't be parsed. */
 export function isEarlyCloseET(closeHHMM: string): boolean {

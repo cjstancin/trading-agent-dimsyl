@@ -45,6 +45,47 @@ export function sizeBuyQty(live: number, equity: number, rules: Rules = AGGRESSI
   return rules.fractional ? Math.round(raw * 1e4) / 1e4 : Math.floor(raw);
 }
 
+// Universe exclusion (deterministic) — the executor prompt tells Bill to avoid leveraged/inverse ETFs and
+// crypto, but until now nothing in CODE stopped such an order from being sized/placed. Curated denylist of
+// known leveraged/inverse ETPs + a conservative name-pattern fallback + crypto-pair detection; validateOrders()
+// hard-rejects matches before anything downstream can size or place them.
+const LEVERAGED_INVERSE_ETFS = new Set([
+  // Index bull/bear
+  "TQQQ", "SQQQ", "QLD", "QID", "SSO", "SDS", "SPXL", "SPXS", "UPRO", "SPXU", "SH", "PSQ", "DOG",
+  "UDOW", "SDOW", "DDM", "DXD", "TNA", "TZA", "URTY", "SRTY", "UWM", "TWM", "RWM",
+  // Sector / thematic bull/bear
+  "SOXL", "SOXS", "USD", "SSG", "LABU", "LABD", "CURE", "FAS", "FAZ", "DPST",
+  "TECL", "TECS", "WEBL", "WEBS", "FNGU", "FNGD", "BULZ", "BERZ", "YINN", "YANG", "CWEB", "CHAU", "EDC", "EDZ",
+  // Commodities / metals / energy
+  "NUGT", "DUST", "JNUG", "JDST", "GDXU", "GDXD", "UGL", "GLL", "AGQ", "ZSL",
+  "BOIL", "KOLD", "UCO", "SCO", "DRIP", "GUSH", "ERX", "ERY", "NRGU", "NRGD",
+  // Volatility ETPs (leveraged, inverse, or plain VIX exposure — all excluded)
+  "UVXY", "SVXY", "VIXY", "VIXM", "VXX", "UVIX", "SVIX",
+  // Rates / bonds
+  "TMF", "TMV", "TBT", "UBT", "TYD", "TYO", "TTT",
+  // Real estate
+  "DRN", "DRV", "URE", "SRS",
+  // Single-stock leveraged/inverse
+  "TSLL", "TSLS", "TSLQ", "TSLZ", "NVDL", "NVDD", "NVDU", "NVDS", "AAPU", "AAPD", "AMZU", "AMZD",
+  "GGLL", "GGLS", "MSFU", "MSFD", "METU", "METD", "AMDL", "AMDS", "MSTU", "MSTZ", "MSTX", "CONL", "CONI",
+]);
+// Fallback for tickers not in the curated set: leverage markers in the symbol itself (2X/3X prefix/suffix,
+// BULL/BEAR/ULTRA). Conservative — only clear matches; the safe failure mode is skipping a name, not buying it.
+const LEVERAGE_MARKER = /[123]X$|^[123]X|BULL|BEAR|ULTRA/;
+// Crypto: Alpaca crypto pairs look like "BTC/USD" (slash) or "ETHUSD" (base + USD/USDT/USDC suffix).
+const CRYPTO_BASES = new Set(["BTC", "ETH", "LTC", "BCH", "DOGE", "SOL", "ADA", "XRP", "AVAX", "DOT", "LINK", "MATIC", "SHIB", "UNI", "AAVE", "PEPE", "XLM", "TRX", "GRT", "BAT", "CRV", "MKR", "SUSHI", "XTZ", "USDT", "USDC"]);
+
+/** Reason a symbol is outside Bill's tradable universe (leveraged/inverse ETF or crypto), or null if allowed. */
+export function excludedUniverseReason(symbol: string): string | null {
+  const sym = (symbol ?? "").trim().toUpperCase();
+  if (!sym) return null; // empty is caught by the "bad symbol" check
+  if (LEVERAGED_INVERSE_ETFS.has(sym) || LEVERAGE_MARKER.test(sym)) return "excluded universe: leveraged/inverse ETF";
+  if (sym.includes("/")) return "excluded universe: crypto pair";
+  const m = /^([A-Z]+)USD[TC]?$/.exec(sym);
+  if (m && CRYPTO_BASES.has(m[1])) return "excluded universe: crypto pair";
+  return null;
+}
+
 export interface BookState {
   equity: number;
   openCount: number; // current open positions
@@ -63,6 +104,8 @@ export function validateOrders(orders: OrderRequest[], book: BookState, rules: R
     const reasons: string[] = [];
 
     if (!order.symbol || !/^[A-Z][A-Z0-9.\/-]{0,9}$/.test(order.symbol)) reasons.push("bad symbol");
+    const excluded = excludedUniverseReason(order.symbol ?? "");
+    if (excluded) reasons.push(excluded);
     if (!(order.qty > 0)) reasons.push("qty must be > 0");
     if (!(order.est_price > 0)) reasons.push("est_price required (> 0)");
     if (order.type && !["market", "limit"].includes(order.type)) reasons.push(`order type "${order.type}" not allowed — equities only (market/limit), no options/derivatives`);
