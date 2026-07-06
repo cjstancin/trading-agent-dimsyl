@@ -143,6 +143,32 @@ export function riskGate(buy: ProposedBuy, book: { equity: number; positions: Op
   return { ok: true, shares, reasons };
 }
 
+// ───────────────────────── book room (replaces the maxOpen slot count) ─────────────────────────
+
+export interface BookRoom {
+  hasRoom: boolean;        // true = a full-size new entry fits under heat + cash — buy directly, no swap needed
+  heatUsedPct: number;     // aggregate open risk as % of equity
+  heatCapPct: number;      // the portfolio-heat ceiling (%)
+  heatRoomDollars: number; // $ of heat left under the ceiling
+  detail: string;          // human-readable one-liner for prompts / notes / dashboard
+}
+
+/** Can the book simply ADD a new full-size position, or is a swap the only way in? There is NO fixed
+ *  position-count cap (CJ, 2026-07-06) — "room" means a fresh entry's full risk budget (riskPerTradePct of
+ *  equity) fits under the portfolio-heat ceiling AND buying power covers at least that budget. Pure. */
+export function bookRoom(equity: number, openRiskDollars: number, buyingPower: number, cfg: RiskConfig = DEFAULT_RISK): BookRoom {
+  const heatCapPct = cfg.maxPortfolioHeatPct;
+  if (!(equity > 0)) return { hasRoom: false, heatUsedPct: 0, heatCapPct, heatRoomDollars: 0, detail: "no equity" };
+  const openRisk = Math.max(0, openRiskDollars || 0);
+  const heatUsedPct = Math.round((openRisk / equity) * 1e3) / 10; // 1-dp %
+  const heatRoomDollars = Math.max(0, (heatCapPct / 100) * equity - openRisk);
+  const riskBudget = (cfg.riskPerTradePct / 100) * equity; // one full-size new entry's open risk
+  const bp = Math.max(0, buyingPower || 0);
+  const hasRoom = heatRoomDollars >= riskBudget && bp >= riskBudget;
+  const detail = `heat ${heatUsedPct}%/${heatCapPct}% used ($${Math.round(heatRoomDollars)} room) · buying power $${Math.round(bp)}`;
+  return { hasRoom, heatUsedPct, heatCapPct, heatRoomDollars, detail };
+}
+
 // ───────────────────────── regime filter ─────────────────────────
 
 /** 200-day-MA regime: risk-ON when price ≥ MA200 (deploy), risk-OFF below (reduce / go to cash). Unknown MA → on. */

@@ -16,7 +16,7 @@ You are Bill, CJ's autonomous paper swing trader. Goal: beat the S&P 500 with co
 | Per-name exposure | 20% |
 | Per-sector exposure | 30% |
 | Portfolio heat (aggregate open risk) | 10% |
-| Max open positions | 10 |
+| Open positions | **no fixed cap** — count is governed by the risk rules above + cash (CJ, 2026-07-06) |
 | Price floor | $10 |
 | Halts | −5% day / −20% MTD / −15% from peak |
 

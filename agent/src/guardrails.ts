@@ -5,7 +5,9 @@ import type { OrderRequest } from "./alpaca.js";
 
 export interface Rules {
   maxPositionPct: number; // fraction of equity per position
-  maxOpen: number;        // max concurrent open positions
+  maxOpen?: number;       // OPTIONAL position-count cap. Unset = unbounded: position count is governed by
+                          // the risk engine's caps (risk/trade, per-name, sector, portfolio heat) + cash,
+                          // not by a slot count (CJ, 2026-07-06). Only enforced when a profile sets it.
   minPrice: number;       // quality floor
   // Descriptive limits — surfaced in the executor's prompt + the dashboard. validateOrders() enforces
   // only the three hard caps above; these guide sizing/stops and differ per risk profile.
@@ -20,9 +22,11 @@ export interface Rules {
   profitTriggerPct?: number;       // unrealized gain (%) at which the news-aware profit-trim considers banking part of a winner
 }
 
-// Fractional + 10-slot book: ~6 high-conviction CORE names take the bulk, up to 4 smaller SATELLITES round it out.
+// Fractional book with NO fixed slot count (CJ, 2026-07-06): ~6 high-conviction CORE names take the bulk,
+// smaller SATELLITES round it out; how many names fit is decided by the risk engine (risk/trade, per-name,
+// sector, portfolio-heat caps) + cash — not by a maxOpen count.
 // maxPositionPct is the per-name ceiling for a max-conviction core name; sizeBuyQty scales lower-conviction names down.
-export const AGGRESSIVE_PAPER: Rules = { name: "Aggressive", maxPositionPct: 0.20, maxOpen: 10, minPrice: 10, riskPerTradePct: 5, trailPercent: 20, dailyHaltPct: 5, monthlyKillPct: 20, maxDrawdownFromPeakPct: 15, fractional: true, coreCount: 6, profitTriggerPct: 15 };
+export const AGGRESSIVE_PAPER: Rules = { name: "Aggressive", maxPositionPct: 0.20, minPrice: 10, riskPerTradePct: 5, trailPercent: 20, dailyHaltPct: 5, monthlyKillPct: 20, maxDrawdownFromPeakPct: 15, fractional: true, coreCount: 6, profitTriggerPct: 15 };
 export const STEADY_PAPER: Rules = { name: "Steady", maxPositionPct: 0.15, maxOpen: 4, minPrice: 5, riskPerTradePct: 4, trailPercent: 10, dailyHaltPct: 5, monthlyKillPct: 15 };
 
 /** Pick the rulebook for a risk profile ("aggressive" | "steady"). Defaults to aggressive. */
@@ -97,7 +101,9 @@ export interface ValidatedOrder {
   reasons: string[]; // why it failed (empty if ok)
 }
 
-/** Validate a batch of proposed orders against the rulebook + current book. Counts cumulative new buys vs maxOpen. */
+/** Validate a batch of proposed orders against the rulebook + current book. The position-count check only
+ *  applies when the profile sets maxOpen (e.g. Steady); Aggressive leaves it unset — count is governed by
+ *  the risk engine's heat/name/sector caps + cash, so a strategy-compliant buy is never rejected on count. */
 export function validateOrders(orders: OrderRequest[], book: BookState, rules: Rules = AGGRESSIVE_PAPER): ValidatedOrder[] {
   let projectedOpen = book.openCount;
   return orders.map((order) => {
@@ -119,9 +125,10 @@ export function validateOrders(orders: OrderRequest[], book: BookState, rules: R
       if (order.trail_percent == null) reasons.push("buy needs a protective stop (trail_percent)");
       // Only a buy that clears every other check consumes an open slot. An invalid buy is rejected and
       // never placed, so counting it toward the cap would wrongly push later VALID buys over maxOpen.
+      // Profiles without maxOpen (Aggressive) skip the count check entirely.
       if (reasons.length === 0) {
         projectedOpen += 1;
-        if (projectedOpen > rules.maxOpen) reasons.push(`would exceed max ${rules.maxOpen} open positions`);
+        if (rules.maxOpen != null && projectedOpen > rules.maxOpen) reasons.push(`would exceed max ${rules.maxOpen} open positions`);
       }
     }
 

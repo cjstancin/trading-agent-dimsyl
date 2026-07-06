@@ -1,5 +1,5 @@
 // Tests for the deterministic risk engine (no network). Run: npm run test:risk-engine
-import { inverseVolWeights, volTargetLeverage, fractionalKelly, sizeByRisk, chandelierStop, atrStop, riskGate, regimeOn, atrFromBars, DEFAULT_RISK } from "./risk-engine.js";
+import { inverseVolWeights, volTargetLeverage, fractionalKelly, sizeByRisk, chandelierStop, atrStop, riskGate, bookRoom, regimeOn, atrFromBars, DEFAULT_RISK } from "./risk-engine.js";
 
 let pass = 0, fail = 0;
 const check = (name: string, cond: boolean) => { (cond ? pass++ : fail++); console.log(`${cond ? "PASS" : "FAIL"} — ${name}`); };
@@ -39,6 +39,19 @@ check("riskGate: per-sector cap binds ($200 room / $100 = 2 sh)",
 {
   const g = riskGate({ symbol: "A", price: 100, stopPrice: 90, shares: 20 }, { equity: 10000, positions: [{ symbol: "X", marketValue: 1000, riskDollars: 1000 }] });
   check("riskGate: no room under heat → rejected (ok=false, 0 sh)", g.ok === false && g.shares === 0);
+}
+
+// bookRoom (replaces the maxOpen slot count): room = a full 1.5%-risk entry fits under the 10% heat cap
+// AND buying power covers the risk budget. On $10k: budget $150, heat ceiling $1000.
+{
+  const low = bookRoom(10_000, 500, 5_000);   // heat 5% used, $500 room ≥ $150, BP ample
+  check("bookRoom: low heat + cash → hasRoom", low.hasRoom === true && low.heatUsedPct === 5);
+  const hot = bookRoom(10_000, 900, 5_000);   // $100 heat room < $150 budget → out of room
+  check("bookRoom: heat near the 10% ceiling → NO room", hot.hasRoom === false);
+  const broke = bookRoom(10_000, 500, 100);   // heat fine but BP $100 < $150 budget → out of room
+  check("bookRoom: no buying power → NO room", broke.hasRoom === false);
+  check("bookRoom: detail names the real limiter (heat + BP)", /heat 5%\/10%/.test(low.detail) && /buying power/.test(low.detail));
+  check("bookRoom: zero equity → NO room, no throw", bookRoom(0, 0, 0).hasRoom === false);
 }
 
 // regime filter

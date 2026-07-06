@@ -1,7 +1,8 @@
 // Pure, testable position-swap + reallocation planner — no network, no order placement, no side effects.
-// Sister module to guardrails.ts: it answers ONE question deterministically — when the book is full
-// (at maxOpen) and the scan surfaces a higher-conviction new idea, which weak holding (if any) should
-// we swap out to fund it? It only PROPOSES swaps; sizing + placement stay in the existing executor
+// Sister module to guardrails.ts: it answers ONE question deterministically — when the book is OUT OF ROOM
+// (no fixed slot count; "full" = a new full-size entry no longer fits under the risk/heat/cash constraints,
+// see risk-engine.bookRoom) and the scan surfaces a higher-conviction new idea, which weak holding (if any)
+// should we swap out to fund it? It only PROPOSES swaps; sizing + placement stay in the existing executor
 // pipeline (run-execute.ts), which still runs every resulting order through validateOrders().
 //
 // Conservative by design, honoring CLAUDE.md's hard rules:
@@ -35,7 +36,7 @@ export interface SwapProposal {
 }
 
 export interface ReallocationPlan {
-  needed: boolean;         // true when the book is full so a swap is the ONLY way to add a name
+  needed: boolean;         // true when the book is out of room so a swap is the ONLY way to add a name
   swaps: SwapProposal[];   // proposed 1:1 swaps (sell weak → buy strong). Empty = hold current book.
   skipped: Array<{ symbol: string; reason: string }>; // candidates/holdings excluded, with why
   notes: string[];         // human-readable summary lines
@@ -70,14 +71,15 @@ export function holdingStrength(h: Holding): number {
  * Plan position swaps. Returns a proposal-only plan — it never places or sizes orders.
  *
  * @param holdings    current open positions
- * @param candidates  new ideas competing for a slot (with 0–100 conviction)
- * @param book        { maxOpen } — the active rulebook's position cap
+ * @param candidates  new ideas competing for capital (with 0–100 conviction)
+ * @param book        { hasRoom, roomDetail? } — whether a new full-size entry still fits under the risk/
+ *                    heat/cash constraints (from risk-engine.bookRoom). No fixed position-count cap.
  * @param cfg         thresholds (defaults to DEFAULT_REALLOC)
  */
 export function planReallocation(
   holdings: Holding[],
   candidates: Candidate[],
-  book: { maxOpen: number },
+  book: { hasRoom: boolean; roomDetail?: string },
   cfg: ReallocConfig = DEFAULT_REALLOC,
 ): ReallocationPlan {
   const notes: string[] = [];
@@ -90,7 +92,10 @@ export function planReallocation(
   }
 
   const held = new Set(holdings.map((h) => h.symbol.toUpperCase()));
-  const needed = holdings.length >= book.maxOpen;
+  // A swap is only NEEDED when the book can't simply add: no heat/cash room for a new full-size entry.
+  // With nothing held there's nothing to swap out — always "room" (the executor's caps gate the buy itself).
+  const needed = !book.hasRoom && holdings.length > 0;
+  const roomNote = book.roomDetail ? ` (${book.roomDetail})` : "";
 
   // A candidate we already hold can't be swapped INTO — drop it up front, then rank by conviction.
   const freshCandidates = candidates
@@ -101,10 +106,10 @@ export function planReallocation(
     .sort((a, b) => b.conviction - a.conviction);
 
   if (!needed) {
-    notes.push(`book has room (${holdings.length}/${book.maxOpen} open) — buy directly, no swap required`);
+    notes.push(`book has room under the risk caps (${holdings.length} open)${roomNote} — buy directly, no swap required`);
     return { needed, swaps, skipped, notes };
   }
-  notes.push(`book is FULL (${holdings.length}/${book.maxOpen}) — a swap is required to add a new name`);
+  notes.push(`book is OUT OF ROOM (${holdings.length} open)${roomNote} — a swap is required to add a new name`);
 
   // Swap-out pool: weakest first, excluding winners we want to let run.
   const swappable = holdings
@@ -139,6 +144,6 @@ export function planReallocation(
     });
   }
 
-  if (swaps.length === 0) notes.push("book full but no candidate cleared the swap bar — hold the current book");
+  if (swaps.length === 0) notes.push("book out of room but no candidate cleared the swap bar — hold the current book");
   return { needed, swaps, skipped, notes };
 }

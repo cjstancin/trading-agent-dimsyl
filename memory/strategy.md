@@ -9,6 +9,8 @@ summary: "Bill's playbook: entry setups, regime overlay, exits. All sizing/caps 
 # Strategy — Bill (aggressive-quality paper) · ACTIVE
 
 > Sizing, per-name/sector/heat caps, halts, and the price floor are **enforced by code** (`agent/src/guardrails.ts` + `agent/src/risk-engine.ts`) and summarized in CLAUDE.md's caps table. This file holds no cap numbers on purpose — you propose the idea and the stop; the engine decides how much.
+>
+> **Position count is NOT fixed** (CJ, 2026-07-06): there is no slot count. Hold as many — or as few — names as the risk rules allow; the binding constraints are per-trade risk, the per-name cap, the sector cap, the portfolio-heat ceiling, and cash/buying power. A swap (cut weakest, fund stronger) is only needed when a new full-size entry no longer fits under those constraints.
 
 ## Objective
 Beat the S&P 500 with concentrated, high-conviction positions in quality, liquid US large/mid-cap equities and non-leveraged broad/sector ETFs, held 1 week to ~5 years. Quality over quantity; let winners run.
@@ -38,3 +40,4 @@ Leveraged/inverse ETFs, crypto, penny/sub-floor names, meme/pump tickers, illiqu
 ## Change log
 - 2026-06-12 — Initial aggressive draft; approved by CJ.
 - 2026-07-06 — Rewritten to match the deterministic risk engine: removed crypto + leveraged-ETF sections and every hardcoded cap number (the code owns caps now).
+- 2026-07-06 — Removed the fixed max-open-positions slot count (was 10) per CJ: position count is governed only by risk/heat/name/sector/cash. Swaps trigger on "no room under the risk caps", not "book at N/N".

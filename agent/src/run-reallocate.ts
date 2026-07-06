@@ -18,7 +18,7 @@ import { paperSnapshot, placePaperOrder, latestPrice, closePosition, waitForOrde
 import { isTrustedTicker, normalizeTicker } from "./news-guard.js";
 import { findWinners, parseTrims, buildTrimPrompt } from "./profit-trim.js";
 import { rulesFor, validateOrders, haltReason } from "./guardrails.js";
-import { atrFromBars, atrStop, sizeByRisk, riskGate, DEFAULT_RISK, type OpenPosition } from "./risk-engine.js";
+import { atrFromBars, atrStop, sizeByRisk, riskGate, bookRoom, DEFAULT_RISK, type OpenPosition } from "./risk-engine.js";
 import { setPositionTrail, readPositionTrails } from "./synthetic-stops.js";
 import { getProfile } from "./profile.js";
 import { getMode, autoExecAllowed } from "./mode.js";
@@ -89,6 +89,18 @@ const holdings: Holding[] = positions.map((p) => ({
   score: lastConfidence(String(p.symbol)),
 }));
 
+// ROOM CHECK (replaces the old maxOpen slot count): a swap is only NEEDED when a new full-size entry no
+// longer fits under the heat cap + buying power. Open risk ≈ each position's own trail% × market value —
+// the same approximation the riskGate book uses below.
+const trailsForRoom = readPositionTrails();
+const openRiskNow = positions.reduce((s, p) => {
+  const mv = Number(p.market_value ?? 0);
+  const tr = (trailsForRoom[String(p.symbol ?? "").toUpperCase()] ?? (rules.trailPercent ?? 20)) / 100;
+  return s + Math.max(0, mv * tr);
+}, 0);
+const buyingPowerNow = Number(acct.buying_power ?? acct.cash ?? 0);
+const room = bookRoom(equity, openRiskNow, buyingPowerNow, DEFAULT_RISK);
+
 // FRESH intraday RE-RESEARCH (the core of CJ's ask): each rotation re-validates this morning's watchlist
 // with CURRENT data via web search — confirming names are still good to own RIGHT NOW, downgrading any whose
 // catalyst already PLAYED OUT (already ran on the news / popped past the entry → less upside left, rotate
@@ -108,7 +120,7 @@ RE-RESEARCH WITH CURRENT DATA — do NOT trust this morning's view. USE WEB SEAR
 This morning's watchlist (names to RE-VALIDATE from today's data — re-score them, do NOT copy the morning convictions):
 ${watchlist || "(none — research the market fresh)"}
 
-Current book (equity ≈ $${equity.toFixed(0)}, ${holdings.length}/${rules.maxOpen} slots):
+Current book (equity ≈ $${equity.toFixed(0)}, ${holdings.length} open — no fixed slot count; room = ${room.detail}):
 ${bookLines}
 
 Propose the TOP 2–3 BEST ideas to rotate INTO right now — names NOT already held. Quality US large/mid-cap stocks + liquid non-leveraged ETFs only; price ≥ $${rules.minPrice}; sized in FRACTIONAL shares so any price is reachable (NVDA-class included; per-name cap ${Math.round(rules.maxPositionPct * 100)}%); NO penny / leveraged / inverse / crypto / options.
@@ -138,7 +150,7 @@ if (execute && candidates.length === 0) {
 const tradableSet = await getTradableSymbols();
 candidates = candidates.filter((c) => isTrustedTicker(c.symbol, tradableSet)).map((c) => ({ ...c, symbol: normalizeTicker(c.symbol) }));
 
-const plan = planReallocation(holdings, candidates, { maxOpen: rules.maxOpen });
+const plan = planReallocation(holdings, candidates, { hasRoom: room.hasRoom, roomDetail: room.detail });
 
 const swapLine = (s: typeof plan.swaps[number]) =>
   `  ↪ SELL ${s.sell.symbol} (strength ${s.sell.score}) → BUY ${s.buy.symbol} (conv ${s.buy.conviction}, +${s.edge} edge)${s.buy.setup ? ` · ${s.buy.setup}` : ""}`;
@@ -248,7 +260,8 @@ for (const s of plan.swaps) {
     if (bp > 0) qty = Math.min(qty, rules.fractional ? Math.round((bp / live) * 1e4) / 1e4 : Math.floor(bp / live));
     if (!(qty > 0)) { results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: false, soldOnly: true, error: `buy sized to 0 (${gated.reasons.join("; ") || "risk caps"})` }); continue; }
     const buy: OrderRequest = { symbol: s.buy.symbol, side: "buy", qty, type: "market", est_price: round(live), trail_percent: trailPct, thesis: s.buy.thesis, confidence: s.buy.conviction, setup: s.buy.setup, fractional: !!rules.fractional };
-    // Validate with the sold slot freed (openCount − 1) so the swap never trips the maxOpen cap.
+    // Validate against the book with the sold name removed (count is informational — no maxOpen cap on
+    // the Aggressive profile; the risk gate above already bounded the buy by heat/name/sector).
     const checked = validateOrders([buy], { equity, openCount: Math.max(0, holdings.length - 1) }, rules)[0];
     if (!checked.ok) { results.push({ sell: s.sell.symbol, buy: s.buy.symbol, ok: false, soldOnly: true, error: `buy rejected: ${checked.reasons.join("; ")}` }); continue; }
 

@@ -17,7 +17,8 @@ import { rulesFor } from "./guardrails.js";
 import { excursionSummary, type ExcursionTrade } from "./excursion-stats.js";
 import { fetchSpyRegime, regimePill, renderRegimeLine } from "./regime.js";
 import { isMarketDayToday } from "./market-calendar.js";
-import { runSyntheticStops } from "./synthetic-stops.js";
+import { DEFAULT_RISK } from "./risk-engine.js";
+import { runSyntheticStops, readPositionTrails } from "./synthetic-stops.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-refresh");
@@ -71,6 +72,15 @@ const openOrders = rawOrders.map((o) => ({
 const grossUsd = positions.reduce((s, p) => s + Math.abs(p.mktVal), 0);
 const grossExposure = equity > 0 ? round((grossUsd / equity) * 100, 0) : 0;
 const largestPos = equity > 0 && positions.length ? round((Math.max(...positions.map((p) => Math.abs(p.mktVal))) / equity) * 100, 0) : 0;
+// Portfolio heat = aggregate open risk (each position's own trail% × market value) as % of equity. This —
+// with cash — is what actually bounds how many names Bill can hold (there is NO fixed position-count cap).
+const trailsForHeat = readPositionTrails();
+const heatUsd = rawPositions.reduce((s, p) => {
+  const mv = Math.abs(num(p.market_value));
+  const tr = (trailsForHeat[String(p.symbol ?? "").toUpperCase()] ?? 20) / 100;
+  return s + mv * tr;
+}, 0);
+const heatUsedPct = equity > 0 ? round((heatUsd / equity) * 100, 1) : 0;
 
 const prev = JSON.parse(readFileSync(STATUS, "utf8")) as Record<string, unknown>;
 
@@ -141,8 +151,9 @@ const next = {
   movers: prev.movers ?? { gainers: [], losers: [], active: [] },
   tickers: prev.tickers ?? {},
   bot: { ...((prev.bot as Record<string, unknown>) ?? {}), status: botStatus, mode, profile: rules.name, lastRun: stamp },
-  caps: { riskPerTrade: rules.riskPerTradePct, maxPosition: Math.round((rules.maxPositionPct ?? 0.4) * 100), trailingStop: rules.trailPercent, dailyHalt: rules.dailyHaltPct, monthlyKill: rules.monthlyKillPct },
-  risk: { drawdown: m.risk.drawdown, maxDD: m.risk.maxDD, peakEquity: m.risk.peakEquity, grossExposure, largestPos, sectorConc: 0 },
+  // No maxOpen / slot count here on purpose — position count is governed by heat + name + sector + cash.
+  caps: { riskPerTrade: DEFAULT_RISK.riskPerTradePct, maxPosition: Math.round((rules.maxPositionPct ?? 0.4) * 100), sectorCap: DEFAULT_RISK.maxSectorPct, portfolioHeat: DEFAULT_RISK.maxPortfolioHeatPct, trailingStop: rules.trailPercent, dailyHalt: rules.dailyHaltPct, monthlyKill: rules.monthlyKillPct },
+  risk: { drawdown: m.risk.drawdown, maxDD: m.risk.maxDD, peakEquity: m.risk.peakEquity, grossExposure, largestPos, heatUsedPct, sectorConc: 0 },
   alerts,
   alertKeys,
 };

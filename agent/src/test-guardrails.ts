@@ -1,5 +1,5 @@
 // SUCCESS / FAIL / NULL test for the guardrail validator (no network). Run: npm run test:guardrails
-import { validateOrders, sizeBuyQty, AGGRESSIVE_PAPER } from "./guardrails.js";
+import { validateOrders, sizeBuyQty, AGGRESSIVE_PAPER, STEADY_PAPER } from "./guardrails.js";
 import type { OrderRequest } from "./alpaca.js";
 
 const book = { equity: 100_000, openCount: 2 };
@@ -30,17 +30,30 @@ check("FAIL: crypto pair (ETHUSD) rejected", validateOrders([cryptoFlat], book)[
 const aapl: OrderRequest = { symbol: "AAPL", side: "buy", qty: 10, type: "market", est_price: 210, trail_percent: 18 };
 check("SUCCESS: normal equity (AAPL) passes the universe check", validateOrders([aapl], book)[0].ok === true);
 
-// FAIL: exceeding max open. AGGRESSIVE_PAPER caps at 10; book already has 2 open, so 9 new buys → 11 > 10.
-const overMax = Array.from({ length: 9 }, (_, i): OrderRequest => ({ symbol: `AA${i}`, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 }));
-check("FAIL: max-open exceeded once projected open passes the cap", validateOrders(overMax, book).some(v => v.reasons.some(r => /max .* open/.test(r))));
+// NO COUNT CAP (CJ, 2026-07-06): Aggressive has NO maxOpen — a strategy-compliant buy is never rejected
+// just for pushing the position COUNT up. Book already has 10 open; 5 more valid buys must ALL pass.
+// (Risk/heat/name/sector/cash caps — the actual strategy — are enforced in risk-engine.riskGate + above.)
+const bigBook = { equity: 100_000, openCount: 10 };
+const manyBuys = Array.from({ length: 5 }, (_, i): OrderRequest => ({ symbol: `AA${i}`, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 }));
+{
+  const v = validateOrders(manyBuys, bigBook, AGGRESSIVE_PAPER);
+  check("NO-CAP: 10 open + 5 valid buys — none rejected on count (Aggressive)", v.every(x => x.ok === true));
+  check("NO-CAP: no 'max open' reason appears anywhere", !v.some(x => x.reasons.some(r => /max .* open/.test(r))));
+}
 
-// INVALID buys must NOT consume open slots: an order that fails another check is rejected + never placed,
-// so it can't push later VALID buys over maxOpen. Book has 4 open; cap is 6 → room for exactly 2 valid buys.
-// The 3 leading invalid buys (no stop) used to each bump the projected count, wrongly rejecting both valids.
-const capBook = { equity: 100_000, openCount: 4 };
+// maxOpen still enforced when a profile SETS it (Steady caps at 4): 3 open + 2 valid buys → 2nd rejected.
 const noStopBuy = (s: string): OrderRequest => ({ symbol: s, side: "buy", qty: 1, type: "market", est_price: 50 });
 const validBuy = (s: string): OrderRequest => ({ symbol: s, side: "buy", qty: 1, type: "market", est_price: 50, trail_percent: 18 });
-const mixed = validateOrders([noStopBuy("AA"), noStopBuy("BB"), noStopBuy("CC"), validBuy("DD"), validBuy("EE")], capBook);
+{
+  const v = validateOrders([validBuy("DD"), validBuy("EE")], { equity: 100_000, openCount: 3 }, STEADY_PAPER);
+  check("CAP(steady): first buy fits (4th slot)", v[0].ok === true);
+  check("CAP(steady): second buy exceeds maxOpen 4 → rejected", v[1].ok === false && v[1].reasons.some(r => /max 4 open/.test(r)));
+}
+
+// INVALID buys must NOT consume open slots: an order that fails another check is rejected + never placed,
+// so it can't push later VALID buys over a set maxOpen. Steady book has 2 open; cap 4 → room for exactly
+// 2 valid buys. The 3 leading invalid buys (no stop) must not bump the projected count.
+const mixed = validateOrders([noStopBuy("AA"), noStopBuy("BB"), noStopBuy("CC"), validBuy("DD"), validBuy("EE")], { equity: 100_000, openCount: 2 }, STEADY_PAPER);
 check("CAP: invalid buys are still rejected (missing stop)", mixed.slice(0, 3).every(v => v.ok === false));
 check("CAP: invalid buys don't consume slots → both valid buys pass", mixed[3].ok === true && mixed[4].ok === true);
 check("CAP: neither valid buy is mismarked as over-cap", !mixed[3].reasons.concat(mixed[4].reasons).some(r => /max .* open/.test(r)));

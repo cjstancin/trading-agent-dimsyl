@@ -191,12 +191,14 @@ function pgRisk(){const r=DATA.risk||{},c=DATA.caps||{};
   </div>
   <div class="grid2">
     ${card('Drawdown','from peak',`<div class="val ${cls(-(r.drawdown||0))}" style="font-family:var(--num);font-size:30px">${r.drawdown||0}%</div><div class="dimn">Max DD ${r.maxDD||0}% · peak equity ${usd(r.peakEquity||DATA.equity)}</div>`)}
-    ${card('Exposure','live',`<div class="dimn">Gross exposure</div><div class="note"><b>${r.grossExposure||0}%</b></div><div class="dimn" style="margin-top:6px">Largest single <b>${r.largestPos||0}%</b> (cap ${c.maxPosition||40}%) · sector <b>${r.sectorConc||0}%</b> (cap ${c.sectorCap||80}%)</div>`)}
+    ${card('Exposure & heat','heat + cash govern how many names fit — no slot count',meter('Portfolio heat (aggregate open risk)',r.heatUsedPct!=null?r.heatUsedPct:0,c.portfolioHeat||10)+`<div class="dimn" style="margin-top:6px">Gross exposure <b>${r.grossExposure||0}%</b> · largest single <b>${r.largestPos||0}%</b> (cap ${c.maxPosition||40}%) · sector <b>${r.sectorConc||0}%</b> (cap ${c.sectorCap||30}%)</div>`)}
   </div>
   ${card('Active guardrails','aggressive paper profile','<ul class="rules">'+
      `<li>Risk per trade: <b>${c.riskPerTrade||10}%</b> of equity</li>`+
      `<li>Max single position: <b>${c.maxPosition||40}%</b></li>`+
-     `<li>Max sector: <b>${c.sectorCap||80}%</b></li>`+
+     `<li>Max sector: <b>${c.sectorCap||30}%</b></li>`+
+     `<li>Portfolio heat (aggregate open risk): <b>${c.portfolioHeat||10}%</b> cap</li>`+
+     `<li>Open positions: <b>no fixed cap</b> — position count is bounded by heat, per-name, sector and cash</li>`+
      `<li>Trailing stop: <b>~${c.trailingStop||18}%</b></li>`+
      `<li>Daily loss halt: <b>${c.dailyHalt||10}%</b> · Monthly kill: <b>${c.monthlyKill||30}%</b></li>`+
      `<li>LIVE profile: <b class="dn">LOCKED</b> — paper only until CJ's written opt-in</li>`+
