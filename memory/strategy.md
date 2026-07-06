@@ -41,3 +41,4 @@ Leveraged/inverse ETFs, crypto, penny/sub-floor names, meme/pump tickers, illiqu
 - 2026-06-12 — Initial aggressive draft; approved by CJ.
 - 2026-07-06 — Rewritten to match the deterministic risk engine: removed crypto + leveraged-ETF sections and every hardcoded cap number (the code owns caps now).
 - 2026-07-06 — Removed the fixed max-open-positions slot count (was 10) per CJ: position count is governed only by risk/heat/name/sector/cash. Swaps trigger on "no room under the risk caps", not "book at N/N".
+- 2026-07-06 — Raised the portfolio-heat ceiling 10% → 15% per CJ (hold more names; accepted trade-off: a broad stop-out day now costs ~15% instead of ~10%). Risk/trade (1.5%), name/sector caps, and the halts are unchanged. Enforced in `risk-engine.ts` DEFAULT_RISK.

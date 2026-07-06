@@ -24,6 +24,7 @@ import { getProfile } from "./profile.js";
 import { getMode, autoExecAllowed } from "./mode.js";
 import { readLedger, appendProposals } from "./ledger.js";
 import { planReallocation, type Holding, type Candidate } from "./reallocate.js";
+import { renderSymbolHistoryBlock } from "./symbol-record.js";
 import { rankHoldings, formatRankingLines, holdingAgesDays } from "./run-rank.js";
 import { runAgent } from "./agent.js";
 import { buildEquityCurve, type PortfolioHistory } from "./equity-curve.js";
@@ -113,6 +114,9 @@ async function generateCandidates(): Promise<{ candidates: Candidate[]; costUsd:
   const bookLines = holdings.length
     ? holdings.map((h) => `  • ${h.symbol}: ${(h.unrealizedPlPct * 100).toFixed(1)}% unreal, $${h.marketValue.toFixed(0)}${typeof h.score === "number" ? `, conv@entry ${h.score}` : ""}`).join("\n")
     : "  (no open positions)";
+  // Per-symbol memory (advisory): Bill's record on previously traded names, so re-scoring a swap candidate
+  // he's traded before happens with his own history visible. "" until the first reconciled close.
+  const symbolHistory = renderSymbolHistoryBlock(ledger);
   const prompt = `You are Bill the Bull (paper account) running an INTRADAY rotation check — deciding whether to swap a weak holding for a better idea RIGHT NOW. Quality over churn.
 
 RE-RESEARCH WITH CURRENT DATA — do NOT trust this morning's view. USE WEB SEARCH to check, as of right now: today's price action + intraday move, any news/catalyst since the open, and the market regime (risk-on/off). A name whose catalyst has already PLAYED OUT (already ran on the news, or popped through its entry zone) has less upside left → downgrade it or drop it in favor of a name still setting up. Also surface fresh movers that weren't on the morning list.
@@ -123,7 +127,7 @@ ${watchlist || "(none — research the market fresh)"}
 Current book (equity ≈ $${equity.toFixed(0)}, ${holdings.length} open — no fixed slot count; room = ${room.detail}):
 ${bookLines}
 
-Propose the TOP 2–3 BEST ideas to rotate INTO right now — names NOT already held. Quality US large/mid-cap stocks + liquid non-leveraged ETFs only; price ≥ $${rules.minPrice}; sized in FRACTIONAL shares so any price is reachable (NVDA-class included; per-name cap ${Math.round(rules.maxPositionPct * 100)}%); NO penny / leveraged / inverse / crypto / options.
+${symbolHistory ? symbolHistory + "\n\n" : ""}Propose the TOP 2–3 BEST ideas to rotate INTO right now — names NOT already held. Quality US large/mid-cap stocks + liquid non-leveraged ETFs only; price ≥ $${rules.minPrice}; sized in FRACTIONAL shares so any price is reachable (NVDA-class included; per-name cap ${Math.round(rules.maxPositionPct * 100)}%); NO penny / leveraged / inverse / crypto / options.
 Give an HONEST 0–100 conviction reflecting TODAY's setup (only an idea beating a holding's strength by ≥15 points triggers a swap, so do NOT inflate). One-line thesis grounded in CURRENT data + a short setup label.
 Output ONLY a JSON array (no prose / no fence): [{"symbol":"NVDA","conviction":85,"thesis":"… (current)","setup":"momentum breakout"}]. If nothing clearly beats the current book today, output [].`;
   try {

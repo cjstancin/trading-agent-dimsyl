@@ -15,7 +15,7 @@ breakout) as a STAND-IN for "the LLM proposed this name", then run the EXACT liv
   - ATR(22) average true range  (matches agent/src/risk-engine.ts atrFromBars, simple mean)
   - entry stop = entry - ATR*3          (atrStop)
   - risk-based sizing: shares = equity*1.5% / (entry-stop), capped at 20% of equity  (sizeByRisk)
-  - portfolio risk gate: 20% per-name, 30% per-sector, 10% portfolio-heat ceiling    (riskGate)
+  - portfolio risk gate: 20% per-name, 30% per-sector, 15% portfolio-heat ceiling    (riskGate)
   - Chandelier trailing stop = highestHigh - ATR*3, ratchets up only                  (chandelierStop)
   - 200-day-MA regime filter (only open new risk when SPY >= its 200DMA)              (regimeOn)
   - costs: per-side slippage in bps (Alpaca commission = $0)
@@ -39,7 +39,7 @@ import pandas as pd
 
 # ───────────────────────── config (mirrors DEFAULT_RISK, MODERATE) ─────────────────────────
 RISK = dict(
-    riskPerTradePct=1.5, maxPortfolioHeatPct=10.0, maxNamePct=20.0, maxSectorPct=30.0,
+    riskPerTradePct=1.5, maxPortfolioHeatPct=15.0, maxNamePct=20.0, maxSectorPct=30.0,
     atrMult=3.0, atrPeriod=22, maxPositions=10,
 )
 START = "2016-01-01"
@@ -311,7 +311,7 @@ def build_md(results, bench_m):
         "",
         "## What this proves (and what it doesn't)",
         "This tests the **deterministic risk plumbing** of the hybrid engine — ATR(22)×3 stops, "
-        "1.5%-risk sizing, 20% name / 30% sector caps, 10% portfolio-heat ceiling, Chandelier trailing "
+        "1.5%-risk sizing, 20% name / 30% sector caps, 15% portfolio-heat ceiling, Chandelier trailing "
         "stop, 200-day-MA regime filter, and trading costs — driven by a transparent mechanical "
         "trend+momentum+breakout entry **as a stand-in for the LLM's idea generation**. ",
         "",

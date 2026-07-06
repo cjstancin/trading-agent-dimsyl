@@ -5,8 +5,8 @@ let pass = 0, fail = 0;
 const check = (name: string, cond: boolean) => { (cond ? pass++ : fail++); console.log(`${cond ? "PASS" : "FAIL"} — ${name}`); };
 
 // No fixed slot count anymore: "full" = no room to ADD under the risk/heat/cash constraints (bookRoom).
-const full = { hasRoom: false, roomDetail: "heat 9.8%/10% used" };  // out of room → swaps are the only way in
-const roomy = { hasRoom: true, roomDetail: "heat 3%/10% used" };    // room → buy directly, no swap
+const full = { hasRoom: false, roomDetail: "heat 14.8%/15% used" }; // out of room → swaps are the only way in
+const roomy = { hasRoom: true, roomDetail: "heat 3%/15% used" };    // room → buy directly, no swap
 
 // A full book of four laggards (scores 30–55) — the weakest is WEAK at 30.
 const fullBook: Holding[] = [

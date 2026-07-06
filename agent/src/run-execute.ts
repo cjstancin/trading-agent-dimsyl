@@ -16,7 +16,8 @@ import { setPositionTrail, readPositionTrails } from "./synthetic-stops.js";
 import { buildEquityCurve, type PortfolioHistory } from "./equity-curve.js";
 import { getMode, autoExecAllowed } from "./mode.js";
 import { getProfile } from "./profile.js";
-import { appendProposals } from "./ledger.js";
+import { appendProposals, readLedger } from "./ledger.js";
+import { renderProposedSymbolHistory, tradedSymbolsIn, symbolRecord, renderSymbolRecordLine } from "./symbol-record.js";
 import { isMarketDayToday, isPastHalfDayCloseET } from "./market-calendar.js";
 import { installSafetyNet } from "./http-utils.js";
 
@@ -75,6 +76,11 @@ const equity = Number(acct.equity ?? 0);
 const openCount = Array.isArray(snap.positions) ? snap.positions.length : 0;
 const book: BookState = { equity, openCount };
 const rules = rulesFor(getProfile());
+
+// Per-symbol memory (advisory): Bill's own closed-trade record, read once — it seasons the live proposal
+// prompt below AND annotates the gated proposal message, so a name that kept losing is flagged AT the
+// decision point. History-not-edge framing lives in the block; it never hard-blocks a re-buy.
+const ledgerTrades = readLedger();
 
 // Deterministic 200-DMA market regime (SPY level + slope) — the dormant risk-engine regime filter, now
 // live. Fetched once: it informs the proposal prompt AND drives the risk-off gate below. Fail-open
@@ -139,10 +145,13 @@ if (fromPlan) {
 // Live proposal (plain execute, --plan-only, or the --from-plan fallback): the model converts the approved
 // cycle into concrete orders. The model only PROPOSES — sizing + guardrail validation are deterministic, below.
 if (!usedPlan) {
+  // Per-symbol history for the names actually on the table: any approved-cycle symbol Bill has closed
+  // trades on gets its record shown to the model before it proposes. "" when none match (fail open).
+  const symbolHistory = renderProposedSymbolHistory(ledgerTrades, tradedSymbolsIn(ledgerTrades, approved));
   const prompt = `You are Bill the Bull, CJ's trading agent (paper account). Convert the APPROVED trade cycle below into concrete orders.
 Rulebook limits (${rules.name}): max ${Math.round(rules.maxPositionPct * 100)}% per position, NO fixed position count — how many names fit is governed by the code's risk caps (risk/trade, per-name, sector, portfolio heat) + cash, price ≥ $${rules.minPrice}, a protective ~${rules.trailPercent}% trailing stop on EVERY buy (enforced in code). Current equity ≈ $${equity}, open positions ≈ ${openCount}.
 COMPUTED MARKET REGIME (SPY vs 200-DMA, deterministic): ${renderRegimeLine(regime)}.${regime.state === "risk-off" ? ` Risk-off: the CODE will drop any NEW long whose setup is not explicitly tagged "counter-trend" — only propose longs you'd defend as counter-trend, or nothing.` : ""}
-QUALITY UNIVERSE ONLY: liquid US large/mid-cap stocks + liquid non-leveraged ETFs. NEVER propose penny stocks (< $${rules.minPrice}), leveraged/inverse ETFs (SOXL/TQQQ/3x), crypto, meme/pump names, OR options/calls/puts/futures/derivatives — equities & ETFs only. Horizon 1 week–5 years; let winners run.
+${symbolHistory ? symbolHistory + "\n" : ""}QUALITY UNIVERSE ONLY: liquid US large/mid-cap stocks + liquid non-leveraged ETFs. NEVER propose penny stocks (< $${rules.minPrice}), leveraged/inverse ETFs (SOXL/TQQQ/3x), crypto, meme/pump names, OR options/calls/puts/futures/derivatives — equities & ETFs only. Horizon 1 week–5 years; let winners run.
 FRACTIONAL SIZING: positions are sized in FRACTIONAL shares from a ~$${equity} book, so ANY quality name is reachable regardless of share price (NVDA + other high-priced names included) — never skip a name for being "too expensive." Build a CONVICTION-TIERED book with NO fixed slot count: ~${rules.coreCount ?? 6} high-conviction CORE names you want the most capital in (confidence 70–95), plus optionally smaller SATELLITE names (confidence ~45–65) only if you genuinely like them — the risk engine's heat/name/sector/cash caps decide how many actually fit. Quality over quantity — a few strong names beats many mediocre ones; fine to pick fewer or none. Give an honest "confidence" (0–100) used to RANK ideas and decide which make the cut. You do NOT size positions: a deterministic risk engine sizes every buy itself from volatility + a fixed ~1% risk budget and caps it against portfolio limits.
 
 APPROVED CYCLE:
@@ -283,9 +292,16 @@ appendProposals(checked.map((c) => ({
 // gated, OR auto-without-the-env-opt-in → PROPOSE only.
 if (mode === "gated" || !autoExecAllowed()) {
   const note = mode === "auto" ? " (mode=auto but BILL_ALLOW_AUTO_EXEC not set → proposing, not placing)" : "";
+  // Per-symbol memory on the proposal itself (covers --from-plan too, where the LLM prompt is skipped):
+  // any proposed name Bill has closed trades on gets its record shown at the approval point. Advisory only.
+  const histLines = valid
+    .map((o) => symbolRecord(ledgerTrades, o.symbol))
+    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .map((r) => `  📜 ${renderSymbolRecordLine(r)}`);
   const body = [
     `🐂 **Bill the Bull — proposed orders · ${rules.name}**${note}`,
     valid.length ? valid.map(fmt).join("\n") : "（none passed guardrails）",
+    histLines.length ? `\nBill's history on these names (small sample — advisory):\n${histLines.join("\n")}` : "",
     rejected.length ? `\nRejected: ${rejected.map((r) => `${r.order.symbol} [${r.reasons.join("; ")}]`).join(" · ")}` : "",
     `\nReply 👍 to approve, or set mode=auto (+ BILL_ALLOW_AUTO_EXEC=1) to let Bill place these.`,
   ].join("\n");
