@@ -4,6 +4,7 @@ import { query, type Options } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { getMode } from "./mode.js";
+import { emitCost, ritualTask } from "./fleet-emit.js";
 
 // src -> agent -> Trading-Agent. cwd = Trading-Agent so the agent can read memory/, Signals/, dashboard/.
 const PROJECT_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -33,6 +34,9 @@ export interface RunResult {
   costUsd: number;
   isError: boolean;
   numTurns: number;
+  model: string;        // model id the run used (fleet cost ledger)
+  inputTokens: number;  // input-side tokens incl. cache creation/read (fleet cost ledger)
+  outputTokens: number;
 }
 
 export async function runAgent(prompt: string, overrides: Partial<Options> = {}): Promise<RunResult> {
@@ -51,11 +55,19 @@ export async function runAgent(prompt: string, overrides: Partial<Options> = {})
   let costUsd = 0;
   let numTurns = 0;
   let isError = false;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  const model = String(options.model ?? "unknown");
 
   for await (const message of query({ prompt, options })) {
     if (message.type === "result") {
       costUsd = message.total_cost_usd ?? 0;
       numTurns = message.num_turns ?? 0;
+      // Token usage for the fleet cost ledger. Defensive: usage shape varies across SDK versions.
+      const u = (message as { usage?: Record<string, unknown> }).usage ?? {};
+      const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+      inputTokens = n(u.input_tokens) + n(u.cache_creation_input_tokens) + n(u.cache_read_input_tokens);
+      outputTokens = n(u.output_tokens);
       if (message.subtype === "success") {
         text = message.result ?? "";
       } else {
@@ -64,5 +76,11 @@ export async function runAgent(prompt: string, overrides: Partial<Options> = {})
       }
     }
   }
-  return { text, costUsd, isError, numTurns };
+
+  // Fleet cost ledger: EVERY LLM ritual's spend → conductor POST /cost (one central hook covers all
+  // run-* scripts; task inferred from the entry script name). Best-effort — emitCost never throws and
+  // silently no-ops without SAMS_CONTROL_TOKEN, so the ledger can never break a ritual.
+  await emitCost({ model, inputTokens, outputTokens, costUsd, task: ritualTask() });
+
+  return { text, costUsd, isError, numTurns, model, inputTokens, outputTokens };
 }

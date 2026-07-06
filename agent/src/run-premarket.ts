@@ -10,6 +10,7 @@ import { rulesFor } from "./guardrails.js";
 import { getProfile } from "./profile.js";
 import { readState, positionLines, readPositionTrails } from "./synthetic-stops.js";
 import { fetchSpyRegime, renderRegimeLine } from "./regime.js";
+import { positionNews, renderNewsLines } from "./news-feed.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-premarket");
@@ -43,12 +44,19 @@ const snap = await paperSnapshot();
 // Deterministic 200-DMA regime — the same computed value the scan prompt + execute risk-off gate use.
 const regime = await fetchSpyRegime();
 
+// Per-holding news feed (Bull v6): recent cached headlines per open position (existing Alpaca data
+// source, TTL ~1h) as grounding for the per-position notes. Best-effort — feed down → "" (no block).
+const heldSyms = (Array.isArray(snap.positions) ? (snap.positions as Array<Record<string, unknown>>) : []).map((p) => String(p.symbol ?? ""));
+let newsBySym: Awaited<ReturnType<typeof positionNews>> = {};
+try { newsBySym = await positionNews(heldSyms); } catch { /* news never breaks the brief */ }
+const newsLines = renderNewsLines(newsBySym, 2);
+
 const prompt = `You are Bill, CJ's PAPER trading agent. Write his PRE-MARKET BRIEF for ${today}.
 This is a READ-ONLY run: analyze and write only — you place no orders.
 
 LIVE ALPACA PAPER SNAPSHOT (read-only; ${snap.connected ? "connected" : "NOT connected — note this"}):
 ${JSON.stringify(snap, null, 2)}
-
+${newsLines ? `\nRECENT HEADLINES per holding (existing data source, cached ≤1h, sanitized — use as grounding for the per-position notes; still verify anything decision-relevant with web search):\n${newsLines}\n` : ""}
 Also do (web search is primary for live data):
 - Today's market-open setup: index futures, key levels for SPY/QQQ, any major overnight headline. The regime is COMPUTED deterministically (SPY vs 200-DMA): ${renderRegimeLine(regime)} — use this as THE regime, don't re-derive it.
 - For each open paper position above, a one-line note (overnight move / any catalyst today).
@@ -79,6 +87,11 @@ if (rawPos.length) {
 }
 // Computed regime, appended deterministically (not LLM-rephrased) so the brief always carries the real value.
 brief += `\n\n📐 Regime (200-DMA, computed): ${renderRegimeLine(regime)}`;
-const posted = await sendDiscord(brief, { channel: "bull", username: "Bill the Bull" });
+// Per-holding headlines, appended deterministically (1 per name, cached ≤1h) so the freshest news line
+// per position always reaches CJ even if the model skipped it. Empty feed → nothing appended.
+const compactNews = renderNewsLines(newsBySym, 1);
+if (compactNews) brief += `\n\n📰 Holdings news (≤1h cache):\n${compactNews}`;
+// Discord hard-caps messages at 2000 chars — protective slice (same pattern as the other rituals).
+const posted = await sendDiscord(brief.slice(0, 1990), { channel: "bull", username: "Bill the Bull" });
 console.log(JSON.stringify({ ok: posted.ok === true, posted, paperConnected: snap.connected, costUsd, numTurns }, null, 2));
 if (!posted.ok) process.exitCode = 1;

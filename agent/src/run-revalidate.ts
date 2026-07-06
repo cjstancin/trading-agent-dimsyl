@@ -31,6 +31,8 @@ import {
   buildPositionContexts, buildRevalidatePrompt, parseVerdicts, verdictsToOrders,
   renderVerdictLines, renderThesisHealthFooter, DEFAULT_REVALIDATE,
 } from "./revalidate.js";
+import { positionNews, renderNewsLines } from "./news-feed.js";
+import { emitEvent } from "./fleet-emit.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-revalidate");
@@ -80,7 +82,12 @@ const ledger = readLedger();
 const contexts = buildPositionContexts(rawPositions, ledger);
 const regime = await fetchSpyRegime();
 
-const prompt = buildRevalidatePrompt(contexts, ledger, renderRegimeLine(regime));
+// Per-holding news feed (Bull v6): recent cached headlines per held name as revalidation grounding —
+// fresh negative news on a holding is a signal. Best-effort: no source / feed down → "" (prompt unchanged).
+let newsLines = "";
+try { newsLines = renderNewsLines(await positionNews(contexts.map((c) => c.symbol)), 2); } catch { /* news never breaks the ritual */ }
+
+const prompt = buildRevalidatePrompt(contexts, ledger, renderRegimeLine(regime), newsLines);
 const res = await runAgent(prompt);
 if (res.isError) {
   console.error(JSON.stringify({ ok: false, reason: res.text || "agent error", costUsd: res.costUsd }));
@@ -93,6 +100,16 @@ if (!verdicts.length) {
   // Parse failure / empty output: keep the previous thesis-health file (stale beats blank) and bail.
   console.error(JSON.stringify({ ok: false, reason: "no parseable verdicts", raw: res.text.slice(0, 300), costUsd: res.costUsd }));
   process.exit(1);
+}
+
+// Fleet event ledger (best-effort, never throws): a broken thesis on a held name is a key activity signal.
+const brokenVerdicts = verdicts.filter((v) => v.verdict === "broken");
+if (brokenVerdicts.length) {
+  await emitEvent({
+    kind: "revalidation-broken",
+    summary: `thesis broken: ${brokenVerdicts.map((v) => `${v.symbol}${v.reason ? ` (${v.reason})` : ""}`).join("; ")}`.slice(0, 400),
+    severity: "warn",
+  });
 }
 
 // Persist the verdicts (memory file): the refresh ritual reads this into dashboard/data/status.json

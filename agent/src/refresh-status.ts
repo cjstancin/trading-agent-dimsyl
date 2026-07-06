@@ -19,6 +19,7 @@ import { fetchSpyRegime, regimePill, renderRegimeLine } from "./regime.js";
 import { isMarketDayToday } from "./market-calendar.js";
 import { DEFAULT_RISK } from "./risk-engine.js";
 import { runSyntheticStops, readPositionTrails } from "./synthetic-stops.js";
+import { positionNews, type NewsHeadline } from "./news-feed.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-refresh");
@@ -61,6 +62,14 @@ try {
 const thesisBySym: Record<string, ThesisEntry> = {};
 for (const v of thesisHealth.verdicts) if (v?.symbol) thesisBySym[String(v.symbol).toUpperCase()] = v;
 
+// Per-holding news feed (Bull v6): recent headlines per OPEN position from the existing Alpaca data
+// source, TTL-cached (~1h, memory/news-cache.json) so the 5-min refresh tick stays quota-safe. Surfaced
+// as a per-position news line/badge on the dashboard. Best-effort — feed down / no keys → empty lists.
+let newsBySym: Record<string, NewsHeadline[]> = {};
+try {
+  newsBySym = await positionNews(rawPositions.map((p) => String(p.symbol ?? "")));
+} catch { /* news never breaks the refresh */ }
+
 const positions = rawPositions.map((p) => ({
   t: String(p.symbol ?? "?"),
   name: String(p.symbol ?? "?"),
@@ -74,6 +83,8 @@ const positions = rawPositions.map((p) => ({
   // Thesis-health badge (valid / weakening / broken) from the latest revalidation pass; null = no verdict.
   thesis: thesisBySym[String(p.symbol ?? "").toUpperCase()]?.verdict ?? null,
   thesisReason: thesisBySym[String(p.symbol ?? "").toUpperCase()]?.reason ?? null,
+  // Recent headlines (Bull v6) — dashboard news badge per position; [] when the feed has nothing.
+  news: newsBySym[String(p.symbol ?? "").toUpperCase()] ?? [],
 }));
 
 const openOrders = rawOrders.map((o) => ({

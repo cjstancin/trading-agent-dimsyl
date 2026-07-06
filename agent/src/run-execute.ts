@@ -19,6 +19,7 @@ import { getProfile } from "./profile.js";
 import { appendProposals, readLedger } from "./ledger.js";
 import { renderProposedSymbolHistory, tradedSymbolsIn, symbolRecord, renderSymbolRecordLine } from "./symbol-record.js";
 import { isMarketDayToday, isPastHalfDayCloseET } from "./market-calendar.js";
+import { emitEvent } from "./fleet-emit.js";
 import { installSafetyNet } from "./http-utils.js";
 
 installSafetyNet("bill-execute");
@@ -109,6 +110,8 @@ if (!dryRun && !planOnly) {
   } catch { /* portfolio-history fetch failed → leave monthly/drawdown null; daily halt still enforced */ }
   const halt = haltReason({ dayPnlPct, monthPnlPct, drawdownFromPeakPct }, rules);
   if (halt) {
+    // Fleet event ledger (best-effort, never throws): a risk halt is a key activity signal.
+    await emitEvent({ kind: "risk-halt", summary: `${halt} — new entries blocked (day ${dayPnlPct.toFixed(1)}%)`, severity: "error" });
     await sendDiscord(
       `🛑 **Bill — risk halt, NO new entries**\n${halt}\nEquity $${equity.toFixed(0)} · day ${dayPnlPct.toFixed(1)}%` +
         (monthPnlPct != null ? ` · MTD ${monthPnlPct.toFixed(1)}%` : "") +
@@ -307,6 +310,8 @@ if (mode === "gated" || !autoExecAllowed()) {
   ].join("\n");
   await sendDiscord(body.slice(0, 1990), { channel: "bull", username: "Bill the Bull" });
   writeFileSync(PENDING, `# Pending paper orders — ${new Date().toISOString()}\n\n` + valid.map(fmt).join("\n") + "\n");
+  // Fleet event ledger (best-effort): proposals surfaced for approval — nothing placed.
+  await emitEvent({ kind: "trades-proposed", summary: `${valid.length} order(s) proposed (${valid.map((o) => o.symbol).join(", ") || "none"}) · ${rejected.length} rejected · mode=${mode}`, severity: "info" });
   console.log(JSON.stringify({ ok: true, mode, proposed: valid.length, rejected: rejected.length, placed: 0, costUsd }, null, 2));
   process.exit(0);
 }
@@ -356,4 +361,12 @@ await sendDiscord(
     (results.some((r) => !r.ok) ? `\n❌ ${results.filter((r) => !r.ok).map((r) => `${r.symbol}: ${r.error}`).join("; ")}` : ""),
   { channel: "bull", username: "Bill the Bull" }
 );
+// Fleet event ledger (best-effort): paper orders actually placed (auto mode, double-gated).
+await emitEvent({
+  kind: "trades-placed",
+  summary: `placed ${placed.length} paper order(s): ${placed.map((r) => r.symbol).join(", ") || "none"}` +
+    (unprotected.length ? ` · UNPROTECTED: ${unprotected.map((r) => r.symbol).join(", ")}` : "") +
+    (results.some((r) => !r.ok) ? ` · failed: ${results.filter((r) => !r.ok).map((r) => r.symbol).join(", ")}` : ""),
+  severity: unprotected.length || results.some((r) => !r.ok) ? "warn" : "info",
+});
 console.log(JSON.stringify({ ok: true, mode, placed: placed.length, unprotected: unprotected.length, failed: results.length - placed.length, rejected: rejected.length, costUsd }, null, 2));

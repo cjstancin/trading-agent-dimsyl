@@ -230,6 +230,34 @@ export async function getBars(symbol: string, start: string, end: string, timefr
   } catch { return []; }
 }
 
+export interface AlpacaNewsItem {
+  headline?: string;
+  source?: string;
+  url?: string;
+  created_at?: string;
+  symbols?: string[];
+}
+
+// Read-only recent NEWS headlines from Alpaca market data (data host, NOT the trading host — the same
+// existing data source as latestPrice/getBars; same keys, no new paid feed). One batched call covers many
+// symbols (each item carries its tagged `symbols`), which keeps the per-holding news feed quota-safe.
+// Bounded by withTimeout; returns [] on ANY failure so callers (news-feed.ts) degrade gracefully — news
+// is best-effort and can never break a ritual. NEVER places an order; no money rail.
+export async function getNews(symbols: string[], limit = 50): Promise<AlpacaNewsItem[]> {
+  try {
+    const syms = (symbols ?? []).map((s) => String(s ?? "").trim().toUpperCase()).filter(Boolean);
+    if (!syms.length) return [];
+    const qs = new URLSearchParams({ symbols: syms.join(","), limit: String(limit), sort: "desc", include_content: "false" });
+    const r = await withTimeout((signal) => fetch(
+      `https://data.alpaca.markets/v1beta1/news?${qs.toString()}`,
+      { headers: authHeaders(), signal },
+    ), ALPACA_TIMEOUT_MS);
+    if (!r.ok) return [];
+    const j = (await r.json()) as { news?: AlpacaNewsItem[] };
+    return Array.isArray(j?.news) ? j.news : [];
+  } catch { return []; }
+}
+
 export interface PaperSnapshot {
   connected: boolean;
   account?: unknown;

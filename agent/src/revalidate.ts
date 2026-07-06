@@ -104,9 +104,14 @@ export function renderPositionLine(c: PositionContext): string {
  * blobs), the computed regime line, and Bill's per-symbol closed-trade history on the held names
  * (symbol-record.ts) so he re-judges each thesis knowing his actual record on that name.
  */
-export function buildRevalidatePrompt(contexts: PositionContext[], ledger: SymbolTrade[], regimeLine: string): string {
+export function buildRevalidatePrompt(contexts: PositionContext[], ledger: SymbolTrade[], regimeLine: string, newsLines = ""): string {
   const lines = contexts.map(renderPositionLine).join("\n");
   const symbolHistory = renderProposedSymbolHistory(ledger ?? [], contexts.map((c) => c.symbol));
+  // Per-holding news feed (Bull v6, optional): recent cached headlines per held name — fresh NEGATIVE
+  // news on a holding is a revalidation signal. Advisory grounding only; "" adds nothing.
+  const newsBlock = newsLines
+    ? `RECENT HEADLINES per holding (existing data source, cached ≤1h, sanitized — fresh NEGATIVE news on a held name is a signal its thesis may be weakening/broken; weigh it, then verify with web search):\n${newsLines}\n\n`
+    : "";
   return `You are Bill the Bull (paper account) running the OPEN-POSITION THESIS RE-VALIDATION ritual. For EACH open position below, judge whether the ORIGINAL entry thesis still holds RIGHT NOW. You only JUDGE — you place no orders and size nothing; deterministic code sizes any resulting action and routes it through the normal gates.
 
 COMPUTED MARKET REGIME (deterministic — treat as THE regime, do not re-derive it): ${regimeLine}
@@ -114,7 +119,7 @@ COMPUTED MARKET REGIME (deterministic — treat as THE regime, do not re-derive 
 OPEN POSITIONS (each with the thesis it was bought on):
 ${lines}
 
-${symbolHistory ? symbolHistory + "\n\n" : ""}USE WEB SEARCH per name, as of right now: price action since entry, news/catalyst changes, guidance/analyst moves, sector shifts. Judge the ORIGINAL thesis — not whether you'd buy fresh today:
+${symbolHistory ? symbolHistory + "\n\n" : ""}${newsBlock}USE WEB SEARCH per name, as of right now: price action since entry, news/catalyst changes, guidance/analyst moves, sector shifts. Judge the ORIGINAL thesis — not whether you'd buy fresh today:
 - "valid" — the reason for owning it is still true; catalyst/story intact. Suggested action: hold.
 - "weakening" — partially played out, priced in, or newly contradicted; reducing is sensible. Suggested action: hold or trim.
 - "broken" — the thesis is invalidated (catalyst failed, story changed, structural downgrade); exiting is reasonable. Suggested action: exit (or trim if genuinely borderline).
