@@ -119,8 +119,10 @@ function pgOverview(){const d=DATA,b=d.bot||{},s=d.stats||{};
 }
 function ctrlMsg(el,msg){const n=$('#ctrlnote');if(n){n.textContent=msg;el.style.opacity=.5;setTimeout(()=>el.style.opacity=1,400);}}
 
-function posTable(P){return tableSort(P.map(x=>Object.assign({},x)),[{k:'t',h:'Sym'},{k:'qty',h:'Qty'},{k:'price',h:'Last'},{k:'mktVal',h:'Value'},{k:'unrealPct',h:'P&L%'},{k:'dayPct',h:'Day'}],
-  p=>`<tr onclick="go('ticker/${p.t}')"><td>${p.t}${p.lev?'<span class="tag">'+p.lev+'</span>':''}</td><td>${p.qty}</td><td>$${(+p.price).toFixed(2)}</td><td>${usd(p.mktVal)}</td><td class="${cls(p.unrealPct)}">${pc(p.unrealPct)}</td><td class="${cls(p.dayPct)}">${pc(p.dayPct)}</td></tr>`,'mktVal');}
+/* Thesis-health badge (from the revalidation ritual via status.json positions[].thesis): valid/weakening/broken. */
+function thesisBadge(p){if(!p.thesis)return '<span class="dim">—</span>';const M={valid:['✓ valid','up'],weakening:['⚠ weakening','warnc'],broken:['✖ broken','dn']};const b=M[p.thesis]||[p.thesis,''];const tip=(p.thesisReason||('thesis '+p.thesis)).replace(/"/g,'&quot;');return `<span class="${b[1]}" title="${tip}">${b[0]}</span>`;}
+function posTable(P){return tableSort(P.map(x=>Object.assign({},x)),[{k:'t',h:'Sym'},{k:'qty',h:'Qty'},{k:'price',h:'Last'},{k:'mktVal',h:'Value'},{k:'unrealPct',h:'P&L%'},{k:'dayPct',h:'Day'},{k:'thesis',h:'Thesis'}],
+  p=>`<tr onclick="go('ticker/${p.t}')"><td>${p.t}${p.lev?'<span class="tag">'+p.lev+'</span>':''}</td><td>${p.qty}</td><td>$${(+p.price).toFixed(2)}</td><td>${usd(p.mktVal)}</td><td class="${cls(p.unrealPct)}">${pc(p.unrealPct)}</td><td class="${cls(p.dayPct)}">${pc(p.dayPct)}</td><td>${thesisBadge(p)}</td></tr>`,'mktVal');}
 function fillsMini(F){if(!F||!F.length)return '<div class="dimn">No fills yet — orders appear here as Bull trades.</div>';return `<table><thead><tr><th>Time</th><th>Sym</th><th>Side</th><th>Qty</th><th>Price</th></tr></thead><tbody>${F.slice(0,7).map(f=>`<tr onclick="go('ticker/${f.t}')"><td>${f.time}</td><td>${f.t}</td><td class="${f.side==='Buy'?'up':'dn'}">${f.side}</td><td>${f.qty}</td><td>$${(+f.price).toFixed(2)}</td></tr>`).join('')}</tbody></table>`;}
 
 /* ---- new-field renderers ---- */

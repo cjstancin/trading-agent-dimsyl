@@ -11,6 +11,7 @@ import { readLedger } from "./ledger.js";
 import { rollingStats, renderRollingFooter } from "./rolling-stats.js";
 import { attribution, renderAttributionFooter } from "./attribution.js";
 import { excursionSummary, renderExcursionFooter, renderExcursionLines, type ExcursionTrade } from "./excursion-stats.js";
+import { renderThesisHealthFooter } from "./revalidate.js";
 import { paperSnapshot, getActivities, getClosedOrders, getPortfolioHistory } from "./alpaca.js";
 import { getMode } from "./mode.js";
 import { isMarketDayToday, isPastHalfDayCloseET } from "./market-calendar.js";
@@ -134,7 +135,20 @@ const excursionFooter = excSummaryLine
   ? [excSummaryLine, ...(todaysCloseLines.length ? ["📐 Today's closes:", ...todaysCloseLines] : [])].join("\n")
   : "";
 
-const report = [text.trimEnd(), rollingFooter, attributionFooter, excursionFooter].filter(Boolean).join("\n\n");
+// Deterministic thesis-health footer: the latest revalidation verdicts (memory/thesis-health.json,
+// written by `npm run revalidate`) summarized per position — but only when they're from TODAY, so a
+// stale file from a prior session never masquerades as current judgment. "" when absent/stale/flat.
+let thesisFooter = "";
+try {
+  const tf = fileURLToPath(new URL("../../memory/thesis-health.json", import.meta.url));
+  if (existsSync(tf)) {
+    const th = JSON.parse(readFileSync(tf, "utf8"));
+    const updatedET = th?.updated ? new Date(String(th.updated)).toLocaleDateString("en-CA", { timeZone: "America/New_York" }) : "";
+    if (updatedET === isoToday && Array.isArray(th?.verdicts)) thesisFooter = renderThesisHealthFooter(th.verdicts);
+  }
+} catch { /* not critical */ }
+
+const report = [text.trimEnd(), thesisFooter, rollingFooter, attributionFooter, excursionFooter].filter(Boolean).join("\n\n");
 
 const posted = await sendDiscord(report, { channel: "bull", username: "Bill the Bull" });
 console.log(JSON.stringify({ ok: posted.ok === true, posted, paperConnected: snap.connected, todaysFills: todaysFills.length, todaysCloses: todaysCloses.length, costUsd, numTurns }, null, 2));

@@ -47,6 +47,20 @@ const equity = num(acct.equity ?? acct.portfolio_value);
 const cash = num(acct.cash);
 const lastEquity = num(acct.last_equity) || equity;
 
+// Thesis-health verdicts (written by `npm run revalidate`): per-position badge on the dashboard.
+// Fail-open — no file / stale file → no badges, nothing else changes.
+type ThesisEntry = { symbol: string; verdict: string; action?: string; reason?: string };
+let thesisHealth: { updated?: string; verdicts: ThesisEntry[] } = { verdicts: [] };
+try {
+  const tf = fileURLToPath(new URL("../../memory/thesis-health.json", import.meta.url));
+  if (existsSync(tf)) {
+    const raw = JSON.parse(readFileSync(tf, "utf8"));
+    if (raw && Array.isArray(raw.verdicts)) thesisHealth = { updated: raw.updated, verdicts: raw.verdicts };
+  }
+} catch { /* none yet */ }
+const thesisBySym: Record<string, ThesisEntry> = {};
+for (const v of thesisHealth.verdicts) if (v?.symbol) thesisBySym[String(v.symbol).toUpperCase()] = v;
+
 const positions = rawPositions.map((p) => ({
   t: String(p.symbol ?? "?"),
   name: String(p.symbol ?? "?"),
@@ -57,6 +71,9 @@ const positions = rawPositions.map((p) => ({
   unrealPct: round(num(p.unrealized_plpc) * 100, 1),
   dayPct: round(num(p.change_today) * 100, 1),
   stop: null as number | null,
+  // Thesis-health badge (valid / weakening / broken) from the latest revalidation pass; null = no verdict.
+  thesis: thesisBySym[String(p.symbol ?? "").toUpperCase()]?.verdict ?? null,
+  thesisReason: thesisBySym[String(p.symbol ?? "").toUpperCase()]?.reason ?? null,
 }));
 
 const openOrders = rawOrders.map((o) => ({
@@ -144,6 +161,7 @@ const next = {
   readiness: ready,
   proposals: m.proposals,
   positions,
+  thesisHealth,
   openOrders,
   fills,
   journal: journalEntries,

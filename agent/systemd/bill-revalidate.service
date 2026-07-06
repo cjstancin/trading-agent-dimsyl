@@ -1,0 +1,18 @@
+# TEMPLATE — NOT installed automatically. Bill's thesis re-validation ritual (run-revalidate.sh).
+# Install on the VPS (paths assume the fleet layout: repo at /home/cj/bull, user cj):
+#   sudo cp agent/systemd/bill-revalidate.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now bill-revalidate.timer
+# Propose-only unless MODE=auto AND BILL_ALLOW_AUTO_EXEC=1 (the same double gate as every Bill ritual).
+[Unit]
+Description=Bill the Bull — open-position thesis re-validation (propose-only unless auto + opt-in)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/home/cj/bull/agent/run-revalidate.sh
+
+[Install]
+WantedBy=multi-user.target

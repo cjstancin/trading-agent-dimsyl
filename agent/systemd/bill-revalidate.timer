@@ -1,0 +1,13 @@
+# TEMPLATE — NOT installed automatically. See bill-revalidate.service for install steps.
+# Fires once mid-session (13:45 ET, Mon–Fri) — after the 12:30 mid trade window, well before the close —
+# so every open position gets a fresh thesis verdict each trading day. The ritual itself guards holidays
+# (Alpaca calendar) and half-days (propose-only after the 13:00 ET early close), so a stray fire is safe.
+[Unit]
+Description=Run bill-revalidate Mon-Fri 13:45 America/New_York
+
+[Timer]
+OnCalendar=Mon..Fri 13:45 America/New_York
+Persistent=false
+
+[Install]
+WantedBy=timers.target
