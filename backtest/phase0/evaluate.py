@@ -342,6 +342,52 @@ def main():
         mirage = ("Memorization mirage NOT confirmed at 90% confidence — no gap CI excludes 0 "
                   "(note the thin OOS sample limits power).")
 
+    # ── absolute arm returns + interpretation ──
+    # The verdict gates on LLM5−MOM5, but that spread can be dominated by the BASELINE having a bad
+    # regime rather than the LLM having skill. Surface the absolute arms + a decomposition so the
+    # verdict is read in context (e.g. "did the LLM beat momentum, or did momentum just lag SPY?").
+    def arm_means(d):
+        return {a: (float(d[a].mean()) if len(d) else float("nan"))
+                for a in ("spy", "univ", "mom5", "llm5", "llmbot5")}
+    in_arms, oos_arms = arm_means(in_full), arm_means(oos_full)
+    ARM_LABELS = [("spy", "SPY"), ("univ", "Universe (equal-weight)"), ("mom5", "Momentum top-5 (MOM5)"),
+                  ("llm5", "LLM top-5 (LLM5)"), ("llmbot5", "LLM bottom-5 (LLMbot5)")]
+    abs_table = md_table(
+        ["Arm (mean 21d fwd)", "IN", "OOS"],
+        [[label, pct(in_arms[k]), pct(oos_arms[k])] for k, label in ARM_LABELS],
+    )
+
+    def interpretation():
+        if oos_exc.size < MIN_OOS:
+            return "Insufficient OOS data to interpret the verdict."
+        llm5, univ, mom, spy, bot = (oos_arms[k] for k in ("llm5", "univ", "mom5", "spy", "llmbot5"))
+        e_mom, e_univ, e_spy, mom_drag = llm5 - mom, llm5 - univ, llm5 - spy, mom - univ
+        ic = a_oos["ic"][0]
+        p = [f"**OOS absolute 21d forward returns** — SPY {pct(spy)}, equal-weight universe {pct(univ)}, "
+             f"momentum top-5 {pct(mom)}, **LLM top-5 {pct(llm5)}**, LLM bottom-5 {pct(bot)}.",
+             f"The verdict metric LLM5−MOM5 = {pct(e_mom)} decomposes into LLM5 vs the equal-weight universe "
+             f"({pct(e_univ)}) plus momentum's own gap to that universe ({pct(mom_drag)})."]
+        if e_mom > 0 and mom_drag < 0 and (-mom_drag) >= 0.5 * e_mom:
+            p.append("So **most of the edge over momentum is the momentum baseline underperforming** a simple "
+                     "equal-weight of the same 18 names — 63-day momentum was a losing factor this window "
+                     "(a reversal regime), not the LLM outperforming simple benchmarks.")
+        vs_spy = f"beat SPY by {pct(e_spy)}" if e_spy > 0 else f"lagged SPY by {pct(-e_spy)}"
+        vs_univ = f"beat the equal-weight universe by {pct(e_univ)}" if e_univ > 0 else f"lagged the equal-weight universe by {pct(-e_univ)}"
+        p.append(f"Against the simplest baselines the LLM {vs_spy} and {vs_univ}.")
+        if abs(ic) < 0.05:
+            p.append(f"Full-ranking rank IC is ~0 OOS ({num(ic)}) — **no broad ordering skill** across all 18 names; "
+                     "the top-5 result is a narrow slice that may not generalize.")
+        broad = e_spy > 0 and e_univ > 0 and ic > 0.05
+        if broad:
+            p.append("The signal is broad (beats every baseline **and** the full-ranking IC is positive) — a genuine "
+                     "candidate edge; confirm it holds up in forward paper before expanding authority.")
+        else:
+            p.append("**Bottom line:** a narrow, regime-dependent signal — it does **not** by itself justify expanding "
+                     "LLM authority. Forward paper trading remains the gate.")
+        return " ".join(p)
+
+    interp_text = interpretation()
+
     # ── report ──
     win_table = agg_table([(f"IN (memorized)", a_in), (f"OOS (clean)", a_oos)])
     nov_table = agg_table([("IN non-overlap", a_in_nov), ("OOS non-overlap", a_oos_nov)])
@@ -364,6 +410,9 @@ def main():
 
 _IC t-stat above is nominal — weekly decisions with a {HORIZON}-day horizon overlap, inflating it ~2×; the non-overlapping table below is the honest read._
 
+## Absolute arm returns (mean {HORIZON}d forward return per decision date)
+{abs_table}
+
 ## Robustness: non-overlapping decision dates (~every {HORIZON} trading days)
 {nov_table}
 
@@ -374,6 +423,9 @@ _IC t-stat above is nominal — weekly decisions with a {HORIZON}-day horizon ov
 
 ## Verdict
 {verdict}
+
+## How to read the verdict
+{interp_text}
 
 ## Caveats
 - **Thin OOS window** (~5 months of clean data) — low power; the verdict is provisional until more forward months accrue.
@@ -391,10 +443,13 @@ _IC t-stat above is nominal — weekly decisions with a {HORIZON}-day horizon ov
           f"(IN={len(in_full)}, OOS={n_oos}; skipped: {n_err} errored, {n_bad} malformed, "
           f"{n_skip} no-horizon, {n_nan} missing-price)\n")
     print(win_table + "\n")
+    print("Absolute arm returns (mean 21d fwd):")
+    print(abs_table + "\n")
     print("Memorization gap:")
     print(gap_table + "\n")
     print(mirage + "\n")
-    print("VERDICT: " + verdict)
+    print("VERDICT: " + verdict + "\n")
+    print("HOW TO READ IT: " + interp_text)
     print(f"\nWrote {PER_DATE_FP}")
     print(f"Wrote {REPORT_FP}")
 
