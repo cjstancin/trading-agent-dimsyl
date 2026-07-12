@@ -34,3 +34,5 @@ backtest/out/replay_attribution.json
 backtest/out/replay_equity.csv
 backtest/out/replay_trades.csv
 backtest/data/
+Signals/status.json
+Signals/trade-log.md
