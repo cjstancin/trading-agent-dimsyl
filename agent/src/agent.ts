@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { getMode } from "./mode.js";
 import { emitCost, ritualTask } from "./fleet-emit.js";
+import { loadAibrainContext } from "./aibrain-context.js";
 
 // src -> agent -> Trading-Agent. cwd = Trading-Agent so the agent can read memory/, Signals/, dashboard/.
 const PROJECT_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -40,8 +41,9 @@ export interface RunResult {
 }
 
 export async function runAgent(prompt: string, overrides: Partial<Options> = {}): Promise<RunResult> {
+  const context = loadAibrainContext(prompt);
   const options: Options = {
-    systemPrompt: { type: "preset", preset: "claude_code", append: loadBillBrain() },
+    systemPrompt: { type: "preset", preset: "claude_code", append: [loadBillBrain(), context].filter(Boolean).join("\n\n") },
     model: process.env.AGENT_MODEL || "claude-sonnet-4-6",
     cwd: PROJECT_ROOT,
     permissionMode: "bypassPermissions",
