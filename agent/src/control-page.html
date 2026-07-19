@@ -66,6 +66,10 @@
 </div>
 <script>
   const $=s=>document.querySelector(s);
+  // Auth: the server injects the control token; every state-changing POST carries it in a custom header
+  // (a cross-site page cannot set this header, which is what closes CSRF). Read-only GETs need no token.
+  const TOKEN=(window.__BILL_TOKEN__||'');
+  const AUTH={'x-control-token':TOKEN};
   function render(st){
     const m=st.mode;
     const b=$('#badge');b.textContent=m.toUpperCase();b.className='badge '+m;
@@ -76,12 +80,12 @@
     document.querySelector('.b-steady')?.classList.toggle('sel',p==='steady');
   }
   async function setProfile(profile){
-    try{const r=await (await fetch('/api/profile',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({profile})})).json();
+    try{const r=await (await fetch('/api/profile',{method:'POST',headers:{'content-type':'application/json',...AUTH},body:JSON.stringify({profile})})).json();
       if(r.ok){poll();log('Risk profile → '+r.profile.toUpperCase());}else log('⚠ '+(r.error||'failed'));}catch(e){log('⚠ '+e);}
   }
   async function poll(){try{render(await (await fetch('/api/state')).json());}catch(e){}}
   async function setMode(mode){
-    try{const r=await (await fetch('/api/mode',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode})})).json();
+    try{const r=await (await fetch('/api/mode',{method:'POST',headers:{'content-type':'application/json',...AUTH},body:JSON.stringify({mode})})).json();
       if(r.ok){render(r);log('Mode → '+r.mode.toUpperCase());}else log('⚠ '+(r.error||'failed'));}catch(e){log('⚠ '+e);}
   }
   function setAuto(){if(confirm('Start AUTO?\\n\\nBill will place PAPER orders automatically (within the 40%/6-position/$2/stop guardrails) on the next trade cycle. No human approval per order.\\n\\nThis is PAPER money only.'))setMode('auto');}
@@ -90,7 +94,7 @@
   async function run(ritual,dry){
     if(busy)return;busy=true;
     const el=$('#log');el.innerHTML='<span class="spin"></span>running '+(dry?'dry-run ':'')+ritual+'…';
-    try{const r=await (await fetch('/api/run?ritual='+ritual+(dry?'&dry=1':''),{method:'POST'})).json();
+    try{const r=await (await fetch('/api/run?ritual='+ritual+(dry?'&dry=1':''),{method:'POST',headers:{...AUTH}})).json();
       el.textContent='';log((r.ok?'✅ ':'❌ ')+(dry?'dry-run ':'')+ritual+' (exit '+r.code+')\\n'+(r.tail||''));poll();}
     catch(e){el.textContent='';log('⚠ '+e);}
     busy=false;

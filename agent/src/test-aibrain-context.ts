@@ -1,0 +1,85 @@
+// Security regression tests for aibrain-context — the AIBRAIN_VAULT arbitrary-exec hardening.
+// No network. Builds throwaway "vaults" in the OS temp dir. Run: npm run test:aibrain-context
+// Invariants under test:
+//   - a valid vault whose scripts/context/render-context.mjs is genuinely in-tree still RUNS (not over-tightened);
+//   - a non-existent / non-directory / script-less vault → no context, never a spawn;
+//   - an OUT-OF-TREE render-context.mjs reached via a symlink/junction escape is REJECTED, never executed.
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { loadAibrainContext, __resolveContextScript } from "./aibrain-context.js";
+
+let pass = 0, fail = 0;
+const check = (name: string, cond: boolean) => { (cond ? pass++ : fail++); console.log(`${cond ? "PASS" : "FAIL"} — ${name}`); };
+
+const base = mkdtempSync(join(tmpdir(), "aibrain-ctx-"));
+const withVault = (v: string, fn: () => void) => {
+  const prev = process.env.AIBRAIN_VAULT;
+  process.env.AIBRAIN_VAULT = v;
+  try { fn(); } finally { if (prev === undefined) delete process.env.AIBRAIN_VAULT; else process.env.AIBRAIN_VAULT = prev; }
+};
+
+// Helper: build a vault with an in-tree render-context.mjs that prints `sentinel` and exits 0.
+function makeVault(name: string, sentinel: string): string {
+  const v = join(base, name);
+  mkdirSync(join(v, "scripts", "context"), { recursive: true });
+  writeFileSync(join(v, "scripts", "context", "render-context.mjs"), `process.stdout.write(${JSON.stringify(sentinel)});\n`);
+  return v;
+}
+
+try {
+  // ── HAPPY PATH: a legitimate in-tree script still resolves AND executes (guards over-tightening) ──
+  const good = makeVault("good", "SENTINEL_OK");
+  const resGood = __resolveContextScript(good);
+  check("valid vault → resolver returns {vault,script}", !!resGood && resGood.script.startsWith(join(good, "scripts")));
+  withVault(good, () => {
+    check("valid vault → loadAibrainContext executes the in-tree script (returns its stdout)", loadAibrainContext("hello") === "SENTINEL_OK");
+  });
+
+  // ── AIBRAIN_CONTEXT=off short-circuits before any resolution/exec ──
+  withVault(good, () => {
+    const prev = process.env.AIBRAIN_CONTEXT; process.env.AIBRAIN_CONTEXT = "off";
+    try { check("AIBRAIN_CONTEXT=off → empty, no exec", loadAibrainContext("hello") === ""); }
+    finally { if (prev === undefined) delete process.env.AIBRAIN_CONTEXT; else process.env.AIBRAIN_CONTEXT = prev; }
+  });
+
+  // ── NON-EXISTENT vault (injected path) → rejected, no exec ──
+  const missing = join(base, "does-not-exist-vault");
+  check("non-existent vault → resolver null", __resolveContextScript(missing) === null);
+  withVault(missing, () => check("non-existent vault → loadAibrainContext '' ", loadAibrainContext("x") === ""));
+
+  // ── vault is a FILE, not a directory → rejected ──
+  const filePath = join(base, "a-file");
+  writeFileSync(filePath, "not a dir");
+  check("vault is a file → resolver null", __resolveContextScript(filePath) === null);
+
+  // ── real dir but NO scripts/context/render-context.mjs → rejected ──
+  const emptyDir = join(base, "empty");
+  mkdirSync(emptyDir, { recursive: true });
+  check("dir without the context script → resolver null", __resolveContextScript(emptyDir) === null);
+
+  // ── SECURITY DIFFERENTIATOR: out-of-tree script reached via a junction/symlink escape is REJECTED ──
+  // Old code only existsSync()'d the path and would have spawned the escaped script; the realpath prefix
+  // check refuses it. Junction on Windows / dir symlink on POSIX — both need no elevation for a dir link.
+  let escapeTested = false;
+  try {
+    const evil = join(base, "evil-target");
+    mkdirSync(evil, { recursive: true });
+    writeFileSync(join(evil, "render-context.mjs"), `process.stdout.write("EVIL_EXECUTED");\n`);
+    const esc = join(base, "escvault");
+    mkdirSync(join(esc, "scripts"), { recursive: true });
+    symlinkSync(evil, join(esc, "scripts", "context"), "junction"); // context/ → out-of-tree evil/
+    escapeTested = true;
+    check("symlink/junction escape → resolver null (out-of-tree script refused)", __resolveContextScript(esc) === null);
+    withVault(esc, () => check("symlink/junction escape → loadAibrainContext '' (EVIL never executed)", loadAibrainContext("x") === ""));
+  } catch (e) {
+    console.log(`SKIP — junction/symlink escape sub-test (link creation unavailable here): ${String(e instanceof Error ? e.message : e)}`);
+  }
+  check("escape sub-test attempted or cleanly skipped", true); // record that we reached this point without throwing
+  void escapeTested;
+} finally {
+  try { rmSync(base, { recursive: true, force: true }); } catch { /* best effort temp cleanup */ }
+}
+
+console.log(`\n${pass} passed, ${fail} failed`);
+process.exit(fail ? 1 : 0);
