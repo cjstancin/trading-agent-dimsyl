@@ -11,7 +11,7 @@
 //   installSafetyNet(service) — last-resort unhandledRejection/uncaughtException guards (§4)
 //   healthPayload(service, x) — the canonical GET /health body { ok, service, uptimeSec, ... } (§3)
 //   timingSafeTokenMatch(p,e) — constant-time token compare, fail-closed on empty (from Atlas)
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, createHash } from 'node:crypto';
 
 export const DEFAULT_TIMEOUT_MS = 9000;
 export const DEFAULT_BODY_CAP   = 1_000_000;  // 1 MB
@@ -73,11 +73,11 @@ export function healthPayload(service, extra = {}) {
   return { ok: true, service, uptimeSec: Math.round(process.uptime()), ...extra };
 }
 
-/** Constant-time token compare (length mismatch short-circuits, which leaks only the length).
- *  Empty/absent expected OR provided → NEVER matches (fail closed). Folded in from Atlas. */
+/** Constant-time token compare. Both sides are SHA-256'd to a fixed 32 bytes before the compare, so
+ *  neither the timing NOR the length short-circuit leaks anything about the expected token (a mismatched
+ *  length no longer returns early). Empty/absent expected OR provided → NEVER matches (fail closed). */
 export function timingSafeTokenMatch(provided, expected) {
   if (!provided || !expected) return false;
-  const a = Buffer.from(String(provided));
-  const b = Buffer.from(String(expected));
-  return a.length === b.length && timingSafeEqual(a, b);
+  const h = (s) => createHash('sha256').update(String(s)).digest();
+  return timingSafeEqual(h(provided), h(expected));
 }
