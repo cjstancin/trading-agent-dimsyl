@@ -1,0 +1,12 @@
+[Unit]
+Description=Bill the Bull — market-hours monitoring heartbeat to SAMS
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/npm run heartbeat --silent
+TimeoutStartSec=120

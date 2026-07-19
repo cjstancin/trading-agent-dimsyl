@@ -1,0 +1,10 @@
+[Unit]
+Description=Bill the Bull — market close (Mon-Fri 16:00 ET): reconcile + journal + EOD report
+After=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/home/cj/bull/agent/run-close.sh
+TimeoutStartSec=1800

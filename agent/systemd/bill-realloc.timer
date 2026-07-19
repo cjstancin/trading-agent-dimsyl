@@ -1,0 +1,7 @@
+[Unit]
+Description=Bill rotation — Mon-Fri ~hourly during market hours (UTC)
+[Timer]
+OnCalendar=Mon-Fri *-*-* 14,15,17,18,19:30:00
+Persistent=false
+[Install]
+WantedBy=timers.target
