@@ -66,9 +66,23 @@
 </div>
 <script>
   const $=s=>document.querySelector(s);
-  // Auth: the server injects the control token; every state-changing POST carries it in a custom header
-  // (a cross-site page cannot set this header, which is what closes CSRF). Read-only GETs need no token.
-  const TOKEN=(window.__BILL_TOKEN__||'');
+  // Auth: the server NO LONGER embeds the token (an unauthenticated GET / must not leak it). The operator
+  // opens the panel with the token in the URL fragment — http://127.0.0.1:<port>/#token=… — which the
+  // browser never sends to the server. Read it once, keep it only in memory, then scrub it from the address
+  // bar so it isn't shoulder-surfed or saved to history. (?token=… in the query also works but is
+  // discouraged: the query string reaches server/proxy logs.) Every state-changing POST carries the token
+  // in a custom header (a cross-site page cannot set it, which closes CSRF). Read-only GETs need no token.
+  function readToken(){
+    try{
+      const frag=new URLSearchParams((location.hash||'').replace(/^#/,''));
+      if(frag.get('token'))return frag.get('token');
+      const qs=new URLSearchParams(location.search||'');
+      if(qs.get('token'))return qs.get('token');
+    }catch(e){}
+    return '';
+  }
+  const TOKEN=readToken();
+  try{if(TOKEN)history.replaceState(null,'',location.pathname);}catch(e){}
   const AUTH={'x-control-token':TOKEN};
   function render(st){
     const m=st.mode;
@@ -99,5 +113,6 @@
     catch(e){el.textContent='';log('⚠ '+e);}
     busy=false;
   }
+  if(!TOKEN)log('⚠ No control token in this URL — actions will be rejected. Open the panel as '+location.origin+'/#token=YOUR_TOKEN (see the server boot log).');
   poll();setInterval(poll,3000);
 </script></body></html>

@@ -6,7 +6,8 @@
 //   - a cross-site Origin is refused (CSRF backstop) and a header-less "simple" cross-site POST is rejected;
 //   - an over-cap request body → 413; a normal small body still works;
 //   - /api/run runs one-at-a-time (2nd concurrent → 409) and is rate-limited (excess → 429);
-//   - GET / injects the token so the same-origin UI keeps working.
+//   - GET / serves the panel WITHOUT leaking the token (operator passes it out-of-band via the #fragment);
+//     a caller holding the token can still drive every state-changing endpoint.
 import { createServer, request as httpRequest } from "node:http";
 import { once, EventEmitter } from "node:events";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -86,7 +87,9 @@ try {
   const state = await req("GET", "/api/state");
   check("GET /api/state open, 200, has mode", state.status === 200 && typeof state.json?.mode === "string");
   const page = await req("GET", "/");
-  check("GET / serves HTML and injects the token", page.status === 200 && page.text.includes("window.__BILL_TOKEN__") && page.text.includes(TOKEN));
+  check("GET / serves the HTML panel (200)", page.status === 200 && page.text.includes("Bill the Bull"));
+  check("GET / does NOT leak the control token in the unauthenticated body (Codex round-2)",
+    !page.text.includes(TOKEN) && !page.text.includes("__BILL_TOKEN__"));
 
   // ── ITEM 2: auth on state-changing endpoints ──
   const noTok = await req("POST", "/api/mode", { headers: { "content-type": "application/json" }, body: JSON.stringify({ mode: "gated" }) });
