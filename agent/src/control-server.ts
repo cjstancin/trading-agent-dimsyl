@@ -7,9 +7,11 @@
 // custom `x-control-token` header (constant-time compared) AND a same-origin Origin, which together close
 // (a) any other local process poking the panel and (b) CSRF from a malicious page in CJ's browser — a
 // cross-site form/fetch cannot set a custom header. Read-only GETs (/, /api/state, /health) stay open.
-// The token comes from BILL_CONTROL_TOKEN; if unset a random one is minted per boot and injected into the
-// served page so the browser UI keeps working with zero config. The scheduled rituals do NOT use this HTTP
-// surface (systemd → run-*.sh → `npm run <ritual>` directly), so auth here breaks nothing on the box.
+// The token comes from BILL_CONTROL_TOKEN; if unset a random one is minted per boot. The token is NEVER
+// embedded in the served page (an unauthenticated GET / must not leak it — Codex round-2); the operator
+// opens the panel with the token in the URL fragment (…/#token=<token>, never sent to the server) and the
+// page holds it only in memory. The scheduled rituals do NOT use this HTTP surface (systemd → run-*.sh →
+// `npm run <ritual>` directly), so auth here breaks nothing on the box.
 import "./load-env.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -102,11 +104,14 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
   const url = new URL(req.url || "/", "http://localhost");
   try {
     if (req.method === "GET" && url.pathname === "/") {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      // Inject the current control token so the same-origin UI can authenticate its POSTs. `<` is escaped
-      // so a token value can never break out of the <script> element.
-      const tokenLiteral = JSON.stringify(CONTROL_TOKEN).replace(/</g, "\\u003c");
-      res.end(readFileSync(PAGE, "utf8").replace("</head>", `<script>window.__BILL_TOKEN__=${tokenLiteral};</script></head>`));
+      // SECURITY (Codex round-2): GET / is UNAUTHENTICATED, so it must NOT embed CONTROL_TOKEN. The old
+      // code injected the token into this HTML, which let any local process `GET /` and scrape the bearer
+      // token, then drive every protected endpoint — defeating the auth. We now serve the page verbatim
+      // with NO secret in it. The operator supplies the token out-of-band via the URL fragment
+      // (http://127.0.0.1:<port>/#token=<BILL_CONTROL_TOKEN>); the browser never sends a fragment to the
+      // server, and the page keeps it only in memory. (?token=… in the query is accepted as a fallback.)
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+      res.end(readFileSync(PAGE, "utf8"));
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/state") {
@@ -186,9 +191,15 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
 
 server.listen(PORT, "127.0.0.1", () => {
   console.log(`\n  🐂  Bill the Bull — control panel`);
-  console.log(`  →  http://localhost:${PORT}`);
+  // The token reaches the browser via the URL fragment (never sent to the server, never in the HTML). For
+  // an ephemeral per-boot token we bake it into the printed URL so the panel stays usable with zero config;
+  // for a stable env token we print a placeholder so the reusable secret never lands in a log.
+  const openUrl = TOKEN_FROM_ENV
+    ? `http://localhost:${PORT}/#token=<BILL_CONTROL_TOKEN>`
+    : `http://localhost:${PORT}/#token=${CONTROL_TOKEN}`;
+  console.log(`  →  open ${openUrl}`);
   console.log(`  mode: ${getMode()}  ·  auto-exec armed: ${autoExecAllowed()}`);
-  console.log(`  auth: ${TOKEN_FROM_ENV ? "BILL_CONTROL_TOKEN (env)" : "ephemeral per-boot token (set BILL_CONTROL_TOKEN to make it stable)"}\n`);
+  console.log(`  auth: ${TOKEN_FROM_ENV ? "BILL_CONTROL_TOKEN (env) — append it as the #token fragment above" : "ephemeral per-boot token (baked into the URL above; set BILL_CONTROL_TOKEN to make it stable)"}\n`);
 });
 
 // Exported for the regression test (no listen) — lets it drive the server against a real socket.
