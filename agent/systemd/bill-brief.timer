@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill brief timer — Mon-Fri 09:15 America/New_York
+[Timer]
+OnCalendar=Mon..Fri 09:15 America/New_York
+Persistent=false
+Unit=bill-brief.service
+[Install]
+WantedBy=timers.target

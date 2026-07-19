@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill mid-day timer — Mon-Fri 12:30 America/New_York
+[Timer]
+OnCalendar=Mon..Fri 12:30 America/New_York
+Persistent=false
+Unit=bill-mid.service
+[Install]
+WantedBy=timers.target

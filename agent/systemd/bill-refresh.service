@@ -1,0 +1,12 @@
+[Unit]
+Description=Bill the Bull — refresh dashboard status.json from live Alpaca (intraday freshness)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/npm run refresh --silent
+TimeoutStartSec=120

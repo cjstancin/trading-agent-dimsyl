@@ -1,0 +1,25 @@
+# Bull CI — fleet-audit GATE 1 (CI on every repo): the aggregate suite (typecheck + all 24
+# hand-rolled test rituals, serial) + the vendored-copy drift gate. check-vendored.mjs verifies
+# src/fleet-core against its .sync-manifest.json — self-contained, no castle checkout needed.
+# INFRA ONLY: nothing here touches trade/money logic; the suite includes the paper-guardrail tests.
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: node src/fleet-core/check-vendored.mjs src/fleet-core

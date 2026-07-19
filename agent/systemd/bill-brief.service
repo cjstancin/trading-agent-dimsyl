@@ -1,0 +1,11 @@
+[Unit]
+Description=Bill the Bull — pre-market brief + scan (Mon-Fri 9:15 ET)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/home/cj/bull/agent/run-brief.sh
+TimeoutStartSec=1800

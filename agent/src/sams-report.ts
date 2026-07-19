@@ -13,17 +13,28 @@ export const SAMS_URL = (process.env.SAMS_URL || "http://127.0.0.1:4319").replac
 
 export interface SamsResult { ok: boolean; status?: number; skipped?: boolean; error?: string }
 
+/** The fleet control token, read LAZILY at call time (mirrors fleet-emit.ts). "" → header omitted. */
+const controlToken = (): string => String(process.env.SAMS_CONTROL_TOKEN || "").trim();
+
 /**
  * POST a status patch for agent `id` to the SAMS conductor. `patch` carries the standard registry fields
  * (name, kind, room, roomTitle, status, loadScore, metrics, event, …). Returns a result object; never throws.
+ *
+ * Sends `x-sams-control-token` whenever SAMS_CONTROL_TOKEN is set (fleet-audit fix #1 — this used to
+ * post token-less while fleet-emit's /cost,/event carried the token, so the hardened conductor would
+ * refuse the heartbeat and Bill would silently read OFFLINE mid-session). Without a token it still
+ * posts bare — the conductor's legacy-compat path — so an unconfigured local run keeps working.
+ * Kept local (not the fleet-core client) deliberately: heartbeat callers log this richer
+ * {ok,status,error} result, which fleet-core's boolean report() does not carry.
  */
 export async function samsReport(id: string, patch: Record<string, unknown> = {}, opts: { url?: string; timeoutMs?: number } = {}): Promise<SamsResult> {
   if (!id) return { ok: false, skipped: true, error: "no agent id" };
   const url = (opts.url ?? SAMS_URL).replace(/\/+$/, "") + "/report";
+  const token = controlToken();
   try {
     const res = await withTimeout((signal) => fetch(url, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...(token ? { "x-sams-control-token": token } : {}) },
       body: JSON.stringify({ id, ...patch }),
       signal,
     }), opts.timeoutMs ?? 6000);

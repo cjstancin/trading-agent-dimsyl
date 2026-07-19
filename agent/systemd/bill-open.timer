@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill open timer — Mon-Fri 09:30 America/New_York
+[Timer]
+OnCalendar=Mon..Fri 09:30 America/New_York
+Persistent=false
+Unit=bill-open.service
+[Install]
+WantedBy=timers.target

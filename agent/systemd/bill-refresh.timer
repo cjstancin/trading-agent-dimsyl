@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill dashboard refresh — every 5 min, market window (Mon-Fri 09:00-16:55 ET)
+[Timer]
+OnCalendar=Mon..Fri 09..16:0/5 America/New_York
+Persistent=false
+Unit=bill-refresh.service
+[Install]
+WantedBy=timers.target

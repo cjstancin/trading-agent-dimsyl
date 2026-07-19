@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill close timer — Mon-Fri 16:00 America/New_York
+[Timer]
+OnCalendar=Mon..Fri 16:00 America/New_York
+Persistent=false
+Unit=bill-close.service
+[Install]
+WantedBy=timers.target

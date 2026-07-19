@@ -1,0 +1,10 @@
+[Unit]
+Description=Bill the Bull — mid-day (Mon-Fri 12:30 ET): scan + execute
+After=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/home/cj/bull/agent/run-mid.sh
+TimeoutStartSec=1800
