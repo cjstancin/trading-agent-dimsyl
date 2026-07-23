@@ -1,0 +1,13 @@
+{
+  "set": "fleet-core",
+  "note": "written by castle/scripts/sync-fleet-core.mjs — do not edit; verify with fleet-core check-vendored.mjs",
+  "files": {
+    "aibrain-context.d.mts": "1817f8549218e8d8eb6e88cd41ac689db2b9a246b2a70f0f94c9e26fae40cc3d",
+    "aibrain-context.mjs": "353ea9a48f0d93395e18a6b458428119569c07cf1da5b57da14ea8a7ff805e38",
+    "check-vendored.mjs": "ac1b68893ea8980f112ca1f97ebd0fa8136ac5362f9d3cc33e7bd2ba2da1400f",
+    "http-utils.d.mts": "036c4e4c88aa74743e4ad721590b747d6b3cbd0c004b627f8e0649dd55ac0d9c",
+    "http-utils.mjs": "a404f92fce93e44f9e92cc8bb31948ac3c475fa7260960084f19d4f2997382f1",
+    "sams-client.d.mts": "352b815e583cf18d7af85a56b7e5755f157218b0a849d66ffb48f91ad0ebf281",
+    "sams-client.mjs": "b770942d4aaf04689d710e0710fd668742bad61f6503034a3434f2a5e27899c0"
+  }
+}
