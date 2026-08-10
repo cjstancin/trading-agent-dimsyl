@@ -231,10 +231,16 @@ async function api(path) {
   return r.json();
 }
 async function post(path, body) {
-  if (!TOKEN) { toast("No control token — open with /#token=<BULL_CONTROL_TOKEN>", true); throw new Error("no token"); }
-  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json", "x-control-token": TOKEN }, body: JSON.stringify(body) });
+  // Two auth paths: via the public domain, Caddy injects x-control-token after basic_auth (the
+  // browser never holds it); via localhost/tailnet direct, the operator supplies it as a URL
+  // fragment. Send the header only when we actually have one — the server decides.
+  const headers = { "content-type": "application/json", ...(TOKEN ? { "x-control-token": TOKEN } : {}) };
+  const r = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) { toast(j.error || (path + " → " + r.status), true); throw new Error("post failed"); }
+  if (!r.ok) {
+    toast(r.status === 401 ? "Not authorized — direct access needs /#token=<BULL_CONTROL_TOKEN>" : (j.error || (path + " → " + r.status)), true);
+    throw new Error("post failed");
+  }
   return j;
 }
 

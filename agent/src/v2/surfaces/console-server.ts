@@ -28,7 +28,17 @@ const PORT = Number(process.env.BULL_CONSOLE_PORT || 4326);
 const PAGE = fileURLToPath(new URL("./console-page.html", import.meta.url));
 const ENV_TOKEN = (process.env.BULL_CONTROL_TOKEN || "").trim();
 const CONTROL_TOKEN = ENV_TOKEN || randomBytes(32).toString("hex");
-const ALLOWED_ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`]);
+// Public-origin mode (VPS): Caddy fronts this server with basic_auth and INJECTS x-control-token
+// via header_up on every authenticated request — the operator signs in once and the token never
+// reaches the browser. The origin allowlist must then include the public site, and stays strict:
+// a cross-site POST (CSRF riding auto-attached basic_auth creds) carries the attacker's Origin and
+// is refused here regardless of the injected token.
+const PUBLIC_ORIGIN = (process.env.BULL_CONSOLE_ORIGIN || "").trim().replace(/\/+$/, "");
+const ALLOWED_ORIGINS = new Set([
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+  ...(PUBLIC_ORIGIN ? [PUBLIC_ORIGIN] : []),
+]);
 const BODY_CAP = 64 * 1024;
 
 const db = openDb(process.env.BULL_DB_PATH || DEFAULT_DB_PATH);

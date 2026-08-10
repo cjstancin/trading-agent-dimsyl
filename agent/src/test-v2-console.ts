@@ -4,6 +4,7 @@
 // GUARDS from regressing.)
 process.env.BULL_DB_PATH = ":memory:";
 process.env.BULL_CONTROL_TOKEN = "test-token-123";
+process.env.BULL_CONSOLE_ORIGIN = "https://bull.example.test";
 
 const { server } = await import("./v2/surfaces/console-server.js");
 
@@ -38,6 +39,12 @@ check("unknown GET 404", (await fetch(base + "/api/v2/nope")).status === 404);
 check("no token → 401", (await post("/api/v2/halt", { target: "mom", action: "set" })).status === 401);
 check("wrong token → 401", (await post("/api/v2/halt", { target: "mom", action: "set" }, { "x-control-token": "nope" })).status === 401);
 check("cross-origin refused even with token", (await post("/api/v2/halt", { target: "mom", action: "set" }, { ...TOK, origin: "https://evil.example" })).status === 403);
+// Public-origin mode (Caddy fronting): the configured public origin is allowed WITH the token
+// (Caddy injects it post-basic-auth); the token stays mandatory even from the public origin —
+// CSRF rides auto-attached basic_auth creds but can neither set the header nor fake the Origin.
+check("public origin + token → allowed", (await post("/api/v2/halt", { target: "wld", action: "set", reason: "t" }, { ...TOK, origin: "https://bull.example.test" })).status === 200);
+await post("/api/v2/halt", { target: "wld", action: "clear" }, TOK);
+check("public origin WITHOUT token → 401", (await post("/api/v2/halt", { target: "wld", action: "set" }, { origin: "https://bull.example.test" })).status === 401);
 check("bad target 400", (await post("/api/v2/halt", { target: "everything", action: "set" }, TOK)).status === 400);
 
 // Halt set/clear round trip.
