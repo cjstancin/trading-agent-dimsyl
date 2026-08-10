@@ -25,7 +25,8 @@
       },
       "trimBandRel": 0.1
     },
-    "dayTradeGuard": { "maxDayTradesPer5Days": 3 }
+    "dayTradeGuard": { "maxDayTradesPer5Days": 3 },
+    "watchlist": { "stabilizationWeeks": 4, "pruneWeeks": 26 }
   },
   "momentum": {
     "universe": { "sp500": true, "sp400": true, "minMonthEndCloses": 13, "universeDeltaAlertPct": 15 },
