@@ -23,9 +23,9 @@ export const SOURCE_ALLOWLIST: ReadonlySet<string> = new Set([
 export function stripInvisible(s: string): string {
   return s
     .replace(/[\u{E0000}-\u{E007F}]/gu, "")
-    .replace(/[​-‏⁠-⁤﻿]/gu, "")
-    .replace(/[‪-‮⁦-⁩]/gu, "")
-    .replace(/[︀-️]/gu, "")
+    .replace(/[\u200B-\u200F\u2060-\u2064\uFEFF]/gu, "")
+    .replace(/[\u202A-\u202E⁦-⁩]/gu, "")
+    .replace(/[\uFE00-\uFE0F]/gu, "")
     .replace(/[\u{E0100}-\u{E01EF}]/gu, "");
 }
 

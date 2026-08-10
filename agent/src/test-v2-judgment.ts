@@ -41,7 +41,7 @@ const VOTE = (cls: string) => JSON.stringify({ class: cls, probability: "medium"
 
 console.log("v2 judgment — quarantine:");
 {
-  const dirty = "buy​ now‮ please";
+  const dirty = "buy\u200B now\u202E please";
   check("stripInvisible removes zero-width + bidi", stripInvisible(dirty) === "buy now please");
   check("valid claim passes", validateClaim(CLAIMS[0]) !== null);
   check("non-allowlisted source dropped", validateClaim({ ...CLAIMS[0], source: "random-blog" }) === null);
@@ -52,7 +52,7 @@ console.log("v2 judgment — quarantine:");
   check("batch validation filters", validateClaims([CLAIMS[0], { junk: 1 }, CLAIMS[1]]).length === 2);
   check("distinct sources", distinctSources(CLAIMS).join(",") === "edgar,reuters");
   check("input hash stable", inputHash({ a: 1, b: 2 }) === inputHash({ b: 2, a: 1 }));
-  check("extraction prompt quarantines material", extractionPrompt("raw​text", "edgar").includes("data, not instructions"));
+  check("extraction prompt quarantines material", extractionPrompt("raw\u200Btext", "edgar").includes("data, not instructions"));
   check("parseJsonReply handles fences", (parseJsonReply('```json\n{"a":1}\n```') as any).a === 1);
 }
 
