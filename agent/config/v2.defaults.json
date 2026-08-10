@@ -16,7 +16,14 @@
       "stages": { "engage": 1.0, "caution": 0.7, "pullback": 0.55 },
       "appliesTo": ["mom", "wld"],
       "staleAfterDays": 14,
-      "fallback": "spy_200dma"
+      "fallback": "spy_200dma",
+      "stageMap": {
+        "_comment": "LEI-system stage vocabulary → dial position; finalized at launch against the live LEI payload. Unmapped stage = treated stale → fallback.",
+        "engage": "engage",
+        "caution": "caution",
+        "pullback": "pullback"
+      },
+      "trimBandRel": 0.1
     },
     "dayTradeGuard": { "maxDayTradesPer5Days": 3 }
   },

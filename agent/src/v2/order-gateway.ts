@@ -112,10 +112,14 @@ function mintCoid(db: DatabaseSync, req: PlaceRequest): { coid: string; seq: num
   return { coid, seq, reusedUnknown: false };
 }
 
+/** Pluggable extra gate (e.g. the book layer's day-trade guard). Non-null return = refuse. */
+export type ExtraGuard = (db: DatabaseSync, req: PlaceRequest) => { skip: SkipReason; detail?: string } | null;
+
 /** Place one order through the full gate stack. Never throws on a broker refusal — every outcome
  *  lands in order_intents and the returned PlaceResult. */
 export async function placeOrder(db: DatabaseSync, broker: BrokerPort, req: PlaceRequest, cfg: {
   washBlacklistDays: number;
+  extraGuards?: ExtraGuard[];
 }): Promise<PlaceResult> {
   const sym = req.symbol.toUpperCase();
   const { coid, seq, reusedUnknown } = mintCoid(db, req);
@@ -162,6 +166,15 @@ export async function placeOrder(db: DatabaseSync, broker: BrokerPort, req: Plac
         placed: false, clientOrderId: coid, skipped: "NO_SETTLED_CASH",
         detail: `need ${d9str(notional)} + reserved ${d9str(reserved)} > settled ${d9str(gate.settled9)}`,
       };
+    }
+  }
+
+  // Gate 5 — pluggable extra guards (book layer: day-trade counter, brake hooks).
+  for (const guard of cfg.extraGuards ?? []) {
+    const verdict = guard(db, req);
+    if (verdict) {
+      recordIntent(db, req, coid, seq, "skipped", { skipReason: verdict.skip });
+      return { placed: false, clientOrderId: coid, skipped: verdict.skip, detail: verdict.detail };
     }
   }
 
