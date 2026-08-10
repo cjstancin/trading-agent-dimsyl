@@ -129,6 +129,35 @@ const MIGRATIONS: string[] = [
   -- Small key-value state: sleeve halts, last replayed activity id, brake tier, dial stage, etc.
   CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_ts TEXT NOT NULL);
   `,
+  // v2 — shared cross-sleeve tables (approvals queue + per-position metadata). Sleeve-PRIVATE
+  // tables are owned by the sleeve modules themselves (CREATE TABLE IF NOT EXISTS at open), so
+  // sleeve work never edits this file.
+  `
+  -- "Needs your call" queue (design §9): drift-watch flags, config amendment proposals, escalated
+  -- thesis-checks. The dashboard renders pending rows; CJ resolves them; nothing auto-swaps.
+  CREATE TABLE approvals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    kind TEXT NOT NULL,          -- e.g. 'anchor-drift' | 'config-amendment' | 'thesis-escalation' | 'brake-tier3'
+    title TEXT NOT NULL,
+    payload TEXT NOT NULL,       -- JSON evidence blob
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected','expired')),
+    resolved_ts TEXT,
+    resolved_by TEXT
+  );
+  CREATE INDEX idx_approvals_status ON approvals(status);
+
+  -- Per-position sleeve metadata: stop state (ratchet levels), exit horizons, thesis one-liners,
+  -- invalidation levels, cluster/pick references. One row per (sleeve, symbol); JSON payload owned
+  -- by the sleeve. Exits and the dashboard read it; reconcile clears rows for closed positions.
+  CREATE TABLE position_meta (
+    sleeve TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    meta TEXT NOT NULL,
+    updated_ts TEXT NOT NULL,
+    PRIMARY KEY (sleeve, symbol)
+  );
+  `,
 ];
 
 export function openDb(path: string = DEFAULT_DB_PATH): DatabaseSync {
