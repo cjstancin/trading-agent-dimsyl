@@ -34,14 +34,21 @@ export interface DialState {
 }
 
 /** Real adapter: read the LEI payload file (same box). Returns null on any problem — the decision
- *  core treats null as "LEI unavailable" and walks the fallback chain. Expected minimal shape:
- *  {stage: string, asOf: string} (path configurable because the LEI payload format is owned by the
- *  LEI project — verified at launch, never assumed). */
+ *  core treats null as "LEI unavailable" and walks the fallback chain. Accepts two shapes:
+ *   · minimal {stage, asOf} (test/shim shape)
+ *   · the REAL LEI build payload (verified on the box 2026-08-10, launch pre-check):
+ *     /home/cj/lei/data/last_payload.json → {micro_stage: "WATCH|DEFENSIVE|CONFIRMED|RECOVERY",
+ *     built_date: "YYYY-MM-DD", …} — the weekly Sunday refresh rewrites it atomically, so the
+ *     14-day staleness window always holds unless the LEI refresh itself breaks (then: fallback,
+ *     flagged in the digest, which is exactly the honest behavior the design asks for). */
 export function readLeiFile(path = process.env.BULL_LEI_STAGE_FILE || ""): LeiReading | null {
   if (!path) return null;
   try {
     const j = JSON.parse(readFileSync(path, "utf8"));
     if (typeof j?.stage === "string" && typeof j?.asOf === "string") return { stage: j.stage, asOf: j.asOf };
+    if (typeof j?.micro_stage === "string" && typeof j?.built_date === "string") {
+      return { stage: j.micro_stage, asOf: j.built_date };
+    }
     return null;
   } catch { return null; }
 }

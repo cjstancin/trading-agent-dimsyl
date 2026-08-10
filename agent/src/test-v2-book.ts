@@ -60,6 +60,31 @@ console.log("v2 book — LEI dial:");
   const closes = Array.from({ length: 220 }, (_, i) => 100 + i * 0.1);
   check("spyAbove200 rising tape", spyAbove200(closes) === true);
   check("spyAbove200 needs 200 rows", spyAbove200([1, 2, 3]) === null);
+
+  // Real LEI payload shape (verified on the box 2026-08-10: micro_stage + built_date) + the ladder
+  // vocabulary from the committed defaults — mirrors dad's 100/70/55/100 deployment overlay.
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const { readLeiFile } = await import("./v2/book/lei-dial.js");
+  const dir = mkdtempSync(join(tmpdir(), "lei-"));
+  const p = join(dir, "last_payload.json");
+  writeFileSync(p, JSON.stringify({ micro_stage: "RECOVERY", built_date: "2026-08-09", MICRO: { stage: "RECOVERY" }, D: [] }));
+  const reading = readLeiFile(p);
+  check("readLeiFile accepts the real payload shape", reading?.stage === "RECOVERY" && reading?.asOf === "2026-08-09");
+  writeFileSync(p, JSON.stringify({ stage: "caution", asOf: "2026-08-10" }));
+  check("readLeiFile still accepts the minimal shape", readLeiFile(p)?.stage === "caution");
+  writeFileSync(p, "{not json");
+  check("readLeiFile corrupt → null (fallback chain)", readLeiFile(p) === null);
+  rmSync(dir, { recursive: true, force: true });
+
+  const { loadConfig } = await import("./v2/config.js");
+  const dialCfg = loadConfig().config.book.leiDial as DialConfig;
+  const ladder: [string, string][] = [["WATCH", "engage"], ["DEFENSIVE", "caution"], ["CONFIRMED", "pullback"], ["RECOVERY", "engage"]];
+  for (const [lei, want] of ladder) {
+    const d = decideDial({ cfg: dialCfg, reading: { stage: lei, asOf: "2026-08-09" }, lastKnown: null, today: "2026-08-10", spyAbove200dma: null });
+    check(`ladder ${lei} → ${want}`, d.position === want && d.source === "lei");
+  }
 }
 
 console.log("v2 book — brake:");

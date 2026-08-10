@@ -18,7 +18,11 @@
       "staleAfterDays": 14,
       "fallback": "spy_200dma",
       "stageMap": {
-        "_comment": "LEI-system stage vocabulary → dial position; finalized at launch against the live LEI payload. Unmapped stage = treated stale → fallback.",
+        "_comment": "LEI-system stage ladder → dial position. Verified against the live payload 2026-08-10 (micro_stage in /home/cj/lei/data/last_payload.json); mirrors dad's own 100/70/55/100 deployment overlay. Unmapped stage = treated stale → fallback.",
+        "WATCH": "engage",
+        "DEFENSIVE": "caution",
+        "CONFIRMED": "pullback",
+        "RECOVERY": "engage",
         "engage": "engage",
         "caution": "caution",
         "pullback": "pullback"
