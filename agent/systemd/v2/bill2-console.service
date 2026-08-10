@@ -1,0 +1,14 @@
+[Unit]
+Description=Bill v2 — operator console (127.0.0.1:4326; Caddy/tailnet owns outer access)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/usr/bin/npm run v2:console
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Bill v2 — monthly statement
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/home/cj/bull/agent/run-v2-statement.sh
+TimeoutStartSec=900

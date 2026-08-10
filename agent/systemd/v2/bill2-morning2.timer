@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill v2 morning SECOND tick — Mon..Fri 10:35 ET (inside the momentum 10:30-15:00 trade window; the ritual is idempotent, the 09:35 tick handles everything except momentum execution)
+[Timer]
+OnCalendar=Mon..Fri 10:35 America/New_York
+Persistent=false
+Unit=bill2-morning.service
+[Install]
+WantedBy=timers.target

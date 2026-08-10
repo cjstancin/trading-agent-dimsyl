@@ -1,0 +1,11 @@
+[Unit]
+Description=Bill v2 — morning ritual: reconcile, dial, brake, corp actions, stops, entries, sweep
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/home/cj/bull/agent/run-v2-morning.sh
+TimeoutStartSec=2700

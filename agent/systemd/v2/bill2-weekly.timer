@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill v2 weekly timer — Sun 18:00 America/New_York
+[Timer]
+OnCalendar=Sun 18:00 America/New_York
+Persistent=false
+Unit=bill2-weekly.service
+[Install]
+WantedBy=timers.target

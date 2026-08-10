@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill v2 anchor-filing timer — Mon..Fri 20:15 America/New_York
+[Timer]
+OnCalendar=Mon..Fri 20:15 America/New_York
+Persistent=false
+Unit=bill2-anchor-filing.service
+[Install]
+WantedBy=timers.target

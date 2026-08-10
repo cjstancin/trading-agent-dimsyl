@@ -411,21 +411,48 @@ await (async () => {
   check("missing sibling tables → empty pool sources",
     (await empty.momentumTop(25)).length === 0 && (await empty.insiderLiveClusters()).length === 0 && (await empty.anchorTop5s()).length === 0);
 
-  // Tables present (assumed shapes) → rows flow through.
-  db.exec(`CREATE TABLE mom_ranks (symbol TEXT, rank INTEGER);
-           CREATE TABLE ins_clusters (symbol TEXT, cluster_id INTEGER);
-           CREATE TABLE anc_clone (symbol TEXT, manager TEXT);`);
-  db.prepare("INSERT INTO mom_ranks VALUES('nvda', 2), ('AAPL', 1), ('AAPL', 3)").run();
-  db.prepare("INSERT INTO ins_clusters VALUES('CASY', 7), ('CASY', 8)").run();
-  db.prepare("INSERT INTO anc_clone VALUES('OXY','Berkshire Hathaway'), ('OXY','Himalaya Capital'), ('GOOGL','TCI Fund Management')").run();
+  // SEAM TEST against the REAL sibling schemas (created by the sleeves' own ensure functions —
+  // if a sleeve renames a column, THIS breaks, which is the point).
+  const { ensureMomTables } = await import("./v2/sleeves/momentum/schema.js");
+  const { ensureInsiderTables } = await import("./v2/sleeves/insider/store.js");
+  const { ensureAnchorTables } = await import("./v2/sleeves/anchor/store.js");
+  ensureMomTables(db);
+  ensureInsiderTables(db);
+  ensureAnchorTables(db);
+
+  // Momentum: an OLD month that must be ignored + the latest month with a vetoed row (NULL final_rank).
+  db.prepare(`INSERT INTO mom_ranks(month, symbol, score, dollar_volume, fip, mom_rank, final_rank, veto)
+              VALUES ('2026-07','OLDM',0.5,1e6,-0.1,1,1,NULL),
+                     ('2026-08','AAPL',0.4,9e6,-0.2,2,1,NULL),
+                     ('2026-08','NVDA',0.6,8e6,-0.1,1,2,NULL),
+                     ('2026-08','BADCO',0.3,1e6,NULL,3,NULL,'accruals')`).run();
+  // Insider: one active cluster (two rows same symbol via distinct ids) + one dead one.
+  db.prepare(`INSERT INTO ins_clusters(cluster_id, symbol, issuer_cik, window_start, window_end, insider_count,
+                officer_count, director_count, aggregate9, score, participants, status, detected_ts)
+              VALUES ('c1','CASY','0001','2026-08-01','2026-08-08',3,1,2,'150000',4.2,'[]','active','2026-08-08T20:00:00Z'),
+                     ('c2','CASY','0001','2026-07-01','2026-07-08',3,1,2,'120000',3.9,'[]','active','2026-07-08T20:00:00Z'),
+                     ('c3','DEDX','0002','2026-06-01','2026-06-08',3,1,2,'110000',3.1,'[]','dead','2026-06-08T20:00:00Z')`).run();
+  // Anchor: an older build that must be ignored + the latest build (targets + manager slots).
+  db.prepare(`INSERT INTO anc_builds(ts, period_tag, targets_json, slots_json, flags_json, total_weight9, config_version)
+              VALUES ('2026-05-16T00:00:00Z','2026-03-31','{"STALE":"1"}','[]','[]','1','t')`).run();
+  db.prepare(`INSERT INTO anc_builds(ts, period_tag, targets_json, slots_json, flags_json, total_weight9, config_version)
+              VALUES ('2026-08-15T00:00:00Z','2026-06-30',
+                      '{"OXY":"0.2","GOOGL":"0.15"}',
+                      '[{"manager":"Berkshire Hathaway","lines":[{"symbol":"OXY"}]},{"manager":"Himalaya Capital","lines":[{"symbol":"OXY"}]},{"manager":"TCI Fund Management","lines":[{"symbol":"GOOGL"}]}]',
+                      '[]','0.35','t')`).run();
+
   const port = siblingPoolPort(db);
   const mom = await port.momentumTop(25);
-  check("mom_ranks read, upcased, best-rank deduped", mom.length === 2 && mom[0].symbol === "AAPL" && mom[0].rank === 1 && mom[1].symbol === "NVDA");
+  check("mom_ranks: latest month only, veto'd excluded, final_rank order",
+    mom.length === 2 && mom[0].symbol === "AAPL" && mom[0].rank === 1 && mom[1].symbol === "NVDA"
+    && !mom.some((r) => r.symbol === "OLDM" || r.symbol === "BADCO"));
   const ins = await port.insiderLiveClusters();
-  check("ins_clusters read distinct", ins.length === 1 && ins[0].symbol === "CASY" && ins[0].live === true);
+  check("ins_clusters: distinct symbols, active only", ins.length === 1 && ins[0].symbol === "CASY" && ins[0].live === true);
   const anc = await port.anchorTop5s();
-  check("anc_clone grouped by symbol w/ managers", anc.length === 2
-    && anc.find((a) => a.symbol === "OXY")!.managers.length === 2);
+  check("anc_builds: latest build's targets, managers from slots", anc.length === 2
+    && anc.find((a) => a.symbol === "OXY")!.managers.length === 2
+    && anc.find((a) => a.symbol === "GOOGL")!.managers.join(",") === "TCI Fund Management"
+    && !anc.some((a) => a.symbol === "STALE"));
 })();
 
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1); }

@@ -1,0 +1,11 @@
+[Unit]
+Description=Bill v2 — EDGAR Form 4 poll (ritual self-gates 06:00-22:05 ET)
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/home/cj/bull/agent/run-v2-insider-poll.sh
+TimeoutStartSec=240

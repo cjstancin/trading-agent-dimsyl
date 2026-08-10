@@ -1,0 +1,11 @@
+[Unit]
+Description=Bill v2 — Sunday ritual: watchlist, kill-switches, month-end, digest, Bill explains
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/home/cj/bull/agent/run-v2-weekly.sh
+TimeoutStartSec=2700

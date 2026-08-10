@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill v2 statement timer — *-*-01 08:00 America/New_York
+[Timer]
+OnCalendar=*-*-01 08:00 America/New_York
+Persistent=false
+Unit=bill2-statement.service
+[Install]
+WantedBy=timers.target

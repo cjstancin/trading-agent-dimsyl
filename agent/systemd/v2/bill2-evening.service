@@ -1,0 +1,11 @@
+[Unit]
+Description=Bill v2 — evening ritual: fills replay, marks, thesis-checks, corp-actions poll
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=cj
+Group=cj
+WorkingDirectory=/home/cj/bull/agent
+ExecStart=/home/cj/bull/agent/run-v2-evening.sh
+TimeoutStartSec=2700

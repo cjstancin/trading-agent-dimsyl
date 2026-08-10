@@ -1,0 +1,8 @@
+[Unit]
+Description=Bill v2 insider-poll timer — Mon..Fri *-*-* 06..22:00/3:00 America/New_York
+[Timer]
+OnCalendar=Mon..Fri *-*-* 06..22:00/3:00 America/New_York
+Persistent=false
+Unit=bill2-insider-poll.service
+[Install]
+WantedBy=timers.target
