@@ -1,0 +1,116 @@
+{
+  "_comment": "Bull v2 committed config defaults — the design-doc numbers (vault: 2026-08-10 Bull v2 design doc). Runtime amendments live in runtime/v2/config-journal.jsonl (journaled, dated, attributed — LEI rules-editor pattern); the effective config is defaults + folded journal. Safety non-tunables (paper-only, -25% floor, reallocation-on-schedule-only, quarantine) are CODE, not config — an amendment touching them is refused.",
+  "book": {
+    "equityUsd": 5000,
+    "sleeveSplit": { "mom": 0.4, "ins": 0.25, "anc": 0.25, "wld": 0.1 },
+    "sweep": { "etf": "SGOV", "floatUsd": 50 },
+    "brake": {
+      "tiers": [
+        { "ddPct": 8, "action": "half_size_new_buys" },
+        { "ddPct": 11, "action": "no_new_buys" },
+        { "ddPct": 14, "action": "to_cash_above_floors_escalate" }
+      ],
+      "hysteresisPct": 2
+    },
+    "leiDial": {
+      "stages": { "engage": 1.0, "caution": 0.7, "pullback": 0.55 },
+      "appliesTo": ["mom", "wld"],
+      "staleAfterDays": 14,
+      "fallback": "spy_200dma"
+    },
+    "dayTradeGuard": { "maxDayTradesPer5Days": 3 }
+  },
+  "momentum": {
+    "universe": { "sp500": true, "sp400": true, "minMonthEndCloses": 13, "universeDeltaAlertPct": 15 },
+    "signal": { "lookbackMonths": 12, "skipMonths": 1, "top": 50 },
+    "vetoes": { "accrualsMax": 0.1, "debtAssetsMax": 0.7 },
+    "holdings": {
+      "nSchedule": [
+        { "sleeveUsdBelow": 4000, "n": 10 },
+        { "sleeveUsdBelow": 8000, "n": 15 },
+        { "sleeveUsdBelow": 20000, "n": 20 },
+        { "sleeveUsdBelow": null, "n": 50 }
+      ],
+      "weightBandRel": 0.25,
+      "minOrderUsd": 25
+    },
+    "rebalance": { "buyFromTop": 10, "sellBelowRank": 25, "windowEt": ["10:30", "15:00"] },
+    "localBrake": { "vol20dVsSpyMax": 2 },
+    "slippageBpsPerSide": 5,
+    "sellFeeUsd": 0.01,
+    "shadowN": 50
+  },
+  "insider": {
+    "cluster": {
+      "minInsiders": 3,
+      "windowDays": 10,
+      "minPerInsiderUsd": 10000,
+      "minAggregateUsd": 100000,
+      "roleGate": { "minOfficers": 1, "orMinDirectors": 2, "minNonOwnerParticipants": 2 },
+      "exclude10b51": true
+    },
+    "liquidity": {
+      "minMedianDollarVol21dUsd": 300000,
+      "minPrice": 2,
+      "minMarketCapUsd": 75000000,
+      "maxSpreadPct": 1.5
+    },
+    "capacity": { "slotFloorUsd": 300, "slotCeilUsd": 600, "slotsPerUsd": 500, "slotsMin": 2, "slotsMax": 8, "maxSameSector": 2 },
+    "exit": { "horizonTradingDays": 126, "reversalMinSellers": 2, "reversalSellFrac": 0.5, "clusterResetMaxMonths": 9 },
+    "pollSecondsMin": 120,
+    "pollSecondsMax": 300
+  },
+  "anchor": {
+    "managers": [
+      { "name": "Berkshire Hathaway", "cik": "0001067983", "note": "transition-watch" },
+      { "name": "TCI Fund Management", "cik": "0001647251" },
+      { "name": "AltaRock Partners", "cik": "0001631014" },
+      { "name": "Himalaya Capital", "cik": "0001709323" }
+    ],
+    "topN": 5,
+    "lineCapOfSlot": 0.4,
+    "retradeWeightMovePp": 2,
+    "amendmentWatchDays": 60,
+    "driftWatch": {
+      "top10ShareMin": 0.5,
+      "top5DropPpEject": 15,
+      "nameChurnWarn": 0.3,
+      "nameChurnEject": 0.5,
+      "weightTurnoverWarn": 0.2,
+      "weightTurnoverEject": 0.35,
+      "aumAnomalyWarnPct": 25,
+      "aumAnomalyEjectPct": 40,
+      "nonEquityWarn": 0.1,
+      "nonEquityEject": 0.25,
+      "perfGuardWarnPp": -15,
+      "perfGuardEjectPp": -25,
+      "filingLateDays": 5
+    },
+    "driftBandRel": 0.2
+  },
+  "wildcard": {
+    "picks": { "count": 2, "countMax": 3 },
+    "minHoldWeeks": 4,
+    "reentryCooldownWeeks": 4,
+    "maxChangesPerWeek": 1,
+    "contextCardMaxTokens": 2500,
+    "atrStop": { "atrDays": 14, "multiple": 2.5 }
+  },
+  "thesisCheck": {
+    "judges": 3,
+    "hardFloorPct": -25,
+    "regretKillPctOfSleeveNav": -10,
+    "disagreementFixThreshold": 0.5,
+    "outcomeCheckpointsMonths": [1, 3, 6]
+  },
+  "ledger": {
+    "washBlacklistDays": 31,
+    "stuckOrderMinutes": 10
+  },
+  "benchmarks": {
+    "book": "SPY",
+    "mom": "QMOM",
+    "ins": "IWM",
+    "anc": ["SPY", "NANC"]
+  }
+}

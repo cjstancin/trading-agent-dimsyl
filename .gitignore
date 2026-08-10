@@ -25,6 +25,9 @@ memory/trade-log.md
 memory/stops.json
 memory/position-trails.json
 
+# Bull v2 runtime state (SQLite ledger, config journal — lives on the box, never in git)
+agent/runtime/
+
 # Node
 agent/node_modules/
 node_modules/
