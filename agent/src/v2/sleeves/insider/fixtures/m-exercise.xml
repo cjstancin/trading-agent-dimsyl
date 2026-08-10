@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<ownershipDocument>
+  <schemaVersion>X0409</schemaVersion>
+  <documentType>4</documentType>
+  <periodOfReport>2026-08-05</periodOfReport>
+  <issuer><issuerCik>0001111111</issuerCik><issuerName>KVH Industries Test Corp</issuerName><issuerTradingSymbol>KVHI</issuerTradingSymbol></issuer>
+  <reportingOwner>
+    <reportingOwnerId>
+      <rptOwnerCik>0003333333</rptOwnerCik>
+      <rptOwnerName>Smith Robert</rptOwnerName>
+    </reportingOwnerId>
+    <reportingOwnerRelationship>
+      <isOfficer>1</isOfficer>
+      <isDirector>1</isDirector>
+      <isTenPercentOwner>0</isTenPercentOwner>
+      <isOther>0</isOther>
+      <officerTitle>Chief Executive Officer</officerTitle>
+    </reportingOwnerRelationship>
+  </reportingOwner>
+  <nonDerivativeTable>
+    <nonDerivativeTransaction>
+      <securityTitle><value>Common Stock</value></securityTitle>
+      <transactionDate><value>2026-08-05</value></transactionDate>
+      <transactionCoding>
+        <transactionFormType>4</transactionFormType>
+        <transactionCode>M</transactionCode>
+        <equitySwapInvolved>0</equitySwapInvolved>
+      </transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>20000</value></transactionShares>
+        <transactionPricePerShare><value>4.10</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+      <postTransactionAmounts>
+        <sharesOwnedFollowingTransaction><value>60000</value></sharesOwnedFollowingTransaction>
+      </postTransactionAmounts>
+      <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+    </nonDerivativeTransaction>
+  </nonDerivativeTable>
+  <derivativeTable>
+    <derivativeTransaction>
+      <securityTitle><value>Stock Option (right to buy)</value></securityTitle>
+      <conversionOrExercisePrice><value>4.10</value></conversionOrExercisePrice>
+      <transactionDate><value>2026-08-05</value></transactionDate>
+      <transactionCoding>
+        <transactionFormType>4</transactionFormType>
+        <transactionCode>M</transactionCode>
+        <equitySwapInvolved>0</equitySwapInvolved>
+      </transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>20000</value></transactionShares>
+        <transactionPricePerShare><value>0</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+    </derivativeTransaction>
+  </derivativeTable>
+</ownershipDocument>

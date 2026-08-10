@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<ownershipDocument xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <schemaVersion>X0409</schemaVersion>
+    <documentType>4</documentType>
+    <periodOfReport>2026-08-06</periodOfReport>
+
+    <issuer>
+        <issuerCik>0001111111</issuerCik>
+        <issuerName>KVH Industries Test Corp</issuerName>
+        <issuerTradingSymbol>KVHI</issuerTradingSymbol>
+    </issuer>
+
+    <reportingOwner>
+        <reportingOwnerId>
+            <rptOwnerCik>0002222222</rptOwnerCik>
+            <rptOwnerName>Doe Jane A</rptOwnerName>
+        </reportingOwnerId>
+        <reportingOwnerAddress>
+            <rptOwnerStreet1>50 ENTERPRISE CENTER</rptOwnerStreet1>
+            <rptOwnerCity>MIDDLETOWN</rptOwnerCity>
+            <rptOwnerState>RI</rptOwnerState>
+            <rptOwnerZipCode>02842</rptOwnerZipCode>
+        </reportingOwnerAddress>
+        <reportingOwnerRelationship>
+            <isDirector>0</isDirector>
+            <isOfficer>1</isOfficer>
+            <isTenPercentOwner>0</isTenPercentOwner>
+            <isOther>0</isOther>
+            <officerTitle>Chief Financial Officer</officerTitle>
+        </reportingOwnerRelationship>
+    </reportingOwner>
+
+    <nonDerivativeTable>
+        <nonDerivativeTransaction>
+            <securityTitle>
+                <value>Common Stock</value>
+            </securityTitle>
+            <transactionDate>
+                <value>2026-08-06</value>
+            </transactionDate>
+            <transactionCoding>
+                <transactionFormType>4</transactionFormType>
+                <transactionCode>P</transactionCode>
+                <equitySwapInvolved>0</equitySwapInvolved>
+                <footnoteId id="F1"/>
+            </transactionCoding>
+            <transactionAmounts>
+                <transactionShares>
+                    <value>5000</value>
+                </transactionShares>
+                <transactionPricePerShare>
+                    <value>12.50</value>
+                </transactionPricePerShare>
+                <transactionAcquiredDisposedCode>
+                    <value>A</value>
+                </transactionAcquiredDisposedCode>
+            </transactionAmounts>
+            <postTransactionAmounts>
+                <sharesOwnedFollowingTransaction>
+                    <value>25000</value>
+                </sharesOwnedFollowingTransaction>
+            </postTransactionAmounts>
+            <ownershipNature>
+                <directOrIndirectOwnership>
+                    <value>D</value>
+                </directOrIndirectOwnership>
+            </ownershipNature>
+        </nonDerivativeTransaction>
+    </nonDerivativeTable>
+
+    <footnotes>
+        <footnote id="F1">The price reported is a weighted average price. The shares were purchased in multiple transactions at prices ranging from $12.41 to $12.58.</footnote>
+    </footnotes>
+
+    <ownerSignature>
+        <signatureName>/s/ Jane A. Doe</signatureName>
+        <signatureDate>2026-08-07</signatureDate>
+    </ownerSignature>
+</ownershipDocument>

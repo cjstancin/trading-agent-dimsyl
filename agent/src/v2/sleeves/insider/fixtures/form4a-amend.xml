@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<ownershipDocument>
+  <schemaVersion>X0409</schemaVersion>
+  <documentType>4/A</documentType>
+  <periodOfReport>2026-08-06</periodOfReport>
+  <dateOfOriginalSubmission>2026-08-07</dateOfOriginalSubmission>
+  <issuer><issuerCik>0001111111</issuerCik><issuerName>KVH Industries Test Corp</issuerName><issuerTradingSymbol>KVHI</issuerTradingSymbol></issuer>
+  <reportingOwner>
+    <reportingOwnerId>
+      <rptOwnerCik>0002222222</rptOwnerCik>
+      <rptOwnerName>Doe Jane A</rptOwnerName>
+    </reportingOwnerId>
+    <reportingOwnerRelationship>
+      <isDirector>0</isDirector>
+      <isOfficer>1</isOfficer>
+      <isTenPercentOwner>0</isTenPercentOwner>
+      <isOther>0</isOther>
+      <officerTitle>Chief Financial Officer</officerTitle>
+    </reportingOwnerRelationship>
+  </reportingOwner>
+  <nonDerivativeTable>
+    <nonDerivativeTransaction>
+      <securityTitle><value>Common Stock</value></securityTitle>
+      <transactionDate><value>2026-08-06</value></transactionDate>
+      <transactionCoding>
+        <transactionFormType>4/A</transactionFormType>
+        <transactionCode>P</transactionCode>
+        <equitySwapInvolved>0</equitySwapInvolved>
+        <footnoteId id="F1"/>
+      </transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>6000</value></transactionShares>
+        <transactionPricePerShare><value>12.40</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+      <postTransactionAmounts>
+        <sharesOwnedFollowingTransaction><value>26000</value></sharesOwnedFollowingTransaction>
+      </postTransactionAmounts>
+      <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+    </nonDerivativeTransaction>
+  </nonDerivativeTable>
+  <footnotes>
+    <footnote id="F1">This amendment corrects the number of shares and weighted average price reported on the original Form 4 filed on August 7, 2026, which inadvertently understated the purchase.</footnote>
+  </footnotes>
+</ownershipDocument>

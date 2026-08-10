@@ -1,0 +1,14 @@
+Description:           Daily Index of EDGAR Dissemination Feed by Form Type
+Last Data Received:    August 10, 2026
+Comments:              webmaster@sec.gov
+Anonymous FTP:         ftp://ftp.sec.gov/edgar/
+
+Form Type   Company Name                                                  CIK         Date Filed  File Name
+---------------------------------------------------------------------------------------------------------------------------------------------
+10-K        Some Big Filer Corp                                           9999999     2026-08-10  edgar/data/9999999/0009999999-26-000200.txt
+4           KVH Industries Test Corp                                      1111111     2026-08-10  edgar/data/1111111/0001111111-26-000101.txt
+4           Doe Jane A                                                    2222222     2026-08-10  edgar/data/1111111/0001111111-26-000101.txt
+4           Garcia Miguel                                                 5555555     2026-08-10  edgar/data/1111111/0001111111-26-000102.txt
+4           KVH Industries Test Corp                                      1111111     2026-08-10  edgar/data/1111111/0001111111-26-000102.txt
+4/A         Acme Widgets Inc                                              7777777     2026-08-10  edgar/data/7777777/0007777777-26-000055.txt
+8-K         Another Filer Inc                                             8888877     2026-08-10  edgar/data/8888877/0008888877-26-000031.txt

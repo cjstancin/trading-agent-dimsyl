@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<ownershipDocument>
+  <schemaVersion>X0409</schemaVersion>
+  <documentType>4</documentType>
+  <periodOfReport>2026-08-03</periodOfReport>
+  <issuer><issuerCik>0001111111</issuerCik><issuerName>KVH Industries Test Corp</issuerName><issuerTradingSymbol>KVHI</issuerTradingSymbol></issuer>
+  <reportingOwner>
+    <reportingOwnerId>
+      <rptOwnerCik>0006666666</rptOwnerCik>
+      <rptOwnerName>Okafor Chidi</rptOwnerName>
+    </reportingOwnerId>
+    <reportingOwnerRelationship>
+      <isDirector>1</isDirector>
+      <isOfficer>0</isOfficer>
+      <isTenPercentOwner>0</isTenPercentOwner>
+      <isOther>0</isOther>
+    </reportingOwnerRelationship>
+  </reportingOwner>
+  <nonDerivativeTable>
+    <nonDerivativeTransaction>
+      <securityTitle><value>Common Stock</value></securityTitle>
+      <transactionDate><value>2026-08-03</value></transactionDate>
+      <transactionCoding>
+        <transactionFormType>4</transactionFormType>
+        <transactionCode>P</transactionCode>
+        <equitySwapInvolved>0</equitySwapInvolved>
+        <footnoteId id="F1"/>
+      </transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>1200</value></transactionShares>
+        <transactionPricePerShare><value>12.10</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+      <postTransactionAmounts>
+        <sharesOwnedFollowingTransaction><value>8200</value></sharesOwnedFollowingTransaction>
+      </postTransactionAmounts>
+      <ownershipNature><directOrIndirectOwnership><value>D</value></directOrIndirectOwnership></ownershipNature>
+    </nonDerivativeTransaction>
+  </nonDerivativeTable>
+  <footnotes>
+    <footnote id="F1">Shares acquired pursuant to the Issuer's dividend reinvestment plan.</footnote>
+  </footnotes>
+</ownershipDocument>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fixture: Himalaya Capital 13F-HR/A amendmentType=RESTATEMENT for period 2026-06-30 (the
+     Himalaya-restated-Q4'25 pattern). REPLACES the original table wholesale: PDD is gone, AAPL
+     grew into the top-5, GOOGL/BAC weights shifted. Top-5 membership changes -> re-trade gate
+     must fire. The amendmentType itself lives in the /A's primary_doc.xml; the fixture EdgarPort
+     carries it on the FilingRecord. -->
+<informationTable xmlns="http://www.sec.gov/edgar/document/thirteenf/informationtable">
+  <infoTable>
+    <nameOfIssuer>BERKSHIRE HATHAWAY INC DEL</nameOfIssuer>
+    <titleOfClass>CL B</titleOfClass>
+    <cusip>084670702</cusip>
+    <value>800000000</value>
+    <shrsOrPrnAmt>
+      <sshPrnamt>1700000</sshPrnamt>
+      <sshPrnamtType>SH</sshPrnamtType>
+    </shrsOrPrnAmt>
+    <investmentDiscretion>SOLE</investmentDiscretion>
+    <votingAuthority><Sole>1700000</Sole><Shared>0</Shared><None>0</None></votingAuthority>
+  </infoTable>
+  <infoTable>
+    <nameOfIssuer>ALPHABET INC</nameOfIssuer>
+    <titleOfClass>CAP STK CL A</titleOfClass>
+    <cusip>02079K305</cusip>
+    <value>750000000</value>
+    <shrsOrPrnAmt>
+      <sshPrnamt>3850000</sshPrnamt>
+      <sshPrnamtType>SH</sshPrnamtType>
+    </shrsOrPrnAmt>
+    <investmentDiscretion>SOLE</investmentDiscretion>
+    <votingAuthority><Sole>3850000</Sole><Shared>0</Shared><None>0</None></votingAuthority>
+  </infoTable>
+  <infoTable>
+    <nameOfIssuer>BANK AMER CORP</nameOfIssuer>
+    <titleOfClass>COM</titleOfClass>
+    <cusip>060505104</cusip>
+    <value>520000000</value>
+    <shrsOrPrnAmt>
+      <sshPrnamt>11750000</sshPrnamt>
+      <sshPrnamtType>SH</sshPrnamtType>
+    </shrsOrPrnAmt>
+    <investmentDiscretion>SOLE</investmentDiscretion>
+    <votingAuthority><Sole>11750000</Sole><Shared>0</Shared><None>0</None></votingAuthority>
+  </infoTable>
+  <infoTable>
+    <nameOfIssuer>EAST WEST BANCORP INC</nameOfIssuer>
+    <titleOfClass>COM</titleOfClass>
+    <cusip>27579R104</cusip>
+    <value>400000000</value>
+    <shrsOrPrnAmt>
+      <sshPrnamt>3900000</sshPrnamt>
+      <sshPrnamtType>SH</sshPrnamtType>
+    </shrsOrPrnAmt>
+    <investmentDiscretion>SOLE</investmentDiscretion>
+    <votingAuthority><Sole>3900000</Sole><Shared>0</Shared><None>0</None></votingAuthority>
+  </infoTable>
+  <infoTable>
+    <nameOfIssuer>APPLE INC</nameOfIssuer>
+    <titleOfClass>COM</titleOfClass>
+    <cusip>037833100</cusip>
+    <value>350000000</value>
+    <shrsOrPrnAmt>
+      <sshPrnamt>1750000</sshPrnamt>
+      <sshPrnamtType>SH</sshPrnamtType>
+    </shrsOrPrnAmt>
+    <investmentDiscretion>SOLE</investmentDiscretion>
+    <votingAuthority><Sole>1750000</Sole><Shared>0</Shared><None>0</None></votingAuthority>
+  </infoTable>
+</informationTable>
