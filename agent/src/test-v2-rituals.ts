@@ -474,5 +474,14 @@ await (async () => {
   check("late filers noted", cap.posts.some((p) => p.includes("has not filed")));
 })();
 
+// ---------- effective-mode double-gate (the v1 rail v2 must honor) ----------
+{
+  const { effectiveMode } = await import("./mode.js");
+  check("MODE=auto without env opt-in degrades to gated", effectiveMode("auto", false) === "gated");
+  check("MODE=auto + BILL_ALLOW_AUTO_EXEC=1 → auto", effectiveMode("auto", true) === "auto");
+  check("gated stays gated regardless of env", effectiveMode("gated", true) === "gated");
+  check("off stays off", effectiveMode("off", false) === "off");
+}
+
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nall ritual tests passed");
 process.exit(failures ? 1 : 0);

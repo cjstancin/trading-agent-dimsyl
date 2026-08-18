@@ -3,7 +3,7 @@
 // tests never import this module. Config is loaded ONCE per process (per ritual run) here.
 import { openDb } from "../db.js";
 import { loadConfig, type EffectiveConfig } from "../config.js";
-import { getMode } from "../../mode.js";
+import { effectiveMode } from "../../mode.js";
 import { alpacaBroker, alpacaReadPort } from "../broker.js";
 import { latestPrice, getBars } from "../../alpaca.js";
 import { isMarketDayToday } from "../../market-calendar.js";
@@ -36,7 +36,9 @@ function core(): CoreDeps & { eff: EffectiveConfig } {
   return {
     db: openDb(),
     eff: loadConfig(),
-    mode: getMode(),
+    // Double-gated (v1 rail carried forward): MODE=auto alone runs as gated until
+    // BILL_ALLOW_AUTO_EXEC=1 is also set in the env.
+    mode: effectiveMode(),
     today: etDateKey(),
     post: postBill,
     latestPrice,

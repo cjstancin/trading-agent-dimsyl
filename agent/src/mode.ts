@@ -38,3 +38,13 @@ export function setMode(m: Mode): void {
 export function autoExecAllowed(): boolean {
   return getMode() === "auto" && process.env.BILL_ALLOW_AUTO_EXEC === "1";
 }
+
+/** The v2 rituals' EFFECTIVE mode — the v1 double-gate carried forward: "auto" counts only when the
+ *  MODE file AND BILL_ALLOW_AUTO_EXEC=1 both agree; a lone MODE=auto degrades to "gated" (compute +
+ *  narrate, place nothing), exactly what the mode CLI warns. Pure over its inputs for testability. */
+export function effectiveMode(
+  mode: Mode = getMode(),
+  allow: boolean = process.env.BILL_ALLOW_AUTO_EXEC === "1",
+): Mode {
+  return mode === "auto" && !allow ? "gated" : mode;
+}
