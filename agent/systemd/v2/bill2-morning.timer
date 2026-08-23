@@ -1,7 +1,12 @@
 [Unit]
-Description=Bill v2 morning timer — Mon..Fri 09:35 America/New_York
+Description=Bill v2 morning timer — Mon..Fri 09:35 America/New_York (+14:40 UTC backstop)
 [Timer]
+# Second line = UTC backstop (09:40 EST / 10:40 EDT — always regular hours on a market day):
+# systemd 255's TZ calendar computation silently skipped all five America/New_York bill2 timers
+# on 2026-08-22 while the box was up. The ritual is idempotent by state (same design as the
+# two-tick morning), so a backstop fire after a normal ET fire is a cheap no-op pass.
 OnCalendar=Mon..Fri 09:35 America/New_York
+OnCalendar=Mon..Fri *-*-* 14:40:00 UTC
 Persistent=false
 Unit=bill2-morning.service
 [Install]

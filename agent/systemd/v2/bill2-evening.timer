@@ -1,7 +1,11 @@
 [Unit]
-Description=Bill v2 evening timer — Mon..Fri 16:30 America/New_York
+Description=Bill v2 evening timer — Mon..Fri 16:30 America/New_York (+21:40 UTC backstop)
 [Timer]
+# Second line = UTC backstop (16:40 EST / 17:40 EDT — after the close in both DST regimes). See
+# bill2-morning.timer for the 2026-08-22 TZ-skip incident this guards against; replay/marks are
+# idempotent per date, so a second same-day fire is a no-op pass.
 OnCalendar=Mon..Fri 16:30 America/New_York
+OnCalendar=Mon..Fri *-*-* 21:40:00 UTC
 Persistent=false
 Unit=bill2-evening.service
 [Install]

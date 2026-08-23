@@ -251,6 +251,27 @@ await (async () => {
   check("sweep skipped with a note when SGOV unpriced", posts.some((p) => p.includes("SGOV") && p.includes("NO_PRICE")));
 })();
 
+console.log("v2 rituals — morning: fully cash-skipped rebalance does NOT burn the month:");
+await (async () => {
+  const db = openDb(":memory:");
+  seedBook(db, "5000", TODAY);
+  // Park nearly everything (the launch-day shape: cash swept to SGOV before momentum's window).
+  recordCash(db, { ts: TODAY + "T13:36:00Z", kind: "sweep_buy", symbol: "SGOV", amount9: -d9("4990"), settlesOn: TODAY, ref: "park" });
+  ingestFill(db, { id: "p1", symbol: "SGOV", side: "buy", qty9: d9("49.9"), price9: d9("100"), ts: TODAY + "T13:36:00Z", sleeve: "book" });
+  ensureMomTables(db);
+  db.prepare("INSERT INTO mom_ranks(month, symbol, score, dollar_volume, fip, mom_rank, final_rank, veto) VALUES(?,?,?,?,?,?,?,?)")
+    .run("2026-07", "AAA", 0.5, 1e6, 0.4, 1, 1, null);
+  const { deps, posts } = mkMorningDeps(db, { prices: { AAA: 50, SGOV: 100 } });
+  const res = await runMorningRitual(deps);
+  check("ritual ok", res.ok === true, JSON.stringify(res.steps));
+  check("buy skipped for settled cash", posts.some((p) => p.includes("AAA") && p.includes("NO_SETTLED_CASH")), JSON.stringify(posts));
+  check("month NOT marked executed on full cash-skip", getState(db, "mom:executed-month") === null, String(getState(db, "mom:executed-month")));
+  check("retry note posted", posts.some((p) => p.includes("fully cash-skipped")));
+  check("sweep holds back the pending momentum need", posts.some((p) => p.includes("holding back") && p.includes("momentum 2026-07")), JSON.stringify(posts.filter((p) => p.includes("holding"))));
+  // The sweep's sell-to-fund branch: shortfall beyond settled → liquidate SGOV first.
+  check("sweep liquidates SGOV to fund the pending month", posts.some((p) => p.includes("liquidate SGOV first")), JSON.stringify(posts.filter((p) => p.includes("SGOV"))));
+})();
+
 console.log("v2 rituals — morning: insider entries exempt from dial scalar + skip notes:");
 await (async () => {
   const db = openDb(":memory:");

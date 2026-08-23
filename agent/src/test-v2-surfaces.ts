@@ -111,5 +111,24 @@ console.log("v2 surfaces — digest + statement + explains:");
   check("explains prompt: voice + honesty rails", prompt.includes("Bill the Bull") && prompt.includes("Never invent trades"));
 }
 
+console.log("v2 surfaces — discord sender path:");
+{
+  // Regression guard: discord.ts dynamically imports the fleet notifier by RELATIVE path, and
+  // postBill's catch swallows a resolution failure — a wrong depth silenced every post from
+  // launch (2026-08-18) until 2026-08-23. Resolve the specifier from the module's real location
+  // and require the file to exist.
+  const { readFileSync } = await import("node:fs");
+  const { existsSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const discordSrcUrl = new URL("./v2/surfaces/discord.ts", import.meta.url);
+  const src = readFileSync(fileURLToPath(discordSrcUrl), "utf8");
+  const m = src.match(/import\("([^"]+notify-discord\.mjs)"/);
+  check("discord.ts declares a notify-discord import", !!m, "specifier not found");
+  if (m) {
+    const resolved = fileURLToPath(new URL(m[1], discordSrcUrl));
+    check("notifier specifier resolves to a real file", existsSync(resolved), resolved);
+  }
+}
+
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1); }
 console.log("v2 surfaces: all green");

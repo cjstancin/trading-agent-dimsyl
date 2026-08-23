@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { openDb, getState } from "./v2/db.js";
 import { d9, d9str, type D9 } from "./v2/decimal.js";
 import { loadConfig } from "./v2/config.js";
-import { seedBook } from "./v2/settled-cash.js";
+import { seedBook, recordCash } from "./v2/settled-cash.js";
 import { ingestFill } from "./v2/lots.js";
 import type { BrokerPort, BrokerOrderRequest, SubmitResult } from "./v2/broker.js";
 import { parseForm4, classifyTxn, txnValue9, primaryOwner, type ParsedForm4 } from "./v2/sleeves/insider/form4.js";
@@ -485,6 +485,37 @@ await (async () => {
   });
   check("second reset REFUSED (max one)", res3[0].outcome === "shadow" && readMeta(db, "SYMA")!.clockResets === 1
     && readMeta(db, "SYMA")!.resetDate === "2026-09-21");
+})();
+
+// ---------- planner: NO_SETTLED_CASH keeps the signal pending (cash-retry), bounded ----------
+await (async () => {
+  const db = openDb(":memory:");
+  ensureInsiderTables(db);
+  seedBook(db, "5000", "2026-08-11");
+  // Park the cash: settled drops to $10, the launch-week SGOV-sweep shape.
+  recordCash(db, { ts: "2026-08-11T13:36:00Z", kind: "sweep_buy", symbol: "SGOV", amount9: -d9("4990"), settlesOn: "2026-08-11", ref: "park" });
+  const broker = mockBroker();
+  const cC = mkCluster("SYMC", 5, "ins:SYMC:2026-08-10");
+  const base = {
+    configVersion: eff.version, washBlacklistDays: WBL, horizonTradingDays: EXITCFG.horizonTradingDays,
+    clusterResetMaxMonths: EXITCFG.clusterResetMaxMonths, benchEntryPx9: null,
+  };
+  const res = await executeEntries(db, broker, {
+    ...base, clusters: [cC], signalDate: "2026-08-10", entryDate: "2026-08-11",
+    decisions: [{ kind: "fund", symbol: "SYMC", clusterId: cC.clusterId, sector: "Tech", notional9: d9("500"), estPrice9: d9("10") }],
+  });
+  check("cash-starved entry → cash-retry, nothing submitted", res[0].outcome === "cash-retry" && broker.submits.length === 0, JSON.stringify(res[0]));
+  const sig = db.prepare("SELECT entry_date, funded FROM ins_signals WHERE cluster_id=?").get(cC.clusterId) as any;
+  check("signal stays PENDING (entry_date NULL, not shadowed)", sig.entry_date === null && sig.funded === 0, JSON.stringify(sig));
+
+  // Past the retry window the same skip goes to the shadow book like any other.
+  const res2 = await executeEntries(db, broker, {
+    ...base, clusters: [cC], signalDate: "2026-08-10", entryDate: "2026-08-20",
+    decisions: [{ kind: "fund", symbol: "SYMC", clusterId: cC.clusterId, sector: "Tech", notional9: d9("500"), estPrice9: d9("10") }],
+  });
+  const sig2 = db.prepare("SELECT entry_date, funded, skip_reason FROM ins_signals WHERE cluster_id=?").get(cC.clusterId) as any;
+  check("beyond the window → shadowed with the cash reason",
+    res2[0].outcome === "gateway-skip" && sig2.entry_date === "2026-08-20" && sig2.funded === 0 && sig2.skip_reason === "NO_SETTLED_CASH", JSON.stringify(sig2));
 })();
 
 // ---------- exits: horizon + reset anchor + 9-month cap ----------

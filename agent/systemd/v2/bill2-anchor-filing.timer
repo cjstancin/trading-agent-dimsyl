@@ -1,7 +1,11 @@
 [Unit]
-Description=Bill v2 anchor-filing timer — Mon..Fri 20:15 America/New_York
+Description=Bill v2 anchor-filing timer — Mon..Fri 20:15 America/New_York (+Tue..Sat 01:25 UTC backstop)
 [Timer]
+# Second line = UTC backstop (Mon..Fri 20:25 EST / 21:25 EDT — the weekday shifts by one across
+# the UTC midnight). See bill2-morning.timer for the 2026-08-22 TZ-skip incident this guards
+# against; the ritual self-gates, so a second same-evening fire is a no-op pass.
 OnCalendar=Mon..Fri 20:15 America/New_York
+OnCalendar=Tue..Sat *-*-* 01:25:00 UTC
 Persistent=false
 Unit=bill2-anchor-filing.service
 [Install]

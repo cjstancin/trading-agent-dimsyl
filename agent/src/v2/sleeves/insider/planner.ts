@@ -153,9 +153,19 @@ export function insHeld(db: DatabaseSync): { symbol: string; sector: string | nu
 export interface ExecutedEntry {
   symbol: string;
   clusterId: string;
-  outcome: "placed" | "shadow" | "gateway-skip" | "clock-reset";
+  outcome: "placed" | "shadow" | "gateway-skip" | "clock-reset" | "cash-retry";
   reason?: string;
   clientOrderId?: string;
+}
+
+/** How many calendar days past the signal a cash-starved entry may keep retrying before it goes
+ *  to the shadow book for good. The sweep frees SGOV the same morning (T+1 settle), so one retry
+ *  normally suffices; the window is slack for weekends/holidays. */
+export const CASH_RETRY_WINDOW_DAYS = 4;
+
+export function withinCashRetryWindow(signalDate: string, entryDate: string): boolean {
+  const days = (Date.parse(entryDate + "T12:00:00Z") - Date.parse(signalDate + "T12:00:00Z")) / 86_400_000;
+  return days <= CASH_RETRY_WINDOW_DAYS;
 }
 
 /** Execute decisions: every qualifying cluster gets its shadow-book row; funded ones go through
@@ -214,6 +224,14 @@ export async function executeEntries(db: DatabaseSync, broker: BrokerPort, opts:
 
     if (!place.placed) {
       const reason = place.skipped ?? "GATEWAY_REJECTED";
+      // Settled cash parked in SGOV is not a verdict on the signal (design §1: SGOV is liquidated
+      // FIRST when a sleeve needs cash). Leave entry_date NULL so the signal stays in the pending
+      // queue — the sweep sees it via pendingSleeveNeeds9 and frees cash for tomorrow's open.
+      // Bounded: past the retry window it shadows like any other skip.
+      if (reason === "NO_SETTLED_CASH" && withinCashRetryWindow(opts.signalDate, opts.entryDate)) {
+        out.push({ symbol: d.symbol, clusterId: d.clusterId, outcome: "cash-retry", reason });
+        continue;
+      }
       markShadow(db, d.clusterId, { reason, entryDate: opts.entryDate, entryPx9: null, benchEntryPx9: opts.benchEntryPx9 });
       out.push({ symbol: d.symbol, clusterId: d.clusterId, outcome: "gateway-skip", reason, clientOrderId: place.clientOrderId });
       continue;

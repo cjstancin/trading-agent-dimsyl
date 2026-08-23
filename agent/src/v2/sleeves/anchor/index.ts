@@ -33,7 +33,7 @@ export interface AnchorPorts {
   prices: PricePort;
 }
 
-const PENDING_KEY = "anc:pending_rebuild";
+export const PENDING_KEY = "anc:pending_rebuild";
 
 /** Seed sleeve equity before any position exists: book equity × anchor split. Steady-state equity
  *  (positions value + sleeve cash share) is computed by the BOOK layer and passed in — the sleeve
@@ -273,13 +273,19 @@ export async function tradeNextOpen(
     washBlacklistDays: eff.config.ledger.washBlacklistDays,
   });
 
-  const slotsBySymbol = new Map<string, string[]>();
-  for (const slot of target.slots) {
-    for (const line of slot.lines) {
-      slotsBySymbol.set(line.symbol, [...(slotsBySymbol.get(line.symbol) ?? []), slot.manager]);
+  // A rebuild that placed NOTHING because settled cash was parked keeps its marker: the sweep
+  // sees the pending need, frees SGOV (T+1), and the next auto morning retries the same build.
+  const cashStarved = execute.placed === 0
+    && execute.refused.some((r) => r.result.skipped === "NO_SETTLED_CASH");
+  if (!cashStarved) {
+    const slotsBySymbol = new Map<string, string[]>();
+    for (const slot of target.slots) {
+      for (const line of slot.lines) {
+        slotsBySymbol.set(line.symbol, [...(slotsBySymbol.get(line.symbol) ?? []), slot.manager]);
+      }
     }
+    writePositionMeta(db, target.targets, slotsBySymbol);
+    clearState(db, PENDING_KEY);
   }
-  writePositionMeta(db, target.targets, slotsBySymbol);
-  clearState(db, PENDING_KEY);
-  return { traded: execute.placed > 0, reason: marker.reason, execute, problems: plan.problems };
+  return { traded: execute.placed > 0, reason: cashStarved ? `${marker.reason} — cash-starved, marker kept for retry` : marker.reason, execute, problems: plan.problems };
 }

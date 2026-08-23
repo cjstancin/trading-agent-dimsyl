@@ -1,7 +1,14 @@
 [Unit]
-Description=Bill v2 insider-poll timer — Mon..Fri *-*-* 06..22:00/3:00 America/New_York
+Description=Bill v2 insider-poll timer — Mon..Fri every 3h 06:00-21:00 ET (+UTC backstop; ritual self-gates 06:00-22:05 ET)
 [Timer]
-OnCalendar=Mon..Fri *-*-* 06..22:00/3:00 America/New_York
+# Every 3 HOURS (06,09,12,15,18,21 ET). The launch spec "06..22:00/3:00" put the /3 step on the
+# MINUTE field — systemd fired every 3 minutes, ~340 EDGAR hits/day, and SEC throttled the box
+# (47 logged 403s). The second line is a UTC backstop: systemd 255's TZ calendar computation
+# silently skipped ALL five America/New_York timers on 2026-08-22 (box up, journal clean, every
+# UTC-spec fleet timer fired) — a UTC line keeps a miss from costing a full trading day. The
+# ritual's own ET window gate makes extra fires no-ops.
+OnCalendar=Mon..Fri *-*-* 06..21/3:00:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 11..23/3:00:00 UTC
 Persistent=false
 Unit=bill2-insider-poll.service
 [Install]

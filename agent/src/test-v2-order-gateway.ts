@@ -162,5 +162,23 @@ await (async () => {
   check("no v2 source reads buying_power", offenders.length === 0, offenders.join(","));
 }
 
+// Wire formats: Alpaca rejects >2dp notionals (422 code 42210000 — the launch-week sweep/anchor
+// rejections). Notional FLOORS to the cent; limit/stop prices round to the nearest cent.
+await (async () => {
+  const db = openDb(":memory:");
+  seedBook(db, "5000", "2026-08-17");
+  const b = mockBroker();
+  const r = await placeOrder(db, b, { ...BASE_REQ, notional9: d9("1.520792275") }, CFG);
+  check("9dp notional floors to cents on the wire", r.placed === true && b.submits[0].notional === "1.52", String(b.submits[0].notional));
+  const r2 = await placeOrder(db, b, { ...BASE_REQ, symbol: "AXP", notional9: d9("114.11784375") }, CFG);
+  check("launch-week reject case now wires 2dp", r2.placed === true && b.submits[1].notional === "114.11", String(b.submits[1].notional));
+  const r3 = await placeOrder(db, b, {
+    ...BASE_REQ, symbol: "ABCL", type: "limit" as const, qty9: d9("10"), estPrice9: d9("60"), limitPrice9: d9("59.996666667"),
+  }, CFG);
+  check("limit price rounds to nearest cent", r3.placed === true && b.submits[2].limit_price === "60", String(b.submits[2].limit_price));
+  check("full-precision notional survives in the intent row",
+    (db.prepare("SELECT notional9 FROM order_intents WHERE client_order_id=?").get(r.clientOrderId!) as any).notional9 === "1.520792275");
+})();
+
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1); }
 console.log("v2 order gateway: all green");

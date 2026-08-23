@@ -8,7 +8,10 @@ export const BILL = { username: "Bill the Bull 🐂", channel: "bull" as const }
 export interface DiscordResult { ok: boolean; skipped?: boolean; parts?: number; error?: string; }
 
 async function loadSender(): Promise<(msg: string, opts: Record<string, unknown>) => Promise<{ ok: boolean; skipped?: boolean; error?: string }>> {
-  const mod = await import("../../../scripts/notify-discord.mjs" as string);
+  // Repo layout: agent/src/v2/surfaces/ → four levels up to the repo root, where scripts/ lives.
+  // (Three levels — agent/scripts/ — does not exist; the wrong depth here silenced every post
+  // from launch day until 2026-08-23 because the catch below swallowed the resolution error.)
+  const mod = await import("../../../../scripts/notify-discord.mjs" as string);
   return mod.sendDiscord;
 }
 
@@ -27,7 +30,8 @@ export function chunkMessage(text: string, max = 1900): string[] {
   return parts;
 }
 
-/** Post to #trade-bot in Bill's voice. Chunks long messages; never throws. */
+/** Post to #trade-bot in Bill's voice. Chunks long messages; never throws — but a failure is
+ *  LOGGED to stdout (→ the ritual log file), so a dead rail is visible instead of silent. */
 export async function postBill(text: string): Promise<DiscordResult> {
   if (!text.trim()) return { ok: false, error: "empty" };
   try {
@@ -35,13 +39,17 @@ export async function postBill(text: string): Promise<DiscordResult> {
     const parts = chunkMessage(text);
     let allOk = true;
     let skipped = false;
+    let firstError: string | undefined;
     for (const p of parts) {
       const r = await send(p, { channel: BILL.channel, username: BILL.username });
       if (r.skipped) skipped = true;
-      if (!r.ok) allOk = false;
+      if (!r.ok) { allOk = false; firstError ??= r.error; }
     }
+    if (!allOk) console.warn(`[discord] post ${skipped ? "skipped (webhook unset/invalid)" : "failed"}${firstError ? `: ${firstError}` : ""}`);
     return { ok: allOk, skipped, parts: parts.length };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    const error = e instanceof Error ? e.message : String(e);
+    console.warn(`[discord] sender unavailable: ${error}`);
+    return { ok: false, error };
   }
 }

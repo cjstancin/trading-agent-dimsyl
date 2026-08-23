@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { openDb, getState } from "./v2/db.js";
 import { d9, d9str, div9, mul9, ONE9, type D9 } from "./v2/decimal.js";
 import { loadConfig, DEFAULTS_PATH } from "./v2/config.js";
-import { seedBook } from "./v2/settled-cash.js";
+import { seedBook, recordCash } from "./v2/settled-cash.js";
 import { ingestFill } from "./v2/lots.js";
 import { markIntentStatus } from "./v2/order-gateway.js";
 import type { BrokerPort, BrokerOrderRequest, SubmitResult } from "./v2/broker.js";
@@ -502,6 +502,28 @@ await (async () => {
   const mapEvening = await runFilingEvening(dbMap, { ...ports, mapping: fixtureMapping(noAmzn) }, eff, { period: PERIOD, today: "2026-08-14" });
   const mapRows = dbMap.prepare("SELECT COUNT(*) AS n FROM approvals WHERE kind='anchor-mapping'").get() as any;
   check("e2e: mapping failure → approvals row, line dropped", mapEvening.mappingFlags === 1 && Number(mapRows.n) === 1 && !mapEvening.build!.targets.has("AMZN"));
+})();
+
+// ---------- cash-starved next-open keeps the pending marker for retry ----------
+await (async () => {
+  const db = openDb(":memory:");
+  seedBook(db, "5000", "2026-08-14");
+  // Park the cash (the launch-week SGOV-sweep shape): settled drops to $10.
+  recordCash(db, { ts: "2026-08-14T13:36:00Z", kind: "sweep_buy", symbol: "SGOV", amount9: -d9("4990"), settlesOn: "2026-08-14", ref: "park" });
+  const index: Record<string, FilingRecord[]> = {
+    [CIK.brk]: [RECS.brk], [CIK.tci]: [RECS.tci], [CIK.altarock]: [RECS.altarock], [CIK.himalaya]: [RECS.himalaya],
+  };
+  const ports = { edgar: fixtureEdgar(index), mapping: mappingAll, prices: fixturePrices(LATEST_PRICES) };
+  await runFilingEvening(db, ports, eff, { period: PERIOD, today: "2026-08-14" });
+  const broker = mockBroker();
+  const trade = await tradeNextOpen(db, broker, ports.prices, eff, { asOfDate: "2026-08-17", sleeveEquity9: seedSleeveEquity9(eff) });
+  check("cash-starved: nothing traded", trade.traded === false && trade.execute?.placed === 0, JSON.stringify(trade.execute?.refused?.slice(0, 2)));
+  check("cash-starved: refusals are the settled-cash gate",
+    (trade.execute?.refused.length ?? 0) > 0 && trade.execute!.refused.every((r) => r.result.skipped === "NO_SETTLED_CASH"),
+    JSON.stringify(trade.execute?.refused.map((r) => r.result.skipped).slice(0, 4)));
+  check("cash-starved: marker KEPT for retry", getState(db, "anc:pending_rebuild") !== null);
+  check("cash-starved: no position_meta written yet",
+    Number((db.prepare("SELECT COUNT(*) AS n FROM position_meta WHERE sleeve='anc'").get() as any).n) === 0);
 })();
 
 // ---------- structural rail: the sleeve never reads buying_power (mirrors the shared v2 grep,

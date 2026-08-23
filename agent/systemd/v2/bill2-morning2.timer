@@ -1,7 +1,10 @@
 [Unit]
-Description=Bill v2 morning SECOND tick — Mon..Fri 10:35 ET (inside the momentum 10:30-15:00 trade window; the ritual is idempotent, the 09:35 tick handles everything except momentum execution)
+Description=Bill v2 morning SECOND tick — Mon..Fri 10:35 ET (+15:40 UTC backstop; inside the momentum 10:30-15:00 trade window; the ritual is idempotent, the 09:35 tick handles everything except momentum execution)
 [Timer]
+# Second line = UTC backstop (10:40 EST / 11:40 EDT — inside the momentum window in both DST
+# regimes). See bill2-morning.timer for the 2026-08-22 TZ-skip incident this guards against.
 OnCalendar=Mon..Fri 10:35 America/New_York
+OnCalendar=Mon..Fri *-*-* 15:40:00 UTC
 Persistent=false
 Unit=bill2-morning.service
 [Install]

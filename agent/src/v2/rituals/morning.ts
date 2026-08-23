@@ -6,7 +6,8 @@
 // Every sub-step runs inside step(): one failure posts a note and the ritual continues (v1 lesson —
 // never die silently). Trades place ONLY in mode "auto"; "gated" computes and posts "would have".
 import type { DatabaseSync } from "node:sqlite";
-import { d9, d9str, d9num, mul9, type D9 } from "../decimal.js";
+import { d9, d9str, d9num, mul9, min9, type D9 } from "../decimal.js";
+import type { EffectiveConfig } from "../config.js";
 import { getState, setState } from "../db.js";
 import type { BrokerPort, ReadPort } from "../broker.js";
 import type { MarketDayCheck } from "../../market-calendar.js";
@@ -31,17 +32,59 @@ import { markShadow } from "../sleeves/insider/shadow.js";
 import { ensureMomTables } from "../sleeves/momentum/schema.js";
 import { planRebalance, executeRebalance, momHoldingsFromLedger, computeVolBrake, type Holding } from "../sleeves/momentum/planner.js";
 import type { MomentumConfig, PricePort as MomPricePort } from "../sleeves/momentum/ports.js";
-import { tradeNextOpen } from "../sleeves/anchor/index.js";
+import { tradeNextOpen, PENDING_KEY as ANC_PENDING_KEY } from "../sleeves/anchor/index.js";
 import type { PricePort as AncPricePort } from "../sleeves/anchor/types.js";
 import { pendingEntrySignals } from "./insider-signals.js";
 import { morningCorpActions } from "./corp-actions.js";
 import {
   step, numToD9, bookEquity9, sleeveEquityFor9, priceMap9, sleeveSymbols, ownerSleeveFor,
   avgEntryPrice9, queueApprovalRow,
-  type CoreDeps, type StepResult, type DailyBarsFn, type AlpacaBarLike,
+  type CoreDeps, type StepResult, type DailyBarsFn, type AlpacaBarLike, type LatestPriceFn,
 } from "./support.js";
 
 export const MOM_EXECUTED_MONTH_KEY = "mom:executed-month";
+
+/** Sleeve deployments that are PENDING but not yet reservable at the gateway (planned, not
+ *  placed): an unexecuted momentum month, queued insider signals, a pending anchor rebuild, and —
+ *  when the weekly pick run is next trading day (Friday's sweep, T+1 settle) — the wildcard gap.
+ *  The sweep treats this as spoken-for cash (design §1: SGOV is liquidated FIRST whenever a
+ *  sleeve needs cash). Launch week proved the gap: the 09:35 sweep parked momentum's whole
+ *  allocation 55 minutes before its 10:30 execution window and all ten buys skipped
+ *  NO_SETTLED_CASH. Padded 1% for price drift — over-reserving just leaves cash unswept a day. */
+export async function pendingSleeveNeeds9(
+  db: DatabaseSync, eff: EffectiveConfig, latest: LatestPriceFn, opts: { reserveWildcard: boolean },
+): Promise<{ total9: D9; parts: string[] }> {
+  ensureMomTables(db);
+  const parts: string[] = [];
+  let total9 = 0n;
+  const gapFor = async (sleeve: Sleeve): Promise<D9> => {
+    const prices = await priceMap9(sleeveSymbols(db, sleeve), latest);
+    const deployed9 = sleeveValue9(db, sleeve, prices).value9;
+    const gap = sleeveEquityFor9(db, eff, sleeve) - deployed9;
+    return gap > 0n ? gap : 0n;
+  };
+  const month = (db.prepare("SELECT MAX(month) AS m FROM mom_ranks").get() as { m: string | null } | undefined)?.m ?? null;
+  const momDone = getState(db, MOM_EXECUTED_MONTH_KEY);
+  if (month && (!momDone || momDone < month)) {
+    const gap = await gapFor("mom");
+    if (gap > 0n) { total9 += gap; parts.push(`momentum ${month} rebalance $${d9str(gap)}`); }
+  }
+  const insPending = pendingEntrySignals(db).length;
+  if (insPending > 0) {
+    const slot9 = mul9(d9(String(insPending)), d9(String(eff.config.insider.capacity.slotCeilUsd)));
+    const need = min9(slot9, await gapFor("ins"));
+    if (need > 0n) { total9 += need; parts.push(`${insPending} insider signal(s) $${d9str(need)}`); }
+  }
+  if (getState(db, ANC_PENDING_KEY)) {
+    const gap = await gapFor("anc");
+    if (gap > 0n) { total9 += gap; parts.push(`anchor rebuild $${d9str(gap)}`); }
+  }
+  if (opts.reserveWildcard) {
+    const gap = await gapFor("wld");
+    if (gap > 0n) { total9 += gap; parts.push(`wildcard weekly $${d9str(gap)}`); }
+  }
+  return { total9: mul9(total9, d9("1.01")), parts };
+}
 
 export interface MorningDeps extends CoreDeps {
   broker: BrokerPort;
@@ -280,6 +323,7 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
     for (const r of res) {
       if (r.outcome === "placed") await post(tradeNote({ sleeve: "ins", symbol: r.symbol, side: "buy", intent: "buy", thesis: "insider cluster entry (next open)", protection: "126-session horizon + reversal + ATR event → thesis-check" }));
       else if (r.outcome === "clock-reset") await post(`🔁 [Insider] ${r.symbol}: new qualifying cluster on a held name — horizon clock reset once, no added capital.`);
+      else if (r.outcome === "cash-retry") await post(`⏳ [Insider] ${r.symbol}: entry deferred — settled cash parked; the sweep frees SGOV and the signal retries next open.`);
       else await post(skipNote("ins", r.symbol, r.reason ?? r.outcome));
     }
     return `${res.filter((r) => r.outcome === "placed").length}/${pend.length} entered`;
@@ -344,7 +388,15 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
       await post(`⏳ [Momentum] rebalance for ${month} pending — ${exec.reason}.`);
       return `not executed: ${exec.reason}`;
     }
-    setState(db, MOM_EXECUTED_MONTH_KEY, month);
+    // A rebalance that placed NOTHING because settled cash was parked is not "executed" — the
+    // month stays owed, the sweep sees the pending need and frees SGOV, and tomorrow's run
+    // retries (fresh per-date key). Launch day burned the month on placed 0 / skipped 10.
+    const cashStarved = exec.placed.length === 0 && exec.skipped.some((s) => s.skip === "NO_SETTLED_CASH");
+    if (cashStarved) {
+      await post(`⏳ [Momentum] rebalance for ${month} fully cash-skipped — month NOT marked done; the sweep frees SGOV and tomorrow retries.`);
+    } else {
+      setState(db, MOM_EXECUTED_MONTH_KEY, month);
+    }
     for (const p of exec.placed) await post(tradeNote({ sleeve: "mom", symbol: p.symbol, side: p.side as "buy" | "sell", intent: p.side, reason: p.side === "sell" ? "monthly re-rank" : "monthly rebalance", fillPrice: undefined }));
     for (const s of exec.skipped) await post(skipNote("mom", s.symbol, s.skip, s.detail));
     return `executed ${month}: placed ${exec.placed.length}, skipped ${exec.skipped.length}`;
@@ -401,9 +453,15 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
       await post(skipNote("book", etf, "NO_PRICE", "sweep skipped this run"));
       return "no price";
     }
-    // Open buy reservations (entries placed this morning, fills not yet replayed) are spoken-for
-    // cash — the sweep must leave room for them or the gateway's reservation-aware gate refuses it.
-    const reserved9 = openBuyReservations9(db);
+    // Spoken-for cash the sweep must leave alone: open buy reservations (entries placed this
+    // morning, fills not yet replayed) PLUS pending sleeve deployments that are planned but not
+    // yet placed (an unexecuted momentum month, queued insider signals, a pending anchor rebuild,
+    // Friday's wildcard reserve). Short of the total → the sweep SELLS SGOV to cover (T+1 settle).
+    const pending = await pendingSleeveNeeds9(db, eff, latestPrice, { reserveWildcard: deps.weekday() === 5 });
+    const reserved9 = openBuyReservations9(db) + pending.total9;
+    if (pending.parts.length) {
+      await post(`🏦 [Book] sweep holding back pending deployments: ${pending.parts.join(" · ")}`);
+    }
     if (!tradesAllowed) {
       const plan = decideSweep({
         settled9: settledCash(db, today), float9: d9(String(cfg.book.sweep.floatUsd)), need9: reserved9,

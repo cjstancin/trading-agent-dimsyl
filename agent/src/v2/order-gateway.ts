@@ -22,6 +22,21 @@ import type { BrokerPort, BrokerOrderRequest } from "./broker.js";
 
 const MIN_NOTIONAL9 = d9("1"); // Alpaca's $1 floor — below it the broker rejects (v1 saw these daily)
 
+// ---- Alpaca wire formats (422 code 42210000: "notional value must be limited to 2 decimal
+// places"). Internal math stays d9; ONLY the wire payload is rounded, and fills replay the
+// broker's actual numbers so the ledger never sees the rounding.
+const CENT9 = 10_000_000n; // $0.01 in d9
+
+/** Notional → wire: FLOOR to the cent, so the wire amount never exceeds what the gates approved. */
+export function wireNotional(n9: D9): string {
+  return d9str(n9 - (n9 % CENT9));
+}
+
+/** Limit/stop price → wire: round to the nearest cent (standard equity tick). */
+export function wirePrice(p9: D9): string {
+  return d9str(((p9 + CENT9 / 2n) / CENT9) * CENT9);
+}
+
 export interface PlaceRequest {
   owner: OrderOwner;
   symbol: string;
@@ -187,9 +202,9 @@ export async function placeOrder(db: DatabaseSync, broker: BrokerPort, req: Plac
     time_in_force: req.tif ?? "day",
     client_order_id: coid,
     ...(req.qty9 != null ? { qty: d9str(req.qty9) } : {}),
-    ...(req.notional9 != null ? { notional: d9str(req.notional9) } : {}),
-    ...(req.limitPrice9 != null ? { limit_price: d9str(req.limitPrice9) } : {}),
-    ...(req.stopPrice9 != null ? { stop_price: d9str(req.stopPrice9) } : {}),
+    ...(req.notional9 != null ? { notional: wireNotional(req.notional9) } : {}),
+    ...(req.limitPrice9 != null ? { limit_price: wirePrice(req.limitPrice9) } : {}),
+    ...(req.stopPrice9 != null ? { stop_price: wirePrice(req.stopPrice9) } : {}),
   };
   const res = await broker.submit(wire);
 
