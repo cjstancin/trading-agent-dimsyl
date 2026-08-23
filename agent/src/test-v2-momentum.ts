@@ -15,7 +15,7 @@ import {
 import { planRebalance, executeRebalance, hhmmToMinutes, type Holding } from "./v2/sleeves/momentum/planner.js";
 import { snapshotUniverse, universeDeltaCheck, buildUniverse, type UniverseRow } from "./v2/sleeves/momentum/universe.js";
 import { parseConstituentsHtml } from "./v2/sleeves/momentum/wikipedia.js";
-import { extractFundamentals } from "./v2/sleeves/momentum/edgar.js";
+import { extractFundamentals, encodeFacts, decodeFacts } from "./v2/sleeves/momentum/edgar.js";
 import { runShadowMonth, compareBooks } from "./v2/sleeves/momentum/shadow.js";
 import { runMonthEnd } from "./v2/sleeves/momentum/month-end.js";
 import type { Fundamentals, MomentumConfig } from "./v2/sleeves/momentum/ports.js";
@@ -406,6 +406,27 @@ console.log("v2 momentum:");
   const res2 = await runMonthEnd(db, ports, CFG, "2026-07", 2000);
   check("month-end re-run idempotent", res2.universeCount === res.universeCount
     && Number((db.prepare("SELECT COUNT(*) AS n FROM mom_ranks WHERE month='2026-07'").get() as any).n) === 6);
+}
+
+// ---------- facts-cache codec: gzip round-trip, legacy TEXT rows, corrupt rows ----------
+{
+  const facts = makeCompanyFacts({
+    quarters: { Revenues: [100, 110, 120, 130] },
+    instants: { Assets: 1000 },
+  });
+  const blob = encodeFacts(facts);
+  check("codec: gzip round-trip is lossless", JSON.stringify(decodeFacts(blob)) === JSON.stringify(facts));
+  check("codec: blob is actually gzip (magic bytes) and smaller than the JSON",
+    blob[0] === 0x1f && blob[1] === 0x8b && blob.length < JSON.stringify(facts).length, `len ${blob.length}`);
+  check("codec: legacy plain-TEXT row still decodes", JSON.stringify(decodeFacts(JSON.stringify(facts))) === JSON.stringify(facts));
+  check("codec: corrupt row decodes to null (caller refetches)",
+    decodeFacts("not json{") === null && decodeFacts(Buffer.from([1, 2, 3])) === null);
+  // Through SQLite: a Buffer stored in the TEXT-declared column comes back as a BLOB (Uint8Array).
+  const db = openDb(":memory:");
+  ensureMomTables(db);
+  db.prepare("INSERT INTO mom_facts_cache(cik, fetched_ts, json) VALUES(?,?,?)").run("0000000001", new Date().toISOString(), blob);
+  const row = db.prepare("SELECT json FROM mom_facts_cache WHERE cik=?").get("0000000001") as { json: unknown };
+  check("codec: survives a SQLite BLOB round-trip", JSON.stringify(decodeFacts(row.json)) === JSON.stringify(facts));
 }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : "\nall momentum checks passed");

@@ -2,9 +2,10 @@
 //
 //   1. Wire: data.sec.gov companyfacts JSON + the SEC ticker→CIK map, fetched with a declared
 //      User-Agent (SEC blocks anonymous UAs) and throttled to ≤2 req/s (their published fair-use
-//      ceiling is 10/s; we stay far under — 900 CIKs × quarterly refresh is nothing at 2/s).
-//   2. Cache: mom_facts_cache, quarterly cadence. Fundamentals only move on 10-Q/10-K filings, so a
-//      cached blob younger than ~80 days is authoritative; on a fetch failure a STALE blob is
+//      ceiling is 10/s; we stay far under — ~250 CIKs × monthly refresh is ~2 minutes at 2/s).
+//   2. Cache: mom_facts_cache, monthly cadence, GZIPPED blobs (see the codec below). A cached blob
+//      younger than 25 days is authoritative — every monthly rebalance re-pulls, so a fresh
+//      10-Q/10-K is picked up within one cycle; on a fetch failure a STALE blob is
 //      served rather than nothing (a transient SEC 503 must not veto fifty names via
 //      "missing-fundamentals" — that veto is for companies EDGAR genuinely can't explain).
 //   3. Pure extraction (extractFundamentals): US-GAAP tag-FALLBACK CHAINS (filers pick different
@@ -12,6 +13,7 @@
 //      falling back to the most recent annual duration; balance items take the latest instant.
 //      Any concept the chains can't resolve stays null — and null = VETO upstream, by contract.
 import type { DatabaseSync } from "node:sqlite";
+import { gzipSync, gunzipSync } from "node:zlib";
 import { withTimeout, DEFAULT_TIMEOUT_MS } from "../../../http-utils.js";
 import { ensureMomTables } from "./schema.js";
 import type { Fundamentals, FundamentalsPort } from "./ports.js";
@@ -19,8 +21,29 @@ import type { Fundamentals, FundamentalsPort } from "./ports.js";
 const USER_AGENT = "bull-v2-momentum/0.1 (paper-trading research; cj@dimsylaisolutions.com)";
 const TICKER_MAP_URL = "https://www.sec.gov/files/company_tickers.json";
 const FACTS_URL = (cik10: string) => `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik10}.json`;
-const CACHE_MAX_AGE_DAYS = 80;      // < a quarter — one refresh per filing cycle
+const CACHE_MAX_AGE_DAYS = 25;      // < the monthly rebalance gap — every month-end run re-pulls,
+                                    // so a new 10-Q/10-K is never ridden past one cycle (was 80;
+                                    // tightened 2026-08-23 per CJ's always-newest requirement)
 const MIN_REQUEST_GAP_MS = 500;     // ≤2 req/s
+
+// ---------------------------------------------------------------------------
+// Cache codec. companyfacts blobs are stored GZIPPED (the raw JSON averaged ~3.6MB/CIK and the
+// table was 888MB of a 937MB bull.db — 2026-08-23). SQLite stores the Buffer as a BLOB in the same
+// `json` column; legacy plain-TEXT rows from the launch weeks still decode — the read path handles
+// both, and any corrupt row decodes to null so the caller refetches. Nothing is dropped: gzip is
+// lossless and EDGAR remains the permanent upstream source.
+// ---------------------------------------------------------------------------
+export function encodeFacts(j: unknown): Buffer {
+  return gzipSync(JSON.stringify(j));
+}
+
+export function decodeFacts(v: unknown): unknown | null {
+  try {
+    if (typeof v === "string") return JSON.parse(v);
+    if (v instanceof Uint8Array) return JSON.parse(gunzipSync(v).toString("utf8"));
+  } catch { /* corrupt/unreadable row → caller treats as a miss and refetches */ }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Tag-fallback chains. Order matters: most standard tag first.
@@ -178,19 +201,20 @@ export function makeEdgarFundamentalsPort(db: DatabaseSync): FundamentalsPort {
       const cik10 = cik.replace(/\D/g, "").padStart(10, "0");
       const cached = db
         .prepare("SELECT fetched_ts, json FROM mom_facts_cache WHERE cik=?")
-        .get(cik10) as { fetched_ts: string; json: string } | undefined;
+        .get(cik10) as { fetched_ts: string; json: unknown } | undefined;
       const fresh = cached && (Date.now() - Date.parse(cached.fetched_ts)) / 86_400_000 < CACHE_MAX_AGE_DAYS;
       if (cached && fresh) {
-        try { return JSON.parse(cached.json); } catch { /* corrupt cache row → refetch */ }
+        const parsed = decodeFacts(cached.json);
+        if (parsed != null) return parsed;    // corrupt row → fall through and refetch
       }
       const j = await fetchJson(FACTS_URL(cik10));
       if (j != null) {
         db.prepare("INSERT OR REPLACE INTO mom_facts_cache(cik, fetched_ts, json) VALUES(?,?,?)")
-          .run(cik10, new Date().toISOString(), JSON.stringify(j));
+          .run(cik10, new Date().toISOString(), encodeFacts(j));
         return j;
       }
       // Fetch failed: serve stale rather than nothing (transient SEC outage ≠ missing fundamentals).
-      if (cached) { try { return JSON.parse(cached.json); } catch { return null; } }
+      if (cached) return decodeFacts(cached.json);
       return null;
     },
   };
