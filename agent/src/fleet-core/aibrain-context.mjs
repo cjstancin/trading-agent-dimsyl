@@ -23,7 +23,7 @@ import { join, relative, isAbsolute, dirname, parse as parsePath } from "node:pa
 const IS_WIN = process.platform === "win32";
 const SCRIPT_REL_DIR = ["scripts", "context"];
 const SCRIPT_NAME = "render-context.mjs";
-const DEFAULT_VAULT = "C:/Users/stanc/OneDrive/Documents/Obsidian/AIBrain";
+const DEFAULT_VAULT = "C:/Users/cj/obsidian/AIBrain";
 
 /** POSIX: a path component is safe if owned by our uid (or root) and not WORLD-writable.
  *  Ownership is the primary defense (an attacker's planted script is owned by the attacker → rejected).
