@@ -4,6 +4,8 @@ export interface VaultScript {
 }
 export interface AibrainContextOpts {
   project: string;
+  /** Resolver falls back to this project when project is "auto" and inference finds no unambiguous match. */
+  fallbackProject?: string;
   role?: string;
   sensitivity?: string;
   surface?: string;

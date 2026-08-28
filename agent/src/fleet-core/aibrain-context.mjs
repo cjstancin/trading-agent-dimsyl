@@ -92,7 +92,7 @@ export function resolveVaultScript(rawVault) {
  * Load the AIBRAIN context for a project. Returns the resolver's stdout, or "" when disabled / unresolved /
  * the resolver errors. Never throws.
  * @param {string} description  free-text task description passed to the resolver
- * @param {{project:string, role?:string, sensitivity?:string, surface?:string, maxEvidence?:number, defaultVault?:string}} opts
+ * @param {{project:string, fallbackProject?:string, role?:string, sensitivity?:string, surface?:string, maxEvidence?:number, defaultVault?:string}} opts
  */
 export function loadAibrainContext(description, opts) {
   if (/^(?:0|false|off)$/i.test(process.env.AIBRAIN_CONTEXT ?? "")) return "";
@@ -101,17 +101,21 @@ export function loadAibrainContext(description, opts) {
   const resolved = resolveVaultScript(rawVault);
   if (!resolved) return "";
   const { vault, script } = resolved;
+  const argv = [
+    script, "--root", vault,
+    "--project", opts.project,
+    "--surface", opts.surface || "fleet-runtime",
+    "--role", opts.role || "specialist",
+    "--sensitivity", opts.sensitivity || "scoped",
+    "--description", description,
+    "--max-evidence", String(opts.maxEvidence ?? 3),
+  ];
+  // Only meaningful with project:"auto" — the resolver falls back to this project when inference
+  // finds no unambiguous match (used by the SAMS conductor's Henry, whose messages span the fleet).
+  if (opts.fallbackProject) argv.push("--fallback-project", String(opts.fallbackProject));
   const result = spawnSync(
     process.execPath,
-    [
-      script, "--root", vault,
-      "--project", opts.project,
-      "--surface", opts.surface || "fleet-runtime",
-      "--role", opts.role || "specialist",
-      "--sensitivity", opts.sensitivity || "scoped",
-      "--description", description,
-      "--max-evidence", String(opts.maxEvidence ?? 3),
-    ],
+    argv,
     { encoding: "utf8", timeout: Number(process.env.AIBRAIN_CONTEXT_TIMEOUT_MS) || 30_000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, shell: false },
   );
   return result.status === 0 ? result.stdout.trim() : "";
