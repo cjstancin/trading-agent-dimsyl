@@ -8,6 +8,7 @@ import { d9 } from "./v2/decimal.js";
 import { seedBook } from "./v2/settled-cash.js";
 import { ingestFill } from "./v2/lots.js";
 import { placeOrder, openBuyReservations9, markIntentStatus } from "./v2/order-gateway.js";
+import { starvedNotVerdict } from "./v2/types.js";
 import type { BrokerPort, BrokerOrderRequest, SubmitResult } from "./v2/broker.js";
 
 let failures = 0;
@@ -179,6 +180,18 @@ await (async () => {
   check("full-precision notional survives in the intent row",
     (db.prepare("SELECT notional9 FROM order_intents WHERE client_order_id=?").get(r.clientOrderId!) as any).notional9 === "1.520792275");
 })();
+
+console.log("gateway — starvedNotVerdict (shared marker-burn guard):");
+{
+  check("all SLEEVE_HALTED, placed 0 → blocked", starvedNotVerdict(0, ["SLEEVE_HALTED", "SLEEVE_HALTED"]) === true);
+  check("all NO_SETTLED_CASH, placed 0 → blocked", starvedNotVerdict(0, ["NO_SETTLED_CASH"]) === true);
+  check("mixed blocked + verdict skips, placed 0 → still blocked (keep is the safe side)",
+    starvedNotVerdict(0, ["MIN_ORDER", "SLEEVE_HALTED"]) === true);
+  check("anything placed → not blocked (marker may burn)", starvedNotVerdict(1, ["SLEEVE_HALTED"]) === false);
+  check("placed 0 but only verdict skips → not blocked", starvedNotVerdict(0, ["WASH_BLACKLIST", "MIN_ORDER"]) === false);
+  check("placed 0, no skips at all → not blocked", starvedNotVerdict(0, []) === false);
+  check("null/undefined skips ignored", starvedNotVerdict(0, [null, undefined]) === false);
+}
 
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1); }
 console.log("v2 order gateway: all green");

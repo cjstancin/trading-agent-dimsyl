@@ -11,8 +11,9 @@ import type { EffectiveConfig } from "../config.js";
 import { getState, setState } from "../db.js";
 import type { BrokerPort, ReadPort } from "../broker.js";
 import type { MarketDayCheck } from "../../market-calendar.js";
-import type { Sleeve } from "../types.js";
+import { starvedNotVerdict, type Sleeve } from "../types.js";
 import { reconcileBoot } from "../reconcile.js";
+import { sendNtfy } from "../surfaces/ntfy.js";
 import { resolveDial, scalarFor, type DialConfig, type DialPosition, type DialState, type LeiReading } from "../book/lei-dial.js";
 import { updateBrake, tier3Plan, type BrakeConfig, type BrakeState } from "../book/brake.js";
 import { planDialTrims, executeTrims, sleeveValue9 } from "../book/trims.js";
@@ -118,6 +119,14 @@ function insBars(bars: AlpacaBarLike[]): InsDailyBar[] {
   return bars.map((b) => ({ date: String(b.t).slice(0, 10), close9: numToD9(b.c), volume9: numToD9(b.v) }));
 }
 
+/** One ntfy page per halted DAY (the Discord re-alert fires every run; the phone leg dedupes so a
+ *  4-runs-a-morning schedule doesn't buzz four times). State-keyed, so a cleared-then-re-set halt
+ *  on the same day stays quiet — the Discord line still says so. */
+async function ntfyHaltOncePerDay(db: DatabaseSync, today: string, title: string, text: string): Promise<void> {
+  if (getState(db, "halt:ntfy-day") === today) return;
+  if (await sendNtfy(title, text, true)) setState(db, "halt:ntfy-day", today);
+}
+
 export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult> {
   const { db, eff, today, post, broker, read, latestPrice } = deps;
   const cfg = eff.config;
@@ -137,12 +146,15 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
   await step(steps, post, "reconcile", async () => {
     const rep = await reconcileBoot(db, broker, read, { stuckOrderMinutes: Number(cfg.ledger.stuckOrderMinutes) });
     if (!rep.ok) {
-      await post(escalationNote({
-        kind: "reconcile-mismatch",
-        title: `reconciliation mismatch — ${rep.mismatches.length} position(s), ${rep.untaggedFills.length} untagged fill(s); affected sleeves HALTED`,
-        detail: rep.mismatches.map((m) => `${m.symbol}: ledger ${m.ledger9} vs broker ${m.broker9} (halted: ${m.haltedSleeves.join(",")})`).join(" · ")
-          || rep.notes.join(" · "),
-      }));
+      const title = `reconciliation mismatch — ${rep.mismatches.length} position(s), ${rep.untaggedFills.length} untagged fill(s); affected sleeves HALTED`;
+      const detail = rep.mismatches.map((m) => `${m.symbol}: ledger ${m.ledger9} vs broker ${m.broker9} (halted: ${m.haltedSleeves.join(",")})`).join(" · ")
+        || rep.notes.join(" · ");
+      // The halt-week lesson (08-24→28): a mismatch got ONE Discord post and nothing else — no
+      // approvals card, no page — and stayed invisible for four days. Now it lands in the console
+      // approvals queue AND pages ntfy (deduped per day).
+      queueApprovalRow(db, "reconcile-mismatch", title, { mismatches: rep.mismatches, untaggedFills: rep.untaggedFills, notes: rep.notes });
+      await ntfyHaltOncePerDay(db, today, "Bull HALTED — reconcile mismatch", `${title}\n${detail}`);
+      await post(escalationNote({ kind: "reconcile-mismatch", title, detail }));
       return `MISMATCH (${rep.mismatches.length})`;
     }
     reconOk = true;
@@ -150,6 +162,25 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
   });
   if (!reconOk) {
     // A mismatch (or a reconcile that couldn't run) means the cash truth is suspect — stop here.
+    return { ok: false, halted: true, steps };
+  }
+
+  // ---- 1b · STANDING halt: a PRIOR run's mismatch set halt:book and an operator hasn't cleared
+  // it. Reconcile alone passing does NOT lift a halt (clearing is an operator action, by design) —
+  // and running the sleeve steps against a frozen gateway is exactly how the 08-24 week burned
+  // momentum's month, consumed anchor's rebuild, and shadowed live insider signals. Stop here,
+  // loudly, every run, until the console clears it. No marker/month/signal state advances.
+  const standingHalt = getState(db, "halt:book");
+  if (standingHalt) {
+    await step(steps, post, "halt-standing", async () => {
+      await post(escalationNote({
+        kind: "halt-standing",
+        title: "book still HALTED — no sleeve trades, no month/marker/signal state advances",
+        detail: `${standingHalt} · clear it in the Bill console once the account is explained`,
+      }));
+      await ntfyHaltOncePerDay(db, today, "Bull still halted", standingHalt);
+      return "book halted — ritual stopped after reconcile";
+    });
     return { ok: false, halted: true, steps };
   }
 
@@ -285,6 +316,7 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
 
   // ---- 6 · insider entries (overnight signals → next-open entries; dial-EXEMPT by design). -----
   await step(steps, post, "insider-entries", async () => {
+    if (getState(db, "halt:ins")) return "sleeve halted — signals kept pending";
     const pend = pendingEntrySignals(db);
     if (!pend.length) return "no pending signals";
     const benchSym = String(cfg.benchmarks.ins);
@@ -331,6 +363,7 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
 
   // ---- 7 · momentum first-trading-day execution (deployScalar × brake sizeFactor). -------------
   await step(steps, post, "momentum-rebalance", async () => {
+    if (getState(db, "halt:mom")) return "sleeve halted — month kept";
     ensureMomTables(db);
     const monthRow = db.prepare("SELECT MAX(month) AS m FROM mom_ranks").get() as { m: string | null } | undefined;
     const month = monthRow?.m ?? null;
@@ -388,12 +421,13 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
       await post(`⏳ [Momentum] rebalance for ${month} pending — ${exec.reason}.`);
       return `not executed: ${exec.reason}`;
     }
-    // A rebalance that placed NOTHING because settled cash was parked is not "executed" — the
-    // month stays owed, the sweep sees the pending need and frees SGOV, and tomorrow's run
-    // retries (fresh per-date key). Launch day burned the month on placed 0 / skipped 10.
-    const cashStarved = exec.placed.length === 0 && exec.skipped.some((s) => s.skip === "NO_SETTLED_CASH");
-    if (cashStarved) {
-      await post(`⏳ [Momentum] rebalance for ${month} fully cash-skipped — month NOT marked done; the sweep frees SGOV and tomorrow retries.`);
+    // A rebalance that placed NOTHING because the book was BLOCKED (settled cash parked, or a
+    // halt) is not "executed" — the month stays owed and tomorrow's run retries (fresh per-date
+    // key). Launch day burned the month on placed 0 / skipped 10 NO_SETTLED_CASH; the 08-24 halt
+    // week burned it AGAIN on all-SLEEVE_HALTED skips — hence the shared starvedNotVerdict guard.
+    const blocked = starvedNotVerdict(exec.placed.length, exec.skipped.map((s) => s.skip));
+    if (blocked) {
+      await post(`⏳ [Momentum] rebalance for ${month} fully blocked (cash parked / halt) — month NOT marked done; tomorrow retries.`);
     } else {
       setState(db, MOM_EXECUTED_MONTH_KEY, month);
     }
@@ -404,6 +438,7 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
 
   // ---- 8 · anchor trade-next-open (only when a gated rebuild marker is pending). ---------------
   await step(steps, post, "anchor-trade", async () => {
+    if (getState(db, "halt:anc")) return "sleeve halted — marker kept";
     if (!getState(db, "anc:pending_rebuild")) return "no pending rebuild";
     if (!tradesAllowed) {
       await post(`⏸️ [Anchor] mode=${deps.mode}: rebuild marker pending — would trade next auto morning (marker kept).`);
@@ -422,6 +457,7 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
   // ---- 9 · wildcard weekly pick run (Mondays; deployScalar × brake). ---------------------------
   await step(steps, post, "wildcard-weekly", async () => {
     if (deps.weekday() !== 1) return "not Monday";
+    if (getState(db, "halt:wld")) return "sleeve halted — week not burned";
     if (!brake.newBuysAllowed) {
       await post(skipNote("wld", "(pool)", "BRAKE", `tier ${brake.tier} blocks new buys — weekly pick run deferred`));
       return "brake blocked";

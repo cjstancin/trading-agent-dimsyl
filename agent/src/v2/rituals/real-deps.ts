@@ -22,7 +22,7 @@ import { edgarLive as ancEdgarLive } from "../sleeves/anchor/edgar.js";
 import { openFigiMapping } from "../sleeves/anchor/mapping.js";
 import { alpacaPricePort as ancAlpacaPrices } from "../sleeves/anchor/prices.js";
 import type { AnchorPorts } from "../sleeves/anchor/index.js";
-import { siblingPoolPort, alpacaCardPort, sonnetBatchPickPort } from "../sleeves/wildcard/adapters.js";
+import { siblingPoolPort, alpacaCardPort, llmPickPort } from "../sleeves/wildcard/adapters.js";
 import type { WildcardPorts } from "../sleeves/wildcard/run.js";
 import { etDateKey, etHHMM, etWeekday } from "./time.js";
 import type { CoreDeps, DailyBarsFn } from "./support.js";
@@ -75,7 +75,7 @@ export function realMorningDeps(): MorningDeps {
     wldPorts: {
       pool: siblingPoolPort(c.db),
       card: alpacaCardPort(),
-      pick: sonnetBatchPickPort(), // Phase 3 replaces the stub — until then the weekly run KEEPS the book (recorded)
+      pick: llmPickPort(sdkLlmPort), // wired 2026-09-01 (CJ's call) — one stateless Sonnet ranking a week
     } satisfies WildcardPorts,
     ancPrices: ancAlpacaPrices,
     weekday: () => etWeekday(),

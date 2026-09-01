@@ -81,7 +81,7 @@ function capture(): { posts: string[]; post: (t: string) => Promise<void> } {
 }
 
 function mockLlm(script: Partial<Record<LlmRole, string[]>>): LlmPort & { calls: { role: LlmRole; prompt: string }[] } {
-  const queues: Record<string, string[]> = { extract: [...(script.extract ?? [])], brief: [...(script.brief ?? [])], judge: [...(script.judge ?? [])] };
+  const queues: Record<string, string[]> = { extract: [...(script.extract ?? [])], brief: [...(script.brief ?? [])], judge: [...(script.judge ?? [])], pick: [...(script.pick ?? [])] };
   const calls: { role: LlmRole; prompt: string }[] = [];
   return { calls, async complete(role, prompt) { calls.push({ role, prompt }); return queues[role].shift() ?? "NO_SCRIPTED_REPLY"; } };
 }
@@ -209,6 +209,40 @@ await (async () => {
   check("halted, nothing traded", res.halted === true && broker.submits.length === 0);
   check("escalation posted", posts.some((p) => p.includes("Needs your call") && p.includes("mismatch")));
   check("book halt state set", getState(db, "halt:book") !== null);
+  check("approvals row filed (halt week: Discord-only escalations went unseen)",
+    (db.prepare("SELECT COUNT(*) AS c FROM approvals WHERE kind='reconcile-mismatch'").get() as { c: number }).c === 1);
+})();
+
+console.log("v2 rituals — morning: STANDING halt short-circuits (no marker burns):");
+await (async () => {
+  const db = openDb(":memory:");
+  seedBook(db, "5000", TODAY);
+  ensureMomTables(db);
+  db.prepare("INSERT INTO mom_ranks(month, symbol, score, dollar_volume, fip, mom_rank, final_rank, veto) VALUES('2026-07','NVDA',1.0,1000000,0.1,1,1,NULL)").run();
+  setState(db, "anc:pending_rebuild", JSON.stringify({ buildId: 1, reason: "initial-build" }));
+  setState(db, "halt:book", "untagged fills (manual/dashboard orders?): x @ t");
+  const { deps, broker, posts } = mkMorningDeps(db, { prices: { SGOV: 100, NVDA: 100 } });
+  const res = await runMorningRitual(deps);
+  check("halted after reconcile, nothing traded", res.halted === true && broker.submits.length === 0, JSON.stringify(res.steps));
+  check("only reconcile + halt-standing ran", res.steps.length === 2 && res.steps[1].name === "halt-standing", JSON.stringify(res.steps.map((s) => s.name)));
+  check("momentum month NOT burned while halted", getState(db, "mom:executed-month") === null);
+  check("anchor rebuild marker kept while halted", getState(db, "anc:pending_rebuild") !== null);
+  check("re-alert posted every halted run", posts.some((p) => p.includes("HALTED")));
+})();
+
+console.log("v2 rituals — morning: sleeve-level halt keeps momentum's month:");
+await (async () => {
+  const db = openDb(":memory:");
+  seedBook(db, "5000", TODAY);
+  ensureMomTables(db);
+  db.prepare("INSERT INTO mom_ranks(month, symbol, score, dollar_volume, fip, mom_rank, final_rank, veto) VALUES('2026-07','NVDA',1.0,1000000,0.1,1,1,NULL)").run();
+  setState(db, "halt:mom", "reconcile mismatch NVDA: ledger 1 vs broker 0 @ t");
+  const { deps } = mkMorningDeps(db, { prices: { SGOV: 100 } });
+  const res = await runMorningRitual(deps);
+  const momStep = res.steps.find((s) => s.name === "momentum-rebalance");
+  check("momentum step skipped with the halt note", momStep?.detail === "sleeve halted — month kept", JSON.stringify(momStep));
+  check("month NOT burned under a sleeve halt", getState(db, "mom:executed-month") === null);
+  check("other steps still ran (book not halted)", res.steps.length > 2, JSON.stringify(res.steps.map((s) => s.name)));
 })();
 
 console.log("v2 rituals — morning: dial downgrade trims + sweep runs last:");
@@ -266,7 +300,7 @@ await (async () => {
   check("ritual ok", res.ok === true, JSON.stringify(res.steps));
   check("buy skipped for settled cash", posts.some((p) => p.includes("AAA") && p.includes("NO_SETTLED_CASH")), JSON.stringify(posts));
   check("month NOT marked executed on full cash-skip", getState(db, "mom:executed-month") === null, String(getState(db, "mom:executed-month")));
-  check("retry note posted", posts.some((p) => p.includes("fully cash-skipped")));
+  check("retry note posted", posts.some((p) => p.includes("fully blocked") && p.includes("month NOT marked done")));
   check("sweep holds back the pending momentum need", posts.some((p) => p.includes("holding back") && p.includes("momentum 2026-07")), JSON.stringify(posts.filter((p) => p.includes("holding"))));
   // The sweep's sell-to-fund branch: shortfall beyond settled → liquidate SGOV first.
   check("sweep liquidates SGOV to fund the pending month", posts.some((p) => p.includes("liquidate SGOV first")), JSON.stringify(posts.filter((p) => p.includes("SGOV"))));

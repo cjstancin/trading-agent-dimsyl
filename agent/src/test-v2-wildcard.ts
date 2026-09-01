@@ -20,7 +20,8 @@ import {
 import {
   fixturePoolPort, fixtureCardPort, fixturePickPort, fixtureBars, validPick,
 } from "./v2/sleeves/wildcard/fixtures.js";
-import { siblingPoolPort } from "./v2/sleeves/wildcard/adapters.js";
+import { siblingPoolPort, llmPickPort } from "./v2/sleeves/wildcard/adapters.js";
+import type { LlmPort } from "./v2/judgment/llm-port.js";
 import type { PoolEntry, WldPosMeta } from "./v2/sleeves/wildcard/types.js";
 
 let failures = 0;
@@ -453,6 +454,28 @@ await (async () => {
     && anc.find((a) => a.symbol === "OXY")!.managers.length === 2
     && anc.find((a) => a.symbol === "GOOGL")!.managers.join(",") === "TCI Fund Management"
     && !anc.some((a) => a.symbol === "STALE"));
+})();
+
+console.log("v2 wildcard — llmPickPort (wired 2026-09-01, broken-week repair):");
+await (async () => {
+  const calls: { role: string; prompt: string }[] = [];
+  const scripted = (reply: string): LlmPort => ({
+    async complete(role, prompt) { calls.push({ role, prompt }); return reply; },
+  });
+  const port = llmPickPort(scripted('```json\n[{"ticker":"ABCD","rank":1}]\n```'));
+  const out = await port.rankPool([{ marker: "card-payload" }] as never[], "SCHEMA-INSTRUCTION-HERE");
+  check("calls the 'pick' role with schema + cards in the prompt",
+    calls[0].role === "pick" && calls[0].prompt.startsWith("SCHEMA-INSTRUCTION-HERE") && calls[0].prompt.includes("card-payload"));
+  check("fenced JSON reply parses to the raw value (validate.ts stays the authority)",
+    Array.isArray(out) && (out as { ticker: string }[])[0].ticker === "ABCD");
+
+  let threwEmpty = false;
+  try { await llmPickPort(scripted("   ")).rankPool([], "S"); } catch { threwEmpty = true; }
+  check("empty reply throws (run.ts converts a throw to a KEPT book)", threwEmpty);
+
+  let threwNoJson = false;
+  try { await llmPickPort(scripted("sorry, no picks today")).rankPool([], "S"); } catch { threwNoJson = true; }
+  check("non-JSON reply throws (kept book, never a guessed parse)", threwNoJson);
 })();
 
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1); }

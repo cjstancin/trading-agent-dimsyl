@@ -15,6 +15,7 @@
 // Config dials come from loadConfig() (anchor.*) — nothing numeric is hardcoded here.
 import type { DatabaseSync } from "node:sqlite";
 import { d9, mul9, type D9 } from "../../decimal.js";
+import { starvedNotVerdict } from "../../types.js";
 import { getState, setState, clearState } from "../../db.js";
 import type { EffectiveConfig } from "../../config.js";
 import type { BrokerPort } from "../../broker.js";
@@ -273,10 +274,11 @@ export async function tradeNextOpen(
     washBlacklistDays: eff.config.ledger.washBlacklistDays,
   });
 
-  // A rebuild that placed NOTHING because settled cash was parked keeps its marker: the sweep
-  // sees the pending need, frees SGOV (T+1), and the next auto morning retries the same build.
-  const cashStarved = execute.placed === 0
-    && execute.refused.some((r) => r.result.skipped === "NO_SETTLED_CASH");
+  // A rebuild that placed NOTHING because the book was BLOCKED (settled cash parked, or a halt)
+  // keeps its marker: the sweep sees the pending need, frees SGOV (T+1), and the next auto morning
+  // retries the same build. The 08-24 halt week consumed this marker on an all-SLEEVE_HALTED run
+  // and left the sleeve empty until the next 13F — hence the shared starvedNotVerdict guard.
+  const cashStarved = starvedNotVerdict(execute.placed, execute.refused.map((r) => r.result.skipped));
   if (!cashStarved) {
     const slotsBySymbol = new Map<string, string[]>();
     for (const slot of target.slots) {
@@ -287,5 +289,5 @@ export async function tradeNextOpen(
     writePositionMeta(db, target.targets, slotsBySymbol);
     clearState(db, PENDING_KEY);
   }
-  return { traded: execute.placed > 0, reason: cashStarved ? `${marker.reason} — cash-starved, marker kept for retry` : marker.reason, execute, problems: plan.problems };
+  return { traded: execute.placed > 0, reason: cashStarved ? `${marker.reason} — blocked (cash/halt), marker kept for retry` : marker.reason, execute, problems: plan.problems };
 }

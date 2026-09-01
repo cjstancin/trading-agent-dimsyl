@@ -5,7 +5,7 @@
 // tests' expectations with it.
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { openDb, getState } from "./v2/db.js";
+import { openDb, getState, setState, clearState } from "./v2/db.js";
 import { d9, d9str, type D9 } from "./v2/decimal.js";
 import { loadConfig } from "./v2/config.js";
 import { seedBook, recordCash } from "./v2/settled-cash.js";
@@ -516,6 +516,30 @@ await (async () => {
   const sig2 = db.prepare("SELECT entry_date, funded, skip_reason FROM ins_signals WHERE cluster_id=?").get(cC.clusterId) as any;
   check("beyond the window → shadowed with the cash reason",
     res2[0].outcome === "gateway-skip" && sig2.entry_date === "2026-08-20" && sig2.funded === 0 && sig2.skip_reason === "NO_SETTLED_CASH", JSON.stringify(sig2));
+})();
+
+// ---------- planner: SLEEVE_HALTED is a blocked book, not a verdict — signal stays pending -----
+// (the 08-24 halt week shadowed live signals as SLEEVE_HALTED, permanently and wrongly)
+await (async () => {
+  const db = openDb(":memory:");
+  ensureInsiderTables(db);
+  seedBook(db, "5000", "2026-08-11");
+  setState(db, "halt:ins", "reconcile mismatch TEST @ now");
+  const broker = mockBroker();
+  const cH = mkCluster("SYMH", 5, "ins:SYMH:2026-08-10");
+  const base = {
+    configVersion: eff.version, washBlacklistDays: WBL, horizonTradingDays: EXITCFG.horizonTradingDays,
+    clusterResetMaxMonths: EXITCFG.clusterResetMaxMonths, benchEntryPx9: null,
+  };
+  const res = await executeEntries(db, broker, {
+    ...base, clusters: [cH], signalDate: "2026-08-10", entryDate: "2026-08-11",
+    decisions: [{ kind: "fund", symbol: "SYMH", clusterId: cH.clusterId, sector: "Tech", notional9: d9("500"), estPrice9: d9("10") }],
+  });
+  check("halted entry → cash-retry outcome, nothing submitted",
+    res[0].outcome === "cash-retry" && res[0].reason === "SLEEVE_HALTED" && broker.submits.length === 0, JSON.stringify(res[0]));
+  const sig = db.prepare("SELECT entry_date, funded FROM ins_signals WHERE cluster_id=?").get(cH.clusterId) as any;
+  check("signal stays PENDING through the halt (entry_date NULL, not shadowed)", sig.entry_date === null && sig.funded === 0, JSON.stringify(sig));
+  clearState(db, "halt:ins");
 })();
 
 // ---------- exits: horizon + reset anchor + 9-month cap ----------

@@ -12,6 +12,7 @@
 // route the leftovers there with reason FULL_SLOTS.
 import type { DatabaseSync } from "node:sqlite";
 import { d9, div9, mul9, ONE9, type D9 } from "../../decimal.js";
+import { BLOCKED_SKIPS } from "../../types.js";
 import { placeOrder } from "../../order-gateway.js";
 import type { BrokerPort } from "../../broker.js";
 import type { Cluster } from "./cluster.js";
@@ -224,11 +225,12 @@ export async function executeEntries(db: DatabaseSync, broker: BrokerPort, opts:
 
     if (!place.placed) {
       const reason = place.skipped ?? "GATEWAY_REJECTED";
-      // Settled cash parked in SGOV is not a verdict on the signal (design §1: SGOV is liquidated
-      // FIRST when a sleeve needs cash). Leave entry_date NULL so the signal stays in the pending
-      // queue — the sweep sees it via pendingSleeveNeeds9 and frees cash for tomorrow's open.
-      // Bounded: past the retry window it shadows like any other skip.
-      if (reason === "NO_SETTLED_CASH" && withinCashRetryWindow(opts.signalDate, opts.entryDate)) {
+      // A blocked book is not a verdict on the signal: settled cash parked in SGOV (design §1:
+      // SGOV is liquidated FIRST when a sleeve needs cash) or a reconciliation halt (the 08-24
+      // week shadowed live signals as SLEEVE_HALTED — permanently, wrongly). Leave entry_date NULL
+      // so the signal stays in the pending queue and retries next open. Bounded: past the retry
+      // window it shadows like any other skip.
+      if (BLOCKED_SKIPS.has(reason) && withinCashRetryWindow(opts.signalDate, opts.entryDate)) {
         out.push({ symbol: d.symbol, clusterId: d.clusterId, outcome: "cash-retry", reason });
         continue;
       }

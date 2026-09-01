@@ -8,7 +8,7 @@ import { ingestFill } from "./v2/lots.js";
 import { markEquity } from "./v2/book/equity.js";
 import { recordBench } from "./v2/book/benchmarks.js";
 import { recordExit, weeklyWatchlistCheck, watchlistCandidates, consumeCandidate, renderWatchlist } from "./v2/book/watchlist.js";
-import { chunkMessage } from "./v2/surfaces/discord.js";
+import { chunkMessage, sendPaced, parseRetryAfterMs } from "./v2/surfaces/discord.js";
 import { tradeNote, escalationNote, skipNote } from "./v2/surfaces/notes.js";
 import { sundayDigest } from "./v2/surfaces/digest.js";
 import { monthlyStatement } from "./v2/surfaces/statement.js";
@@ -129,6 +129,37 @@ console.log("v2 surfaces — discord sender path:");
     check("notifier specifier resolves to a real file", existsSync(resolved), resolved);
   }
 }
+
+console.log("v2 surfaces — discord 429 pacing/retry (the 08-24 ten-dropped-posts class):");
+await (async () => {
+  check("parses Discord's retry_after seconds → ms",
+    parseRetryAfterMs('Discord 429: {"message": "You are being rate limited.", "retry_after": 0.3, "global": false}') === 300);
+  check("non-429 error → null (no retry)", parseRetryAfterMs("Discord 500: boom") === null && parseRetryAfterMs(undefined) === null);
+  check("429 without a retry_after field → 1s default", parseRetryAfterMs("HTTP 429") === 1000);
+
+  const sleeps: number[] = [];
+  const fakeSleep = async (ms: number): Promise<void> => { sleeps.push(ms); };
+
+  let calls = 0;
+  const flaky = async () => (++calls <= 2 ? { ok: false, error: 'Discord 429: {"retry_after": 0.3}' } : { ok: true });
+  const r = await sendPaced(flaky, "part", {}, fakeSleep, () => 0);
+  check("429 twice then success → retried to ok", r.ok === true && calls === 3, JSON.stringify({ calls }));
+  check("retry waits honored retry_after + headroom", sleeps.filter((s) => s === 450).length === 2, JSON.stringify(sleeps));
+
+  let hardCalls = 0;
+  const hard = async () => { hardCalls++; return { ok: false, error: "HTTP 400 bad request" }; };
+  const r2 = await sendPaced(hard, "part", {}, fakeSleep, () => 0);
+  check("non-429 failure returns without retry", r2.ok === false && hardCalls === 1);
+
+  let stuckCalls = 0;
+  const stuck = async () => { stuckCalls++; return { ok: false, error: 'Discord 429: {"retry_after": 0.1}' }; };
+  const r3 = await sendPaced(stuck, "part", {}, fakeSleep, () => 0);
+  check("permanent 429 gives up after RETRY_MAX attempts", r3.ok === false && stuckCalls === 3);
+
+  const skippy = async () => ({ ok: false, skipped: true });
+  const r4 = await sendPaced(skippy, "part", {}, fakeSleep, () => 0);
+  check("webhook-unset skip returns immediately", r4.skipped === true);
+})();
 
 if (failures) { console.error(`${failures} failure(s)`); process.exit(1); }
 console.log("v2 surfaces: all green");

@@ -11,6 +11,7 @@
 //     (SDK wiring, batch polling, the quarantine) and replaces `sonnetBatchPickPort`.
 import type { DatabaseSync } from "node:sqlite";
 import { getBars, latestPrice } from "../../../alpaca.js";
+import { parseJsonReply, type LlmPort } from "../../judgment/llm-port.js";
 import type {
   AnchorPoolRow, Bar, CardPort, InsiderPoolRow, MomentumPoolRow, PickPort, PoolPort, PricePath,
 } from "./types.js";
@@ -117,25 +118,30 @@ export function alpacaCardPort(): CardPort {
 }
 
 // ---------------------------------------------------------------------------
-// PickPort — Sonnet-class Batch API stub (Phase 3 wires the SDK)
+// PickPort — the weekly ranking call, WIRED 2026-09-01 (broken-week repair, CJ's call)
 // ---------------------------------------------------------------------------
 
-/** The weekly ranking call, as designed (§6) and NOT yet wired:
- *   · Model: Sonnet-class, via the Message Batches API (the run is weekly and latency-free, and
- *     batch pricing halves the ~$4–7/mo all-in cost target; thesis-checks are Opus-class but those
- *     belong to the JUDGMENT layer, not this sleeve).
- *   · Request: one batch entry; system prompt = ranking role + the schema instruction passed in;
- *     user content = the ContextCard[] as JSON (cards only — fresh context every call, no memory
- *     of last week's reasoning, no CJ preferences, no verdict history).
- *   · Output: forced structured JSON (the PICK_SCHEMA_INSTRUCTION shape). The response is returned
- *     RAW — validate.ts is the only schema authority; this port never pre-parses or repairs.
- *   · Poll: batch results fetched by the scheduler; a failed/expired batch surfaces as a thrown
- *     error, which run.ts converts to a KEPT book (never a retry loop inside the port).
- *  Phase 3 replaces this stub alongside the quarantine wiring. */
-export function sonnetBatchPickPort(): PickPort {
+/** One stateless Sonnet-class completion through the SHARED LLM boundary (judgment/llm-port —
+ *  same path bill-explains rides weekly, cost-emitted per call). The Batch API from the original
+ *  design is dropped: the run is ONE call a week, so batch pricing buys nothing and the polling
+ *  machinery would be pure surface area.
+ *   · Request: system prompt = the "pick" ranking role; user content = the schema instruction +
+ *     the ContextCard[] as JSON (cards only — fresh context every call, no memory of last week's
+ *     reasoning, no CJ preferences, no verdict history).
+ *   · Output: parsed to a JSON value here (fences tolerated) and returned RAW-shaped —
+ *     validate.ts stays the ONLY schema authority; this port never repairs or re-ranks.
+ *   · Any failure (empty reply, no JSON, port throw) surfaces as a thrown error, which run.ts
+ *     converts to a KEPT book (never a retry loop inside the port).
+ *  Quarantine precondition, unchanged from design §6: cards today carry NO free prose
+ *  (fundamentals null, newsClaims [] — the Phase-3 TODOs above). When the news converter is
+ *  wired, claims must arrive PRE-QUARANTINED — raw article text must never transit this port. */
+export function llmPickPort(llm: LlmPort): PickPort {
   return {
-    async rankPool() {
-      throw new Error("wld PickPort: Sonnet Batch adapter not wired — Phase 3 owns LLM plumbing + quarantine");
+    async rankPool(cards, schema) {
+      const prompt = `${schema}\n\nContext cards (JSON array, one per candidate):\n${JSON.stringify(cards)}`;
+      const text = await llm.complete("pick", prompt);
+      if (!text.trim()) throw new Error("wld PickPort: empty pick reply");
+      return parseJsonReply(text);
     },
   };
 }
