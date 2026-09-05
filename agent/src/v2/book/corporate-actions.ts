@@ -29,6 +29,10 @@ export interface CorporateActionsPort {
 }
 
 const DATA_BASE = "https://data.alpaca.markets";
+const UNSUPPORTED_GROUP_NAMES = new Set([
+  "capital_gains_distributions", "name_changes", "partial_calls", "redemptions", "reorganizations",
+  "rights_distributions", "spin_offs", "stock_and_cash_mergers", "stock_dividends", "unit_splits", "worthless_removals",
+]);
 
 function authHeaders(): Record<string, string> {
   const id = process.env.ALPACA_API_KEY;
@@ -37,27 +41,74 @@ function authHeaders(): Record<string, string> {
   return { "APCA-API-KEY-ID": id, "APCA-API-SECRET-KEY": secret };
 }
 
-/** Real adapter — Alpaca data-host v1 corporate actions. Returns [] on any failure (the nightly
- *  poll retries tomorrow; a data blip must not break the evening ritual). Parsing is defensive:
- *  unknown shapes become type "unknown" and are surfaced, never guessed at. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function actionDate(value: unknown): string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)
+    || new Date(value + "T00:00:00Z").toISOString().slice(0, 10) !== value) throw new Error("invalid action date");
+  return value;
+}
+
+function actionRate(value: unknown): number {
+  if ((typeof value !== "number" && typeof value !== "string") || String(value).trim() === ""
+    || !Number.isFinite(Number(value)) || Number(value) <= 0) throw new Error("invalid action rate");
+  return Number(value);
+}
+
+/** Real adapter — Alpaca data-host v1 corporate actions. Only a successfully decoded, complete
+ *  snapshot can return []. HTTP/network/body/schema failures throw a fixed sanitized error so
+ *  callers preserve the old plan and withhold decisions/valuation. Never expose response bodies,
+ *  credentials, or underlying errors. Unsupported nonempty groups and pagination also require
+ *  review rather than silently certifying an incomplete corporate-action snapshot. */
 export const alpacaCorporateActions: CorporateActionsPort = {
   async announcements(symbols, start, end): Promise<CorporateAnnouncement[]> {
+    let unsupportedGroup: string | null = null;
     try {
       const qs = new URLSearchParams({ symbols: symbols.join(","), start, end, limit: "1000" });
-      const r = await withTimeout((signal) => fetch(`${DATA_BASE}/v1/corporate-actions?${qs}`, {
-        headers: authHeaders(), signal,
-      }), DEFAULT_TIMEOUT_MS);
-      if (!r.ok) return [];
-      const j = (await r.json()) as { corporate_actions?: Record<string, any[]> };
+      const j: unknown = await withTimeout(async (signal) => {
+        const r = await fetch(`${DATA_BASE}/v1/corporate-actions?${qs}`, { headers: authHeaders(), signal });
+        if (!r.ok) throw new Error("corporate-actions HTTP failure");
+        return await r.json(); // body read remains inside the abort deadline
+      }, DEFAULT_TIMEOUT_MS);
+      if (!isRecord(j) || !isRecord(j.corporate_actions)) throw new Error("invalid corporate-actions envelope");
+      if (j.next_page_token != null && j.next_page_token !== "") throw new Error("incomplete corporate-actions snapshot");
       const out: CorporateAnnouncement[] = [];
-      const ca = j?.corporate_actions ?? {};
-      for (const s of ca.forward_splits ?? []) out.push({ symbol: String(s.symbol).toUpperCase(), type: "forward_split", exDate: s.ex_date, effectiveDate: s.ex_date, newRate: Number(s.new_rate), oldRate: Number(s.old_rate), raw: s });
-      for (const s of ca.reverse_splits ?? []) out.push({ symbol: String(s.symbol).toUpperCase(), type: "reverse_split", exDate: s.ex_date, effectiveDate: s.ex_date, newRate: Number(s.new_rate), oldRate: Number(s.old_rate), raw: s });
-      for (const dv of ca.cash_dividends ?? []) out.push({ symbol: String(dv.symbol).toUpperCase(), type: "cash_dividend", exDate: dv.ex_date, cashRate: Number(dv.rate), raw: dv });
-      for (const m of ca.cash_mergers ?? []) out.push({ symbol: String(m.acquiree_symbol ?? m.symbol).toUpperCase(), type: "cash_merger", effectiveDate: m.effective_date, raw: m });
-      for (const m of ca.stock_mergers ?? []) out.push({ symbol: String(m.acquiree_symbol ?? m.symbol).toUpperCase(), type: "stock_merger", effectiveDate: m.effective_date, raw: m });
+      for (const [group, rows] of Object.entries(j.corporate_actions)) {
+        if (!Array.isArray(rows)) throw new Error("invalid corporate-actions group");
+        for (const row of rows) {
+          if (!isRecord(row)) throw new Error("invalid corporate-action row");
+          const symbol = group === "cash_mergers" || group === "stock_mergers" ? row.acquiree_symbol ?? row.symbol : row.symbol;
+          if (typeof symbol !== "string" || !symbol.trim()) throw new Error("invalid action symbol");
+          const common = { symbol: symbol.toUpperCase(), raw: row };
+          switch (group) {
+            case "forward_splits":
+            case "reverse_splits": {
+              const exDate = actionDate(row.ex_date);
+              out.push({ ...common, type: group === "forward_splits" ? "forward_split" : "reverse_split",
+                exDate, effectiveDate: exDate, newRate: actionRate(row.new_rate), oldRate: actionRate(row.old_rate) });
+              break;
+            }
+            case "cash_dividends":
+              out.push({ ...common, type: "cash_dividend", exDate: actionDate(row.ex_date), cashRate: actionRate(row.rate) });
+              break;
+            case "cash_mergers":
+            case "stock_mergers":
+              out.push({ ...common, type: group === "cash_mergers" ? "cash_merger" : "stock_merger", effectiveDate: actionDate(row.effective_date) });
+              break;
+            default:
+              // Only fixed known vocabulary may reach the diagnostic; never echo arbitrary keys.
+              unsupportedGroup = UNSUPPORTED_GROUP_NAMES.has(group) ? group : null;
+              throw new Error("unsupported corporate-action group");
+          }
+        }
+      }
       return out;
-    } catch { return []; }
+    } catch {
+      if (unsupportedGroup) throw new Error(`Alpaca corporate-actions snapshot contains unsupported ${unsupportedGroup}; poll aborted`);
+      throw new Error("Alpaca corporate-actions snapshot unavailable, incomplete, or malformed; poll aborted");
+    }
   },
 };
 

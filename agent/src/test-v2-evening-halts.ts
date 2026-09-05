@@ -11,12 +11,14 @@ import { reconcileBoot } from "./v2/reconcile.js";
 import { ensureBookTables } from "./v2/book/equity.js";
 import { ensureBenchTables } from "./v2/book/benchmarks.js";
 import { ensureJdgTables, recordVerdict } from "./v2/judgment/counterfactual.js";
+import { runThesisCheck } from "./v2/judgment/thesis-check.js";
 import { ensureInsiderTables } from "./v2/sleeves/insider/store.js";
 import { writeMeta as writeInsMeta } from "./v2/sleeves/insider/exits.js";
 import { runEveningRitual, type EveningDeps } from "./v2/rituals/evening.js";
 
 const TODAY = "2026-08-17";
 const EFF = loadConfig(DEFAULTS_PATH, DEFAULTS_PATH + ".no-journal");
+let passed = 0;
 type Db = ReturnType<typeof openDb>;
 const count = (db: Db, table: string): number => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
 globalThis.fetch = async () => { throw new Error("network forbidden in evening halt tests"); };
@@ -89,6 +91,7 @@ const foreignFill = (id: string) => ({
 
 async function test(name: string, fn: () => Promise<void>) {
   await fn();
+  passed++;
   console.log(`  ✓ ${name}`);
 }
 
@@ -270,4 +273,155 @@ await test("pending dividend evidence defers certified performance without halti
   } finally { f.db.close(); }
 });
 
-console.log("evening halt safety: 8 scenarios passed");
+await test("effective-today split first discovered tonight is contained before valuation and decisions", async () => {
+  const f = fixture();
+  try {
+    const raw = stopPosition(f.db, "wld");
+    const ins = stopPosition(f.db, "ins");
+    ingestFill(f.db, { id: "aph-buy", symbol: "APH", side: "buy", qty9: d9("10"), price9: d9("100"), ts: "2026-08-01T14:31:00Z", sleeve: "mom" });
+    recordCash(f.db, { ts: "2026-08-01T14:31:00Z", kind: "buy", symbol: "APH", amount9: -d9("1000"), settlesOn: "2026-08-01", ref: "aph-buy" });
+    const lots = f.db.prepare("SELECT * FROM lots").all();
+    f.prices.APH = 50;
+    f.deps.corpPort.announcements = async () => {
+      f.calls.corporate++;
+      assert.equal(count(f.db, "book_marks") + count(f.db, "jdg_verdicts"), 0);
+      assert.equal(f.submits.length, 0);
+      return [{ symbol: "APH", type: "forward_split", exDate: TODAY, newRate: 2, oldRate: 1 }];
+    };
+    const res = await runEveningRitual(f.deps);
+    assert.equal(res.ok, true, JSON.stringify(res.steps));
+    assert.equal(res.halted, true);
+    assert(getState(f.db, "halt:book"));
+    assert(getState(f.db, `corp:pending:split:APH:${TODAY}`));
+    assert.equal(f.calls.corporate, 1); // one fresh poll, not an extra duplicate late in the ritual
+    assert.equal(res.steps.filter((s) => s.name === "corp-actions-poll").length, 1);
+    assert.equal(count(f.db, "book_marks") + count(f.db, "jdg_verdicts"), 0);
+    assert.equal(f.db.prepare("SELECT * FROM bench_marks WHERE series LIKE 'sleeve:%'").all().length, 0);
+    assert.equal(f.submits.length + f.calls.llm, 0);
+    assert.equal(getState(f.db, "wld:stop_fired:WLD"), raw);
+    assert.equal(getState(f.db, "ins:stop_fired:INS"), ins);
+    assert.deepEqual(f.db.prepare("SELECT * FROM lots").all(), lots);
+  } finally { f.db.close(); }
+});
+
+await test("fresh corporate poll outage defers orders and performance without losing existing durable evidence", async () => {
+  for (const legacySplit of [false, true]) {
+    const f = fixture();
+    try {
+      const raw = stopPosition(f.db, "wld");
+      if (legacySplit) setState(f.db, "split_stale:WLD", JSON.stringify({ num: "2", den: "1", ts: `${TODAY}T12:00:00Z` }));
+      f.deps.corpPort.announcements = async () => {
+        f.calls.corporate++;
+        if (legacySplit) assert(getState(f.db, "halt:book"), "legacy preflight must run even BEFORE a failing poll");
+        throw new Error("fixture corporate-actions unavailable");
+      };
+      const res = await runEveningRitual(f.deps);
+      assert.equal(res.ok, false);
+      assert.equal(res.halted, legacySplit);
+      assert.equal(f.calls.corporate, 1);
+      assert.equal(f.submits.length + f.calls.llm, 0);
+      assert.equal(count(f.db, "book_marks") + count(f.db, "jdg_verdicts"), 0);
+      assert.equal(getState(f.db, "wld:stop_fired:WLD"), raw);
+      assert(res.steps.some((s) => s.name === "equity-mark" && s.detail?.includes("corporate-action evidence incomplete")));
+      assert.equal(f.db.prepare("SELECT * FROM bench_marks WHERE series LIKE 'sleeve:%'").all().length, 0);
+      assert.equal(f.db.prepare("SELECT * FROM bench_marks WHERE series='SPY'").all().length, 1);
+    } finally { f.db.close(); }
+  }
+});
+
+await test("fresh corporate evidence persistence failure cannot fall through into marks or decisions", async () => {
+  const f = fixture();
+  try {
+    const raw = stopPosition(f.db, "wld");
+    f.db.exec(`CREATE TRIGGER reject_pending_corp BEFORE INSERT ON state
+      WHEN NEW.key LIKE 'corp:pending:%' BEGIN SELECT RAISE(ABORT, 'fixture evidence storage failed'); END;`);
+    f.deps.corpPort.announcements = async () => [{ symbol: "WLD", type: "forward_split", exDate: TODAY, newRate: 2, oldRate: 1 }];
+    const res = await runEveningRitual(f.deps);
+    assert.equal(res.ok, false);
+    assert(res.steps.some((s) => s.name === "corp-actions-poll" && !s.ok && s.detail?.includes("fixture evidence storage failed")));
+    assert.equal(f.submits.length + f.calls.llm, 0);
+    assert.equal(count(f.db, "book_marks") + count(f.db, "jdg_verdicts"), 0);
+    assert.equal(getState(f.db, "wld:stop_fired:WLD"), raw);
+    assert(getState(f.db, "corp:plan"), "discovered plan remains available for a later containment retry");
+  } finally { f.db.close(); }
+});
+
+await test("durable preflight persistence failure stops before fresh poll or decisions", async () => {
+  const f = fixture();
+  try {
+    const raw = stopPosition(f.db, "wld");
+    setState(f.db, "split_stale:WLD", JSON.stringify({ num: "2", den: "1", ts: `${TODAY}T12:00:00Z` }));
+    f.db.exec(`CREATE TRIGGER reject_legacy_corp BEFORE INSERT ON state
+      WHEN NEW.key LIKE 'corp:pending:%' BEGIN SELECT RAISE(ABORT, 'fixture legacy evidence failed'); END;`);
+    await assert.rejects(runEveningRitual(f.deps), /fixture legacy evidence failed/);
+    assert.equal(f.calls.corporate, 0);
+    assert.equal(f.submits.length + f.calls.llm, 0);
+    assert.equal(count(f.db, "book_marks") + count(f.db, "jdg_verdicts"), 0);
+    assert.equal(getState(f.db, "wld:stop_fired:WLD"), raw);
+  } finally { f.db.close(); }
+});
+
+for (const haltAt of [1, 5]) {
+  await test(`halt during model call ${haltAt} cancels remaining calls and persists no verdict/counterfactual`, async () => {
+    const f = fixture();
+    try {
+      const raw = stopPosition(f.db, "wld");
+      f.prices.WLD = 8; // above the mechanical floor, forcing the real asynchronous classifier path
+      const replies = [
+        JSON.stringify({ impairment_case: "fixture", disconfirming_evidence_needed: "audit", citations: [], severity: "low" }),
+        JSON.stringify({ intact_case: "fixture", citations: [], confidence: "medium" }),
+        ...Array(3).fill(JSON.stringify({ class: "market_noise", probability: "medium", citations: [] })),
+      ];
+      f.deps.llm.complete = async () => {
+        f.calls.llm++;
+        await Promise.resolve(); // the operator changes state while this model call is in flight
+        if (f.calls.llm === haltAt) setState(f.db, haltAt === 1 ? "halt:wld" : "halt:book", "operator halted while model in flight");
+        return haltAt === 1 ? "invalid" : replies[f.calls.llm - 1];
+      };
+      const res = await runEveningRitual(f.deps);
+      assert.equal(res.halted, true);
+      assert.equal(f.calls.llm, haltAt);
+      assert.equal(f.submits.length, 0);
+      assert.equal(count(f.db, "jdg_verdicts") + count(f.db, "jdg_outcomes"), 0);
+      assert.equal(count(f.db, "approvals"), 0);
+      assert.equal(getState(f.db, "wld:stop_fired:WLD"), raw);
+    } finally { f.db.close(); }
+  });
+}
+
+await test("thesis boundary directly returns deferred under a standing halt, including the hard floor", async () => {
+  const f = fixture();
+  try {
+    setState(f.db, "halt:book", "direct caller paused");
+    const res = await runThesisCheck(f.db, f.deps.llm, {
+      sleeve: "wld", symbol: "WLD", entryPrice9: d9("10"), currentPrice9: d9("7"), stopPrice9: d9("8"),
+      qty9: d9("10"), thesis: "fixture", claims: [], asOfDate: TODAY, configVersion: "test", proxyPrice9: d9("650"),
+    });
+    assert.equal(res.action, "deferred");
+    assert.equal(res.cls, "halted");
+    assert.equal(res.verdictId, undefined);
+    assert.equal(f.calls.llm, 0);
+    assert.equal(count(f.db, "jdg_verdicts") + count(f.db, "jdg_outcomes"), 0);
+  } finally { f.db.close(); }
+});
+
+await test("a halt cleared during benchmark fetching cannot certify an unpriced sleeve mark", async () => {
+  const f = fixture();
+  try {
+    stopPosition(f.db, "wld");
+    clearState(f.db, "wld:stop_fired:WLD");
+    setState(f.db, "halt:book", "operator working");
+    f.deps.latestPrice = async (symbol) => {
+      if (symbol === "SPY") clearState(f.db, "halt:book");
+      return f.prices[symbol] ?? null;
+    };
+    const res = await runEveningRitual(f.deps);
+    assert.equal(res.ok, true, JSON.stringify(res.steps));
+    assert.equal(count(f.db, "book_marks"), 0);
+    assert.equal(f.db.prepare("SELECT * FROM bench_marks WHERE series LIKE 'sleeve:%'").all().length, 0);
+    assert.equal(f.db.prepare("SELECT * FROM bench_marks WHERE series='SPY'").all().length, 1);
+    assert(res.steps.some((s) => s.name === "benchmarks" && s.detail?.includes("no completed equity mark this run")));
+  } finally { f.db.close(); }
+});
+
+console.log(`evening halt safety: ${passed} scenarios passed`);

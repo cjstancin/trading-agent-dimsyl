@@ -6,8 +6,8 @@ import { d9, d9str } from "./v2/decimal.js";
 import { ingestFill, ledgerPosition } from "./v2/lots.js";
 import { seedBook, recordCash, settledCash } from "./v2/settled-cash.js";
 import { loadConfig, DEFAULTS_PATH } from "./v2/config.js";
-import { applyDueActions, type CorporateActionsPlan } from "./v2/book/corporate-actions.js";
-import { preflightCorporateActions, morningCorpActions, storeCorpPlan, readCorpPlan } from "./v2/rituals/corp-actions.js";
+import { alpacaCorporateActions, applyDueActions, type CorporateActionsPlan } from "./v2/book/corporate-actions.js";
+import { preflightCorporateActions, morningCorpActions, nightlyCorpPoll, storeCorpPlan, readCorpPlan } from "./v2/rituals/corp-actions.js";
 import type { BrokerPort, BrokerOrderRequest } from "./v2/broker.js";
 
 const TODAY = "2026-09-03";
@@ -189,6 +189,105 @@ function inventory(db: ReturnType<typeof openDb>) {
   assert.equal(applyDueActions(db, splitPlan(), TODAY).halted, true);
   assert.equal(cards(db).length, 1);
   console.log("✓ an evidence/card write failure is atomic and retryable");
+}
+
+{
+  const savedFetch = globalThis.fetch;
+  const savedKey = process.env.ALPACA_API_KEY;
+  const savedSecret = process.env.ALPACA_API_SECRET;
+  const sensitiveFixture = "DO_NOT_INCLUDE_FIXTURE_BODY_OR_ERROR";
+  let fetchCalls = 0;
+  const query = () => alpacaCorporateActions.announcements(["APH"], TODAY, "2026-09-17");
+  function reply(body: unknown, status = 200, raw = false) {
+    globalThis.fetch = async (input, init) => {
+      fetchCalls++;
+      const url = new URL(String(input));
+      assert.equal(url.origin, "https://data.alpaca.markets");
+      assert.equal(url.pathname, "/v1/corporate-actions");
+      assert.equal(url.searchParams.get("symbols"), "APH");
+      assert.equal(init?.method ?? "GET", "GET");
+      assert(init?.signal);
+      return new Response(raw ? String(body) : JSON.stringify(body), { status });
+    };
+  }
+  async function rejectsSanitized(expectedGroup?: string) {
+    await assert.rejects(query, (error: unknown) => {
+      assert(error instanceof Error);
+      assert.match(error.message, /^Alpaca corporate-actions snapshot /);
+      assert.match(error.message, /poll aborted$/);
+      assert(error.message.length < 180);
+      assert(!error.message.includes(sensitiveFixture));
+      assert(!error.message.includes("corp-adapter-test-key"));
+      assert(!error.message.includes("corp-adapter-test-secret"));
+      assert.equal(error.cause, undefined);
+      if (expectedGroup) assert(error.message.includes(expectedGroup));
+      return true;
+    });
+  }
+  try {
+    process.env.ALPACA_API_KEY = "corp-adapter-test-key";
+    process.env.ALPACA_API_SECRET = "corp-adapter-test-secret";
+    reply({ corporate_actions: {}, next_page_token: null, harmless_metadata: { revision: 1 } });
+    assert.deepEqual(await query(), []);
+    reply({ corporate_actions: { forward_splits: [], spin_offs: [] }, next_page_token: null });
+    assert.deepEqual(await query(), []);
+    const split = { symbol: "APH", ex_date: TODAY, old_rate: 1, new_rate: 2, process_date: TODAY, id: "fixture-aph" };
+    reply({ corporate_actions: { forward_splits: [split] }, next_page_token: null });
+    const parsed = await query();
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].symbol, "APH");
+    assert.equal(parsed[0].type, "forward_split");
+    assert.equal(parsed[0].exDate, TODAY);
+    assert.equal(parsed[0].newRate, 2);
+    assert.equal(parsed[0].oldRate, 1);
+    assert.deepEqual(parsed[0].raw, split);
+    console.log("✓ adapter preserves genuine empty responses, harmless metadata, and valid APH split data");
+
+    reply(sensitiveFixture, 503, true);
+    await rejectsSanitized();
+    globalThis.fetch = async () => { fetchCalls++; throw new Error(sensitiveFixture); };
+    await rejectsSanitized();
+    reply(sensitiveFixture, 200, true); // invalid JSON must not become an empty action plan
+    await rejectsSanitized();
+    console.log("✓ HTTP, network, and JSON failures throw bounded errors without body/credential leakage");
+
+    for (const malformed of [
+      null, [], {}, { corporate_actions: null }, { corporate_actions: [] },
+      { corporate_actions: { forward_splits: {} } },
+      { corporate_actions: { forward_splits: null } }, // official REST schema requires array if present
+      { corporate_actions: { forward_splits: [null] } },
+      { corporate_actions: { forward_splits: [{}] } },
+      { corporate_actions: { forward_splits: [{ ...split, new_rate: "invalid" }] } },
+      { corporate_actions: { forward_splits: [{ ...split, old_rate: true }] } },
+      { corporate_actions: { forward_splits: [{ ...split, ex_date: "2026-02-30" }] } },
+      { corporate_actions: { cash_dividends: [{ symbol: "APH", ex_date: TODAY }] } },
+    ]) {
+      reply(malformed);
+      await rejectsSanitized();
+    }
+    reply({ corporate_actions: {}, next_page_token: "fixture-next-page" });
+    await rejectsSanitized();
+    reply({ corporate_actions: { spin_offs: [{ symbol: "APH" }] }, next_page_token: null });
+    await rejectsSanitized("spin_offs");
+    reply({ corporate_actions: { [sensitiveFixture]: [{ symbol: "APH" }] }, next_page_token: null });
+    await rejectsSanitized();
+    console.log("✓ malformed rows/groups and incomplete/unsupported snapshots cannot certify an empty poll");
+
+    const db = holding();
+    storeCorpPlan(db, splitPlan());
+    const stored = getState(db, "corp:plan");
+    reply(sensitiveFixture, 503, true);
+    await assert.rejects(() => nightlyCorpPoll(db, alpacaCorporateActions, { today: TODAY }), /poll aborted/);
+    assert.equal(getState(db, "corp:plan"), stored, "a failed real adapter must preserve previously known split evidence");
+    console.log("✓ nightly poll retains its prior plan when the real adapter reports unavailable data");
+    assert(fetchCalls > 20);
+  } finally {
+    globalThis.fetch = savedFetch;
+    if (savedKey === undefined) delete process.env.ALPACA_API_KEY;
+    else process.env.ALPACA_API_KEY = savedKey;
+    if (savedSecret === undefined) delete process.env.ALPACA_API_SECRET;
+    else process.env.ALPACA_API_SECRET = savedSecret;
+  }
 }
 
 console.log("all corporate-action containment tests passed");

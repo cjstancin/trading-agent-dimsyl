@@ -1,8 +1,9 @@
 // Bull v2 — EVENING ritual (Mon–Fri ~16:30 ET). The close-of-day bookkeeping + judgment sequence:
-//   market-day gate → replay fills → equity mark (missing prices fall back to the prior mark) →
+//   market-day gate → replay fills → stored corporate preflight → fresh poll + preflight → equity
+//   mark (missing prices fall back to the prior mark) →
 //   benchmark closes + per-sleeve marks → insider nightly (daily-index reconcile → new-signal scan
-//   → shadow CARs → exits pass) → thesis-check runner over pending stop_fired events → corporate-
-//   actions nightly poll (plan stored for the morning) → judgment outcome checkpoints → summary.
+//   → shadow CARs → exits pass) → thesis-check runner over pending stop_fired events → judgment
+//   outcome checkpoints → summary.
 // Same rails as the morning: step() around everything, trades only in mode "auto". A halt or an
 // incomplete fill replay defers decisions; ingestion and external-price observations still run.
 import type { DatabaseSync } from "node:sqlite";
@@ -82,6 +83,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
   const tradesAllowed = deps.mode === "auto";
   const washDays = Number(cfg.ledger.washBlacklistDays);
   let replayComplete = false;
+  let corporateEvidenceComplete = false;
   const activeHalts = (): Record<string, string> => Object.fromEntries(
     ["book", ...SLEEVES].flatMap((s) => {
       const reason = getState(db, `halt:${s}`);
@@ -90,6 +92,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
   );
   const decisionBlock = (sleeve: string): string | null => {
     if (!replayComplete) return "fill replay incomplete — ledger not certified this run";
+    if (!corporateEvidenceComplete) return "corporate-action evidence incomplete — decisions deferred this run";
     const book = getState(db, "halt:book");
     if (book) return `book HALTED: ${book}`;
     const halt = getState(db, `halt:${sleeve}`);
@@ -99,7 +102,8 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
   // certify a new ledger-based mark while any halt leaves position/cash truth unresolved.
   const valuationBlock = (): string | null => !replayComplete
     ? "fill replay incomplete"
-    : Object.keys(activeHalts()).length ? "active halt — ledger valuation awaits operator review"
+    : !corporateEvidenceComplete ? "corporate-action evidence incomplete"
+      : Object.keys(activeHalts()).length ? "active halt — ledger valuation awaits operator review"
       : db.prepare("SELECT 1 FROM state WHERE key LIKE 'corp:pending:div:%' LIMIT 1").get()
         ? "unverified dividend entitlement — total-return mark deferred" : null;
 
@@ -155,6 +159,27 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
   // This preflight does no broker actions and must fail closed if durable evidence cannot be saved.
   // Legacy split mutations can exist even when the latest nightly plan no longer contains them.
   preflightCorporateActions(db, today);
+
+  // ---- 1b · fresh corporate evidence BEFORE marks or decisions, including effective-today
+  // announcements first discovered tonight. Keep the stored preflight above: a poll outage must
+  // never prevent containment of legacy/pending evidence. One poll and one notification pass.
+  await step(steps, post, "corp-actions-poll", async () => {
+    const { plan, held } = await nightlyCorpPoll(db, deps.corpPort, { today });
+    preflightCorporateActions(db, today);
+    corporateEvidenceComplete = true; // persistence succeeded; notification failures cannot undo it
+    if (plan.unknown.length) {
+      await post(escalationNote({
+        kind: "corp-actions-unknown",
+        title: `${plan.unknown.length} unclassifiable corporate action(s) on held names — surfaced, never guessed at`,
+        detail: plan.unknown.map((u) => `${u.symbol}:${u.type}`).join(", "),
+      }));
+    }
+    for (const ex of plan.exitBefore) {
+      await post(`📅 [Book] ${ex.symbol} ${ex.type} effective ${ex.effectiveDate} — exit queued for the next morning ritual.`);
+    }
+    return `${held.length} held · exits ${plan.exitBefore.length}, splits ${plan.forwardSplits.length}, dividends ${plan.dividends.length}, unknown ${plan.unknown.length}`;
+  });
+
   await step(steps, post, "halt-status", async () => {
     const halts = activeHalts();
     const reasons = Object.entries(halts).map(([s, reason]) => `${s}: ${reason}`);
@@ -164,11 +189,12 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
         detail: `${reasons.join(" · ")} · pending stop events kept; no halt is cleared automatically`,
       }));
     }
-    return reasons.length ? reasons.join(" · ") : replayComplete ? "no active halts" : "replay incomplete — all decisions deferred";
+    return reasons.length ? reasons.join(" · ") : decisionBlock("book") ?? "no active halts";
   });
 
   // ---- 2 · equity mark (SGOV included; missing prices fall back to the previous mark). ---------
   let heldPrices = new Map<string, D9>();
+  let performanceMarked = false;
   await step(steps, post, "equity-mark", async () => {
     const blocked = valuationBlock();
     if (blocked) return `deferred — ${blocked}; no performance mark written`;
@@ -181,6 +207,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
       ...(dialPos ? { dial: dialPos } : {}),
       ...(brakeTierRaw != null ? { brakeTier: Number(brakeTierRaw) } : {}),
     });
+    performanceMarked = true;
     if (mark.missingPrices.length) {
       await post(`⚠️ [Book] equity mark ${today}: no fresh price for ${mark.missingPrices.join(", ")} — previous mark's price used (flagged, never fabricated).`);
     }
@@ -199,7 +226,9 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
       if (p == null) missing.push(sym);
       else recordBench(db, today, sym, numToD9(p));
     }
-    const blocked = valuationBlock();
+    // A halt may clear during benchmark fetches. That cannot certify an empty/partial map left
+    // by a skipped or failed equity step earlier in THIS run.
+    const blocked = valuationBlock() ?? (!performanceMarked ? "no completed equity mark this run" : null);
     if (!blocked) {
       for (const s of SLEEVES) {
         recordBench(db, today, `sleeve:${s}`, sleeveNavFor9(db, eff, s, heldPrices));
@@ -317,7 +346,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
       // judging and before consuming the event; the gateway remains the final fresh-order gate.
       if (decisionBlock(ev.sleeve)) { deferred++; continue; }
       const v = await runThesisCheck(db, deps.llm, input);
-      if (decisionBlock(ev.sleeve)) { deferred++; continue; }
+      if (v.action === "deferred" || decisionBlock(ev.sleeve)) { deferred++; continue; }
       handled++;
       if (v.action === "sell_now") {
         if (!tradesAllowed) {
@@ -359,23 +388,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
         await post(`🧠 [${ev.sleeve}] ${ev.symbol}: thesis-check verdict ${v.cls} → HOLD with −25% floor $${d9str(v.floorPrice9)} (code-enforced).`);
       }
     }
-    return `${handled}/${events.length} event(s) judged${deferred ? `; ${deferred} deferred — replay incomplete or affected sleeve/book HALTED (events kept)` : ""}`;
-  });
-
-  // ---- 7 · corporate-actions nightly poll (plan stored for the morning). -----------------------
-  await step(steps, post, "corp-actions-poll", async () => {
-    const { plan, held } = await nightlyCorpPoll(db, deps.corpPort, { today });
-    if (plan.unknown.length) {
-      await post(escalationNote({
-        kind: "corp-actions-unknown",
-        title: `${plan.unknown.length} unclassifiable corporate action(s) on held names — surfaced, never guessed at`,
-        detail: plan.unknown.map((u) => `${u.symbol}:${u.type}`).join(", "),
-      }));
-    }
-    for (const ex of plan.exitBefore) {
-      await post(`📅 [Book] ${ex.symbol} ${ex.type} effective ${ex.effectiveDate} — exit queued for the next morning ritual.`);
-    }
-    return `${held.length} held · exits ${plan.exitBefore.length}, splits ${plan.forwardSplits.length}, dividends ${plan.dividends.length}, unknown ${plan.unknown.length}`;
+    return `${handled}/${events.length} event(s) judged${deferred ? `; ${deferred} deferred — evidence incomplete or affected sleeve/book HALTED (events kept)` : ""}`;
   });
 
   // ---- 8 · judgment outcome checkpoints (1/3/6-month counterfactuals). -------------------------
@@ -396,7 +409,8 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
   await step(steps, post, "summary", async () => {
     const lines = steps.filter((s) => s.name !== "summary")
       .map((s) => `${s.ok ? "✓" : "✗"} ${s.name}${s.detail ? ` — ${s.detail}` : ""}`);
-    const state = Object.keys(activeHalts()).length ? " · HALTED" : !replayComplete ? " · REPLAY INCOMPLETE" : "";
+    const state = Object.keys(activeHalts()).length ? " · HALTED" : !replayComplete ? " · REPLAY INCOMPLETE"
+      : !corporateEvidenceComplete ? " · CORPORATE ACTIONS INCOMPLETE" : "";
     await post(`🌙 **Bill v2 evening — ${today}${state}**\n${lines.join("\n")}`);
   });
 

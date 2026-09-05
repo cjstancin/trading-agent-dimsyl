@@ -63,7 +63,7 @@ export function preflightCorporateActions(db: DatabaseSync, today: string): DueA
 }
 
 /** EVENING: poll announcements for every held symbol over the next `horizonDays`, store the plan.
- *  A data blip returns an empty announcement list (the adapter's contract) — tomorrow retries. */
+ *  An unavailable or malformed snapshot throws before storage, preserving the previous plan. */
 export async function nightlyCorpPoll(
   db: DatabaseSync, port: CorporateActionsPort, opts: { today: string; horizonDays?: number },
 ): Promise<{ plan: CorporateActionsPlan; held: string[] }> {
