@@ -1,9 +1,11 @@
 // Bull v2 — EVENING ritual (Mon–Fri ~16:30 ET). The close-of-day bookkeeping + judgment sequence:
-//   market-day gate → replay fills → equity mark (missing prices fall back to the prior mark) →
+//   market-day gate → replay fills → stored corporate preflight → fresh poll + preflight → equity
+//   mark (missing prices fall back to the prior mark) →
 //   benchmark closes + per-sleeve marks → insider nightly (daily-index reconcile → new-signal scan
-//   → shadow CARs → exits pass) → thesis-check runner over pending stop_fired events → corporate-
-//   actions nightly poll (plan stored for the morning) → judgment outcome checkpoints → summary.
-// Same rails as the morning: step() around everything, trades only in mode "auto".
+//   → shadow CARs → exits pass) → thesis-check runner over pending stop_fired events → judgment
+//   outcome checkpoints → summary.
+// Same rails as the morning: step() around everything, trades only in mode "auto". A halt or an
+// incomplete fill replay defers decisions; ingestion and external-price observations still run.
 import type { DatabaseSync } from "node:sqlite";
 import { d9, d9str, div9, type D9 } from "../decimal.js";
 import { getState, setState, clearState } from "../db.js";
@@ -27,7 +29,7 @@ import { updateShadowCars } from "../sleeves/insider/shadow.js";
 import type { EdgarPort as InsEdgarPort, PricePort as InsPricePort, DailyBar as InsDailyBar } from "../sleeves/insider/ports.js";
 import type { StopFiredEvent } from "../sleeves/wildcard/types.js";
 import type { CorporateActionsPort } from "../book/corporate-actions.js";
-import { nightlyCorpPoll } from "./corp-actions.js";
+import { nightlyCorpPoll, preflightCorporateActions } from "./corp-actions.js";
 import { scanNewInsiderSignals } from "./insider-signals.js";
 import {
   step, numToD9, sleeveNavFor9, priceMap9, avgEntryPrice9, queueApprovalRow, dtGuard,
@@ -48,6 +50,8 @@ export interface EveningDeps extends CoreDeps {
 export interface EveningResult {
   ok: boolean;
   skipped?: string;
+  halted?: boolean;
+  halts?: Record<string, string>; // current book/sleeve reasons; a sleeve halt leaves other sleeves active
   steps: StepResult[];
 }
 
@@ -78,6 +82,30 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
   const steps: StepResult[] = [];
   const tradesAllowed = deps.mode === "auto";
   const washDays = Number(cfg.ledger.washBlacklistDays);
+  let replayComplete = false;
+  let corporateEvidenceComplete = false;
+  const activeHalts = (): Record<string, string> => Object.fromEntries(
+    ["book", ...SLEEVES].flatMap((s) => {
+      const reason = getState(db, `halt:${s}`);
+      return reason ? [[s, reason]] : [];
+    }),
+  );
+  const decisionBlock = (sleeve: string): string | null => {
+    if (!replayComplete) return "fill replay incomplete — ledger not certified this run";
+    if (!corporateEvidenceComplete) return "corporate-action evidence incomplete — decisions deferred this run";
+    const book = getState(db, "halt:book");
+    if (book) return `book HALTED: ${book}`;
+    const halt = getState(db, `halt:${sleeve}`);
+    return halt ? `${sleeve} HALTED: ${halt}` : null;
+  };
+  // Marks feed the performance curve, brake and sizing with no provisional-data flag. Do not
+  // certify a new ledger-based mark while any halt leaves position/cash truth unresolved.
+  const valuationBlock = (): string | null => !replayComplete
+    ? "fill replay incomplete"
+    : !corporateEvidenceComplete ? "corporate-action evidence incomplete"
+      : Object.keys(activeHalts()).length ? "active halt — ledger valuation awaits operator review"
+      : db.prepare("SELECT 1 FROM state WHERE key LIKE 'corp:pending:div:%' LIMIT 1").get()
+        ? "unverified dividend entitlement — total-return mark deferred" : null;
 
   if (deps.mode === "off") return { ok: true, skipped: "mode=off", steps };
   const day = await deps.marketDay();
@@ -92,20 +120,86 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
 
   // ---- 1 · replay fills into the tax + cash ledgers. -------------------------------------------
   await step(steps, post, "replay-fills", async () => {
-    const r = await replayFills(db, read, { sessions: sessions.length ? sessions : undefined });
-    if (r.untagged.length) {
+    const before = (db.prepare("SELECT COALESCE(MAX(rowid),0) AS n FROM fills").get() as { n: number }).n;
+    let r: Awaited<ReturnType<typeof replayFills>>;
+    let untagged: string[] = [];
+    try {
+      r = await replayFills(db, read, { sessions: sessions.length ? sessions : undefined });
+    } finally {
+      // Replay commits per fill and advances its cursor. Even if a LATER activity throws, newly
+      // ingested untagged fills must latch the halt now; tomorrow may see no new fills or diff.
+      untagged = (db.prepare("SELECT id FROM fills WHERE rowid > ? AND sleeve IS NULL ORDER BY id").all(before) as { id: string }[])
+        .map((f) => f.id);
+      if (untagged.length) {
+        const ts = new Date().toISOString();
+        if (!getState(db, "halt:book")) {
+          setState(db, "halt:book", `untagged fills (manual/dashboard orders?): ${untagged.slice(0, 5).join(",")} @ ${ts}`);
+        }
+        const title = `${untagged.length} untagged evening fill(s) — book HALTED pending operator review`;
+        const payload = JSON.stringify({ source: "evening", untaggedFills: untagged });
+        // Stable evidence, not a timestamp, identifies this incident. Atomic INSERT guards a
+        // repeated invocation without reopening a previously resolved approval for the same fills.
+        db.prepare(
+          `INSERT INTO approvals(ts, kind, title, payload, status)
+           SELECT ?, 'reconcile-mismatch', ?, ?, 'pending'
+           WHERE NOT EXISTS (SELECT 1 FROM approvals WHERE kind='reconcile-mismatch' AND payload=?)`,
+        ).run(ts, title, payload, payload);
+      }
+    }
+    replayComplete = true; // notification failure below cannot undo the durable halt or fill replay
+    if (untagged.length) {
       await post(escalationNote({
         kind: "untagged-fills",
-        title: `${r.untagged.length} fill(s) with no resolvable sleeve — morning reconcile will halt the book`,
+        title: `${untagged.length} fill(s) with no resolvable sleeve — book HALTED; operator review queued`,
       }));
     }
     return `fills +${r.newFills}, disposals +${r.newDisposals}`;
   });
 
+  // This preflight does no broker actions and must fail closed if durable evidence cannot be saved.
+  // Legacy split mutations can exist even when the latest nightly plan no longer contains them.
+  preflightCorporateActions(db, today);
+
+  // ---- 1b · fresh corporate evidence BEFORE marks or decisions, including effective-today
+  // announcements first discovered tonight. Keep the stored preflight above: a poll outage must
+  // never prevent containment of legacy/pending evidence. One poll and one notification pass.
+  await step(steps, post, "corp-actions-poll", async () => {
+    const { plan, held } = await nightlyCorpPoll(db, deps.corpPort, { today });
+    preflightCorporateActions(db, today);
+    corporateEvidenceComplete = true; // persistence succeeded; notification failures cannot undo it
+    if (plan.unknown.length) {
+      await post(escalationNote({
+        kind: "corp-actions-unknown",
+        title: `${plan.unknown.length} unclassifiable corporate action(s) on held names — surfaced, never guessed at`,
+        detail: plan.unknown.map((u) => `${u.symbol}:${u.type}`).join(", "),
+      }));
+    }
+    for (const ex of plan.exitBefore) {
+      await post(`📅 [Book] ${ex.symbol} ${ex.type} effective ${ex.effectiveDate} — exit queued for the next morning ritual.`);
+    }
+    return `${held.length} held · exits ${plan.exitBefore.length}, splits ${plan.forwardSplits.length}, dividends ${plan.dividends.length}, unknown ${plan.unknown.length}`;
+  });
+
+  await step(steps, post, "halt-status", async () => {
+    const halts = activeHalts();
+    const reasons = Object.entries(halts).map(([s, reason]) => `${s}: ${reason}`);
+    if (reasons.length) {
+      await post(escalationNote({
+        kind: "halt-standing", title: `evening decisions deferred for HALTED ${Object.keys(halts).join(", ")}`,
+        detail: `${reasons.join(" · ")} · pending stop events kept; no halt is cleared automatically`,
+      }));
+    }
+    return reasons.length ? reasons.join(" · ") : decisionBlock("book") ?? "no active halts";
+  });
+
   // ---- 2 · equity mark (SGOV included; missing prices fall back to the previous mark). ---------
   let heldPrices = new Map<string, D9>();
+  let performanceMarked = false;
   await step(steps, post, "equity-mark", async () => {
+    const blocked = valuationBlock();
+    if (blocked) return `deferred — ${blocked}; no performance mark written`;
     heldPrices = await priceMap9(ledgerPositions(db).keys(), latestPrice);
+    if (valuationBlock()) return "deferred — halt appeared while pricing; no performance mark written";
     const dialRaw = getState(db, "dial:lei");
     const dialPos = dialRaw ? (JSON.parse(dialRaw) as { position: string }).position : undefined;
     const brakeTierRaw = getState(db, "brake:tier");
@@ -113,6 +207,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
       ...(dialPos ? { dial: dialPos } : {}),
       ...(brakeTierRaw != null ? { brakeTier: Number(brakeTierRaw) } : {}),
     });
+    performanceMarked = true;
     if (mark.missingPrices.length) {
       await post(`⚠️ [Book] equity mark ${today}: no fresh price for ${mark.missingPrices.join(", ")} — previous mark's price used (flagged, never fabricated).`);
     }
@@ -131,10 +226,15 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
       if (p == null) missing.push(sym);
       else recordBench(db, today, sym, numToD9(p));
     }
-    for (const s of SLEEVES) {
-      recordBench(db, today, `sleeve:${s}`, sleeveNavFor9(db, eff, s, heldPrices));
+    // A halt may clear during benchmark fetches. That cannot certify an empty/partial map left
+    // by a skipped or failed equity step earlier in THIS run.
+    const blocked = valuationBlock() ?? (!performanceMarked ? "no completed equity mark this run" : null);
+    if (!blocked) {
+      for (const s of SLEEVES) {
+        recordBench(db, today, `sleeve:${s}`, sleeveNavFor9(db, eff, s, heldPrices));
+      }
     }
-    return `benches ${benchSyms.size - missing.length}/${benchSyms.size}${missing.length ? ` (missing ${missing.join(",")})` : ""} + 4 sleeve marks`;
+    return `benches ${benchSyms.size - missing.length}/${benchSyms.size}${missing.length ? ` (missing ${missing.join(",")})` : ""} · ${blocked ? `sleeve marks deferred — ${blocked}` : "4 sleeve marks"}`;
   });
 
   // ---- 4 · insider nightly: daily-index reconcile → new-signal scan → shadow CARs. -------------
@@ -151,6 +251,8 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
 
   // ---- 5 · insider exits pass (horizon / reversal / ATR stop events). --------------------------
   await step(steps, post, "insider-exits", async () => {
+    const blocked = decisionBlock("ins");
+    if (blocked) return `deferred — ${blocked}; exit/stop state kept`;
     if (!sessions.length) {
       await post(skipNote("ins", "(all)", "NO_SESSIONS", "calendar unavailable — horizon exits deferred to tomorrow"));
       return "no sessions";
@@ -193,7 +295,9 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
     const events = pendingStopEvents(db);
     if (!events.length) return "no pending events";
     let handled = 0;
+    let deferred = 0;
     for (const ev of events) {
+      if (decisionBlock(ev.sleeve)) { deferred++; continue; }
       const qty9 = ledgerPosition(db, ev.symbol);
       if (qty9 <= 0n) {
         clearState(db, ev.key);
@@ -238,7 +342,11 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
         };
       }
 
+      // Operator halts may arrive while price lookups or the model are in flight. Recheck before
+      // judging and before consuming the event; the gateway remains the final fresh-order gate.
+      if (decisionBlock(ev.sleeve)) { deferred++; continue; }
       const v = await runThesisCheck(db, deps.llm, input);
+      if (v.action === "deferred" || decisionBlock(ev.sleeve)) { deferred++; continue; }
       handled++;
       if (v.action === "sell_now") {
         if (!tradesAllowed) {
@@ -280,23 +388,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
         await post(`🧠 [${ev.sleeve}] ${ev.symbol}: thesis-check verdict ${v.cls} → HOLD with −25% floor $${d9str(v.floorPrice9)} (code-enforced).`);
       }
     }
-    return `${handled}/${events.length} event(s) judged`;
-  });
-
-  // ---- 7 · corporate-actions nightly poll (plan stored for the morning). -----------------------
-  await step(steps, post, "corp-actions-poll", async () => {
-    const { plan, held } = await nightlyCorpPoll(db, deps.corpPort, { today });
-    if (plan.unknown.length) {
-      await post(escalationNote({
-        kind: "corp-actions-unknown",
-        title: `${plan.unknown.length} unclassifiable corporate action(s) on held names — surfaced, never guessed at`,
-        detail: plan.unknown.map((u) => `${u.symbol}:${u.type}`).join(", "),
-      }));
-    }
-    for (const ex of plan.exitBefore) {
-      await post(`📅 [Book] ${ex.symbol} ${ex.type} effective ${ex.effectiveDate} — exit queued for the next morning ritual.`);
-    }
-    return `${held.length} held · exits ${plan.exitBefore.length}, splits ${plan.forwardSplits.length}, dividends ${plan.dividends.length}, unknown ${plan.unknown.length}`;
+    return `${handled}/${events.length} event(s) judged${deferred ? `; ${deferred} deferred — evidence incomplete or affected sleeve/book HALTED (events kept)` : ""}`;
   });
 
   // ---- 8 · judgment outcome checkpoints (1/3/6-month counterfactuals). -------------------------
@@ -317,8 +409,11 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
   await step(steps, post, "summary", async () => {
     const lines = steps.filter((s) => s.name !== "summary")
       .map((s) => `${s.ok ? "✓" : "✗"} ${s.name}${s.detail ? ` — ${s.detail}` : ""}`);
-    await post(`🌙 **Bill v2 evening — ${today}**\n${lines.join("\n")}`);
+    const state = Object.keys(activeHalts()).length ? " · HALTED" : !replayComplete ? " · REPLAY INCOMPLETE"
+      : !corporateEvidenceComplete ? " · CORPORATE ACTIONS INCOMPLETE" : "";
+    await post(`🌙 **Bill v2 evening — ${today}${state}**\n${lines.join("\n")}`);
   });
 
-  return { ok: steps.every((s) => s.ok), steps };
+  const halts = activeHalts();
+  return { ok: steps.every((s) => s.ok), halted: Object.keys(halts).length > 0, halts, steps };
 }

@@ -1,12 +1,10 @@
 // Bull v2 — rituals: corporate-actions glue around book/corporate-actions.ts.
 //   · EVENING: poll announcements for held symbols → planCorporateActions → the plan is stored in
 //     state (bigint-safe JSON) for the next morning.
-//   · MORNING: read the stored plan → applyDueActions (forward splits self-adjust + broker-stale
-//     flag; dividends self-credit, idempotent by ref) → exit-before actions (reverse splits,
-//     mergers) route as SLEEVE SELLS through the shared gateway + a watchlist exit row.
-// Split re-application guard: applyForwardSplit multiplies the ledger every call, so each applied
-// split is remembered in state (corp:applied:*) and filtered out of any later apply pass — a
-// same-day ritual re-run must not double a position.
+//   · PREFLIGHT: contain unresolved splits before any order-capable step; defer unverified dividend
+//     entitlement without mutating executable lots or spendable cash.
+//   · MORNING: when the book is not halted, exit-before actions (reverse splits/mergers) route as
+//     SLEEVE SELLS through the shared gateway + a watchlist exit row.
 import type { DatabaseSync } from "node:sqlite";
 import { d9, d9str, type D9 } from "../decimal.js";
 import { getState, setState } from "../db.js";
@@ -16,14 +14,13 @@ import type { BrokerPort } from "../broker.js";
 import type { EffectiveConfig } from "../config.js";
 import {
   planCorporateActions, applyDueActions,
-  type CorporateActionsPlan, type CorporateActionsPort,
+  type CorporateActionsPlan, type CorporateActionsPort, type DueActionsResult,
 } from "../book/corporate-actions.js";
 import { recordExit } from "../book/watchlist.js";
 import { skipNote, tradeNote } from "../surfaces/notes.js";
 import { dtGuard, ownerSleeveFor, numToD9, type LatestPriceFn, type PostFn } from "./support.js";
 
 export const CORP_PLAN_KEY = "corp:plan";
-const appliedKey = (symbol: string, exDate: string): string => `corp:applied:${symbol}:${exDate}`;
 
 /** CorporateActionsPlan carries bigints (split ratios, d9 dividends) — JSON needs help. */
 export function serializeCorpPlan(plan: CorporateActionsPlan): string {
@@ -59,8 +56,14 @@ export function readCorpPlan(db: DatabaseSync): CorporateActionsPlan | null {
   return raw ? deserializeCorpPlan(raw) : null;
 }
 
+/** Must run before standing-halt checks, trims, brakes, stops, or sleeve decisions. Durable
+ *  pending/stale evidence is checked even when the latest announcement poll returned no plan. */
+export function preflightCorporateActions(db: DatabaseSync, today: string): DueActionsResult {
+  return applyDueActions(db, readCorpPlan(db) ?? { exitBefore: [], forwardSplits: [], dividends: [], unknown: [] }, today);
+}
+
 /** EVENING: poll announcements for every held symbol over the next `horizonDays`, store the plan.
- *  A data blip returns an empty announcement list (the adapter's contract) — tomorrow retries. */
+ *  An unavailable or malformed snapshot throws before storage, preserving the previous plan. */
 export async function nightlyCorpPoll(
   db: DatabaseSync, port: CorporateActionsPort, opts: { today: string; horizonDays?: number },
 ): Promise<{ plan: CorporateActionsPlan; held: string[] }> {
@@ -74,45 +77,34 @@ export async function nightlyCorpPoll(
   return { plan, held };
 }
 
-export interface CorpMorningResult {
-  splitsApplied: number;
-  dividendsCredited: number;
+export interface CorpMorningResult extends DueActionsResult {
   exitsPlaced: { symbol: string; sleeve: string; coid?: string }[];
   exitsWouldPlace: string[];   // gated mode — computed, not placed
   missedExits: string[];       // effective date already passed — escalated, reconcile will flag
   unknownCount: number;
 }
 
-/** MORNING: apply everything due from the stored plan, and route exit-before actions as sleeve
- *  sells (auto mode only). Executed exits are removed from the stored plan so a same-day re-run
- *  can't double-sell; applied splits are remembered in state for the same reason. */
+/** MORNING: contain unsupported accounting effects, then route exit-before actions as sleeve
+ *  sells only when trading is allowed and the book is not halted. Executed exits are removed
+ *  from the plan so a same-day re-run cannot double-sell. No split application marker is minted. */
 export async function morningCorpActions(
   db: DatabaseSync, broker: BrokerPort, eff: EffectiveConfig,
   opts: { today: string; tradesAllowed: boolean; latestPrice: LatestPriceFn; post: PostFn },
 ): Promise<CorpMorningResult> {
   const out: CorpMorningResult = {
-    splitsApplied: 0, dividendsCredited: 0, exitsPlaced: [], exitsWouldPlace: [], missedExits: [], unknownCount: 0,
+    ...preflightCorporateActions(db, opts.today),
+    exitsPlaced: [], exitsWouldPlace: [], missedExits: [], unknownCount: 0,
   };
   const plan = readCorpPlan(db);
+  for (const s of out.deferredSplits) {
+    await opts.post(`⏸️ [Book] split ${s.symbol} (ex ${s.exDate}) remains unresolved — executable quantities unchanged by this run; book halted pending operator review.`);
+  }
+  for (const dv of out.deferredDividends) {
+    await opts.post(`⏳ [Book] dividend ${dv.symbol} (ex ${dv.exDate}) deferred — historical entitlement unverified; no cash credited.`);
+  }
   if (!plan) return out;
   out.unknownCount = plan.unknown.length;
-
-  // Ledger effects due today: splits filtered against the already-applied guard, then remembered.
-  const freshSplits = plan.forwardSplits.filter((s) => !getState(db, appliedKey(s.symbol, s.exDate)));
-  const applied = applyDueActions(db, { ...plan, forwardSplits: freshSplits }, opts.today);
-  out.splitsApplied = applied.splitsApplied;
-  out.dividendsCredited = applied.dividendsCredited;
-  for (const s of freshSplits) {
-    if (s.exDate <= opts.today) {
-      setState(db, appliedKey(s.symbol, s.exDate), opts.today);
-      await opts.post(`🔀 [Book] forward split ${s.symbol} ${s.num}:${s.den} applied to the ledger (ex ${s.exDate}) — broker position flagged stale until reconcile verifies.`);
-    }
-  }
-  for (const dv of plan.dividends) {
-    if (dv.exDate <= opts.today) {
-      await opts.post(`💰 [Book] dividend ${dv.symbol} $${d9str(dv.perShare9)}/sh self-credited at ex-date ${dv.exDate} (paper pays no dividends).`);
-    }
-  }
+  if (out.halted) return out;
 
   // Exit-before actions (reverse splits / mergers) → the owning sleeve's normal sell path.
   const remaining: CorporateActionsPlan["exitBefore"] = [];

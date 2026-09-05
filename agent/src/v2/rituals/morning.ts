@@ -12,7 +12,7 @@ import { getState, setState } from "../db.js";
 import type { BrokerPort, ReadPort } from "../broker.js";
 import type { MarketDayCheck } from "../../market-calendar.js";
 import { starvedNotVerdict, type Sleeve } from "../types.js";
-import { reconcileBoot } from "../reconcile.js";
+import { reconcileBoot, type ReconcileReport } from "../reconcile.js";
 import { sendNtfy } from "../surfaces/ntfy.js";
 import { resolveDial, scalarFor, type DialConfig, type DialPosition, type DialState, type LeiReading } from "../book/lei-dial.js";
 import { updateBrake, tier3Plan, type BrakeConfig, type BrakeState } from "../book/brake.js";
@@ -36,7 +36,7 @@ import type { MomentumConfig, PricePort as MomPricePort } from "../sleeves/momen
 import { tradeNextOpen, PENDING_KEY as ANC_PENDING_KEY } from "../sleeves/anchor/index.js";
 import type { PricePort as AncPricePort } from "../sleeves/anchor/types.js";
 import { pendingEntrySignals } from "./insider-signals.js";
-import { morningCorpActions } from "./corp-actions.js";
+import { morningCorpActions, preflightCorporateActions } from "./corp-actions.js";
 import {
   step, numToD9, bookEquity9, sleeveEquityFor9, priceMap9, sleeveSymbols, ownerSleeveFor,
   avgEntryPrice9, queueApprovalRow,
@@ -115,6 +115,30 @@ export interface MorningResult {
 
 const DIAL_RANK: Record<DialPosition, number> = { engage: 2, caution: 1, pullback: 0 };
 
+type ReconcileEvidence = Pick<ReconcileReport, "mismatches" | "untaggedFills" | "notes">;
+
+/** One pending operator card per reconciliation incident. Cash diagnostics can change every run
+ * without constituting a new position mismatch; refresh that evidence on the existing card. */
+export function queueReconcileApproval(db: DatabaseSync, title: string, evidence: ReconcileEvidence): number {
+  const signature = (e: ReconcileEvidence): string => JSON.stringify({
+    mismatches: e.mismatches.map(m => ({ symbol: m.symbol, ledger9: m.ledger9, broker9: m.broker9,
+      haltedSleeves: [...m.haltedSleeves].sort() })).sort((a, b) => a.symbol.localeCompare(b.symbol)),
+    untaggedFills: [...e.untaggedFills].sort(),
+  });
+  const current = signature(evidence);
+  const pending = db.prepare("SELECT id,payload FROM approvals WHERE kind='reconcile-mismatch' AND status='pending' ORDER BY id DESC")
+    .all() as { id: number; payload: string }[];
+  for (const row of pending) {
+    try {
+      if (signature(JSON.parse(row.payload)) !== current) continue;
+    } catch { continue; } // malformed historic evidence must not hide a new incident
+    db.prepare("UPDATE approvals SET title=?,payload=? WHERE id=? AND status='pending'")
+      .run(title, JSON.stringify(evidence), row.id);
+    return row.id;
+  }
+  return queueApprovalRow(db, "reconcile-mismatch", title, evidence);
+}
+
 function insBars(bars: AlpacaBarLike[]): InsDailyBar[] {
   return bars.map((b) => ({ date: String(b.t).slice(0, 10), close9: numToD9(b.c), volume9: numToD9(b.v) }));
 }
@@ -141,6 +165,14 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
     return { ok: true, skipped: day.reason, steps };
   }
 
+  // Contain due or unresolved paper actions before reconciliation can return on an existing
+  // mismatch, and before any order-capable step. Evidence-write failure aborts this run safely.
+  const corpPreflight = preflightCorporateActions(db, today);
+  if (corpPreflight.splitsDeferred || corpPreflight.dividendsDeferred) {
+    steps.push({ name: "corporate-action-preflight", ok: true,
+      detail: `deferred: ${corpPreflight.splitsDeferred} split(s), ${corpPreflight.dividendsDeferred} dividend(s); operator evidence recorded` });
+  }
+
   // ---- 1 · reconcile: the ledger must explain the account before anything trades. --------------
   let reconOk = false;
   await step(steps, post, "reconcile", async () => {
@@ -152,7 +184,7 @@ export async function runMorningRitual(deps: MorningDeps): Promise<MorningResult
       // The halt-week lesson (08-24→28): a mismatch got ONE Discord post and nothing else — no
       // approvals card, no page — and stayed invisible for four days. Now it lands in the console
       // approvals queue AND pages ntfy (deduped per day).
-      queueApprovalRow(db, "reconcile-mismatch", title, { mismatches: rep.mismatches, untaggedFills: rep.untaggedFills, notes: rep.notes });
+      queueReconcileApproval(db, title, { mismatches: rep.mismatches, untaggedFills: rep.untaggedFills, notes: rep.notes });
       await ntfyHaltOncePerDay(db, today, "Bull HALTED — reconcile mismatch", `${title}\n${detail}`);
       await post(escalationNote({ kind: "reconcile-mismatch", title, detail }));
       return `MISMATCH (${rep.mismatches.length})`;
