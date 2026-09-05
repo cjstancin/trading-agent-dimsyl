@@ -36,6 +36,7 @@ export const sdkLlmPort: LlmPort = {
       systemPrompt: ROLE_SYSTEM[role],           // plain string — NOT the claude_code preset, no brain
       model: ROLE_MODEL[role],
       permissionMode: "bypassPermissions",
+      tools: [],                                // enforce the stateless role's zero-tool inventory
       allowedTools: [],                          // stateless single-turn: no tools at all
       settingSources: [],
       maxTurns: 1,
