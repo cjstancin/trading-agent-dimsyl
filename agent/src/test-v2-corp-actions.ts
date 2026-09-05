@@ -75,15 +75,15 @@ console.log("v2 corp actions — applyDueActions:");
     unknown: [],
   };
   const r1 = applyDueActions(db, plan, TODAY);
-  check("split applied to the ledger", r1.splitsApplied === 1 && d9str(ledgerPosition(db, "AAPL")) === "20");
-  check("broker-stale flag set", getState(db, "split_stale:AAPL") !== null);
+  check("unsupported split contained without changing executable quantity", r1.splitsApplied === 0 && r1.splitsDeferred === 1 && d9str(ledgerPosition(db, "AAPL")) === "10");
+  check("unverified split halts book and records evidence", getState(db, "halt:book") !== null && getState(db, `corp:pending:split:AAPL:${TODAY}`) !== null);
   const divRows = db.prepare("SELECT amount9, settles_on FROM cash_events WHERE kind='dividend'").all() as { amount9: string; settles_on: string }[];
-  check("dividend credited at ex-date (pre-split qty × rate)", divRows.length === 1 && divRows[0].amount9 === "5" && divRows[0].settles_on === TODAY);
+  check("unverified dividend entitlement defers cash", divRows.length === 0 && r1.dividendsDeferred === 1);
 
   // Idempotency: a second pass with the same dividend credits nothing (ref-unique).
   const r2 = applyDueActions(db, { ...plan, forwardSplits: [] }, TODAY);
   check("dividend idempotent by ref", r2.dividendsCredited === 0
-    && (db.prepare("SELECT COUNT(*) AS n FROM cash_events WHERE kind='dividend'").get() as { n: number }).n === 1);
+    && (db.prepare("SELECT COUNT(*) AS n FROM cash_events WHERE kind='dividend'").get() as { n: number }).n === 0);
 
   // Future-dated actions untouched.
   const future: CorporateActionsPlan = {
@@ -93,7 +93,7 @@ console.log("v2 corp actions — applyDueActions:");
     unknown: [],
   };
   const r3 = applyDueActions(db, future, TODAY);
-  check("future-dated split/dividend untouched", r3.splitsApplied === 0 && r3.dividendsCredited === 0 && d9str(ledgerPosition(db, "AAPL")) === "20");
+  check("future-dated split/dividend untouched", r3.splitsApplied === 0 && r3.dividendsCredited === 0 && d9str(ledgerPosition(db, "AAPL")) === "10");
 }
 
 console.log("v2 corp actions — ritual glue (serialize + morning exits):");

@@ -1,19 +1,17 @@
 // Bull v2 — corporate actions (design §7). Alpaca PAPER processes NO corporate actions: splits
-// corrupt the equity curve silently and dividends never arrive. So the book handles them itself:
+// corrupt the equity curve silently and dividends never arrive. Unsupported ledger effects are
+// quarantined for operator review until execution inventory and economic entitlement are proven:
 //   · nightly poll of announcements for HELD symbols
 //   · reverse splits / cash+stock mergers → EXIT before the effective date (normal sell path)
-//   · forward splits → self-adjust the internal ledger (qty×ratio, basis unchanged; broker position
-//     flagged stale until reconcile verifies post-effective)
-//   · cash dividends → self-credited into the cash ledger at EX-DATE, pro-rated to fractional
-//     shares, so the book isn't structurally penalized vs SPY total return
+//   · forward splits → preserve executable FIFO quantities; halt the book while NAV is uncertified
+//   · cash dividends → preserve existing credits; defer new credits pending historical entitlement
 // The poll is a port (offline tests inject fixtures); the real adapter reads Alpaca's data-host
 // corporate-actions endpoint with the same auth as bars/quotes.
 import type { DatabaseSync } from "node:sqlite";
 import { withTimeout, DEFAULT_TIMEOUT_MS } from "../../http-utils.js";
-import { d9, d9str, mul9, type D9 } from "./../decimal.js";
-import { ledgerPositions, applyForwardSplit } from "./../lots.js";
-import { recordCash } from "./../settled-cash.js";
-import { setState } from "./../db.js";
+import { d9, d9str, type D9 } from "./../decimal.js";
+import { ledgerPositions } from "./../lots.js";
+import { getState, setState } from "./../db.js";
 
 export interface CorporateAnnouncement {
   symbol: string;
@@ -101,35 +99,102 @@ export function planCorporateActions(announcements: CorporateAnnouncement[], hel
   return plan;
 }
 
-/** Apply the ledger-side effects that are due as of `today`:
- *  forward splits at ex-date (self-adjust + broker-stale flag) and dividends at ex-date
- *  (self-credit, idempotent by ref div:{symbol}:{exDate}). Exits are NOT executed here — the
- *  evening ritual routes them through the owning sleeve's sell path and Discord-notes them. */
-export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, today: string): {
-  splitsApplied: number; dividendsCredited: number;
-} {
-  let splits = 0;
-  let divs = 0;
-  const positions = ledgerPositions(db);
-  for (const s of plan.forwardSplits) {
-    if (s.exDate > today) continue;
-    applyForwardSplit(db, s.symbol, s.num, s.den, today + "T00:00:00Z");
-    splits++;
+export interface DeferredCorporateAction {
+  symbol: string;
+  exDate: string;
+}
+
+export interface DueActionsResult {
+  splitsApplied: number;
+  dividendsCredited: number;
+  splitsDeferred: number;
+  dividendsDeferred: number;
+  deferredSplits: DeferredCorporateAction[];
+  deferredDividends: DeferredCorporateAction[];
+  halted: boolean;
+}
+
+/** Persist evidence and its operator card atomically. A repeat, including after the card is
+ *  acknowledged, must not create another card or silently resolve the underlying accounting issue. */
+function deferAction(db: DatabaseSync, key: string, title: string, evidence: Record<string, unknown>, halt: boolean): void {
+  db.exec("SAVEPOINT corp_containment");
+  try {
+    if (halt && getState(db, "halt:book") === null) {
+      setState(db, "halt:book", `corporate action unresolved: ${title}; economic NAV uncertified — operator review required`);
+    }
+    if (getState(db, key) === null) {
+      const payload = JSON.stringify({ status: "pending", ...evidence });
+      setState(db, key, payload);
+      db.prepare("INSERT INTO approvals(ts,kind,title,payload) VALUES(?,?,?,?)")
+        .run(new Date().toISOString(), "corporate-action-deferred", title, payload);
+    }
+    db.exec("RELEASE corp_containment");
+  } catch (e) {
+    db.exec("ROLLBACK TO corp_containment");
+    db.exec("RELEASE corp_containment");
+    throw e;
   }
+}
+
+/** Contain due unsupported accounting effects. An announcement is not a broker position update,
+ *  and current holdings do not establish historical dividend entitlement. This deliberately writes
+ *  neither lots nor cash. Existing legacy split mutations/credits require separate reviewed repair.
+ *  Also scans durable split evidence, so an empty/replaced nightly plan cannot erase containment. */
+export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, today: string): DueActionsResult {
+  const positions = ledgerPositions(db);
+  const splits = new Map<string, Record<string, unknown> & DeferredCorporateAction>();
+  for (const s of plan.forwardSplits) {
+    if (s.exDate > today || (positions.get(s.symbol) ?? 0n) <= 0n) continue;
+    if (getState(db, `corp:applied:${s.symbol}:${s.exDate}`) !== null) continue;
+    splits.set(`${s.symbol}:${s.exDate}`, {
+      symbol: s.symbol, exDate: s.exDate, num: String(s.num), den: String(s.den), source: "announcement",
+    });
+  }
+  const stale = db.prepare("SELECT key,value FROM state WHERE key LIKE 'split_stale:%'").all() as { key: string; value: string }[];
+  for (const row of stale) {
+    const symbol = row.key.slice("split_stale:".length);
+    if ((positions.get(symbol) ?? 0n) <= 0n) continue;
+    let marker: Record<string, unknown> = {};
+    try { marker = JSON.parse(row.value) ?? {}; } catch { /* malformed evidence still requires a halt */ }
+    const exDate = typeof marker.ts === "string" && /^\d{4}-\d{2}-\d{2}T/.test(marker.ts) ? marker.ts.slice(0, 10) : "unknown";
+    splits.set(`${symbol}:${exDate}`, {
+      symbol, exDate, num: marker.num ?? null, den: marker.den ?? null,
+      source: "legacy-split-stale", staleMarker: row.value,
+    });
+  }
+  const pending = db.prepare("SELECT value FROM state WHERE key LIKE 'corp:pending:split:%'").all() as { value: string }[];
+  for (const row of pending) {
+    const evidence = JSON.parse(row.value) as Record<string, unknown> & DeferredCorporateAction;
+    splits.set(`${evidence.symbol}:${evidence.exDate}`, evidence);
+  }
+  for (const [id, evidence] of splits) {
+    deferAction(db, `corp:pending:split:${id}`, `split ${evidence.symbol} ${evidence.num ?? "?"}:${evidence.den ?? "?"} (ex ${evidence.exDate}) deferred`, {
+      ...evidence, kind: "forward_split", detectedOn: today,
+      ledgerQty9: d9str(positions.get(evidence.symbol) ?? 0n),
+      lots: db.prepare("SELECT lot_id,open_fill_id,open_ts,qty_open9,qty_remaining9,basis_remaining9 FROM lots WHERE symbol=?").all(evidence.symbol),
+      brokerPosition: "not observed by containment; fresh broker reconciliation required",
+      reason: "Paper split normalization is unverified. Preserve executable quantities and existing fills; economic NAV is uncertified. No automatic repair or halt clearing.",
+    }, true);
+  }
+  const dividends = new Map<string, DeferredCorporateAction>();
   for (const dv of plan.dividends) {
     if (dv.exDate > today) continue;
-    const qty = positions.get(dv.symbol);
-    if (!qty || qty <= 0n) continue;
-    const amount = mul9(qty, dv.perShare9); // pro-rated to fractional shares by construction
-    const inserted = recordCash(db, {
-      ts: dv.exDate + "T00:00:00Z", kind: "dividend", symbol: dv.symbol, amount9: amount,
-      settlesOn: dv.exDate, ref: `div:${dv.symbol}:${dv.exDate}`,
-      note: `self-credited ${d9str(dv.perShare9)}/sh (paper pays no dividends)`,
-    });
-    if (inserted) divs++;
+    const ref = `div:${dv.symbol}:${dv.exDate}`;
+    if (db.prepare("SELECT id FROM cash_events WHERE kind='dividend' AND ref=?").get(ref)) continue;
+    dividends.set(ref, dv);
+    deferAction(db, `corp:pending:${ref}`, `dividend ${dv.symbol} (ex ${dv.exDate}) deferred`, {
+      kind: "cash_dividend", symbol: dv.symbol, exDate: dv.exDate, perShare9: d9str(dv.perShare9), detectedOn: today,
+      currentQty9: d9str(positions.get(dv.symbol) ?? 0n), entitlementQty9: null,
+      reason: "Historical ex-date entitlement has not been established. Current holdings are not evidence of entitlement; no cash was credited.",
+    }, false);
   }
   if (plan.unknown.length) {
     setState(db, "corp_actions_unknown", JSON.stringify(plan.unknown.slice(0, 10)));
   }
-  return { splitsApplied: splits, dividendsCredited: divs };
+  return {
+    splitsApplied: 0, dividendsCredited: 0, splitsDeferred: splits.size, dividendsDeferred: dividends.size,
+    deferredSplits: [...splits.values()].map(({ symbol, exDate }) => ({ symbol, exDate })),
+    deferredDividends: [...dividends.values()].map(({ symbol, exDate }) => ({ symbol, exDate })),
+    halted: getState(db, "halt:book") !== null,
+  };
 }

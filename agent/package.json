@@ -41,7 +41,7 @@
     "test:v2-anchor": "tsx src/test-v2-anchor.ts",
     "test:v2-wildcard": "tsx src/test-v2-wildcard.ts",
     "test:v2-corp-actions": "tsx src/test-v2-corp-actions.ts",
-    "test:v2-rituals": "tsx src/test-v2-rituals.ts",
+    "test:v2-rituals": "tsx src/test-v2-rituals.ts && tsx src/test-v2-evening-halts.ts && tsx src/test-v2-reconcile-approvals.ts && tsx src/test-v2-corp-containment.ts",
     "v2:console": "tsx src/v2/surfaces/console-server.ts",
     "v2:morning": "tsx src/run-v2-morning.ts",
     "v2:insider-poll": "tsx src/run-v2-insider-poll.ts",
