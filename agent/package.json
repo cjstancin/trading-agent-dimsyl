@@ -26,7 +26,8 @@
     "control": "tsx src/control-server.ts",
     "ask": "tsx src/agent-cli.ts",
     "test": "npm run typecheck && npm run test:guardrails && npm run test:synthetic-stops && npm run test:profit-trim && npm run test:risk-engine && npm run test:news-guard && npm run test:news-feed && npm run test:fleet-emit && npm run test:market-calendar && npm run test:reallocate && npm run test:revalidate && npm run test:alpaca && npm run test:mae-mfe && npm run test:attribution && npm run test:rolling-stats && npm run test:excursion-stats && npm run test:equity-curve && npm run test:port-review && npm run test:reconcile && npm run test:track-record && npm run test:symbol-record && npm run test:regime && npm run test:replay && npm run test:sams-report && npm run test:aibrain-context && npm run test:control-server && npm run test:v2",
-    "test:v2": "npm run test:v2-decimal && npm run test:v2-ledger && npm run test:v2-config && npm run test:v2-order-gateway && npm run test:v2-reconcile && npm run test:v2-book && npm run test:v2-judgment && npm run test:v2-surfaces && npm run test:v2-console && npm run test:v2-momentum && npm run test:v2-insider && npm run test:v2-anchor && npm run test:v2-wildcard && npm run test:v2-corp-actions && npm run test:v2-rituals",
+    "test:v2": "npm run test:v2-sdk-boundary && npm run test:v2-decimal && npm run test:v2-ledger && npm run test:v2-config && npm run test:v2-order-gateway && npm run test:v2-reconcile && npm run test:v2-book && npm run test:v2-judgment && npm run test:v2-surfaces && npm run test:v2-console && npm run test:v2-momentum && npm run test:v2-insider && npm run test:v2-anchor && npm run test:v2-wildcard && npm run test:v2-corp-actions && npm run test:v2-rituals",
+    "test:v2-sdk-boundary": "node --import tsx src/test-v2-sdk-boundary.mjs",
     "test:v2-decimal": "tsx src/test-v2-decimal.ts",
     "test:v2-ledger": "tsx src/test-v2-ledger.ts",
     "test:v2-config": "tsx src/test-v2-config.ts",
@@ -81,11 +82,11 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.177"
+    "@anthropic-ai/claude-agent-sdk": "0.3.261"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.6.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.6.0"
   }
 }
