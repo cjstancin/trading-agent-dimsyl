@@ -55,6 +55,8 @@ export interface ReadPort {
   getPositions(): Promise<any[]>;
   /** FILL activities ASCENDING, strictly after `afterId` when given (pages internally). */
   getFillActivities(afterId?: string): Promise<any[]>;
+  /** Complete non-FILL activity history; incomplete pages throw. Optional only for offline ports. */
+  getCashActivities?(historyFrom: string): Promise<any[]>;
   /** Trading sessions (YYYY-MM-DD ascending) for [start, end] — feeds T+1 settlement. */
   getSessions(start: string, end: string): Promise<string[]>;
 }
@@ -118,6 +120,28 @@ export const alpacaReadPort: ReadPort = {
   async getPositions() {
     const j = await getJson("/v2/positions");
     return Array.isArray(j) ? j : [];
+  },
+  async getCashActivities(historyFrom: string) {
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(historyFrom)||new Date(historyFrom+'T12:00:00Z').toISOString().slice(0,10)!==historyFrom)throw new Error('Invalid accounting inception cutoff');
+    const out:any[]=[];
+    const seen=new Set<string>();
+    let token:string|undefined;
+    for(let page=0;page<50;page++) {
+      // Use the complete nontrade category, not a subtype allowlist. Live read-only verification
+      // retained all 11 fees and the seed journal while excluding 52 fills (MISC alone missed fees).
+      const qs=new URLSearchParams({category:'non_trade_activity',after:historyFrom+'T00:00:00Z',direction:'asc',page_size:'100'});
+      if(token)qs.set('page_token',token);
+      const arr=await getJson(`/v2/account/activities?${qs}`);
+      if(!Array.isArray(arr))throw new Error('Invalid broker activity response');
+      for(const a of arr){
+        if(typeof a.id!=='string'||!a.id||seen.has(a.id))throw new Error('Duplicate/missing broker activity ID');
+        if(a.activity_type==='FILL')throw new Error('Nontrade activity filter was not honored');
+        seen.add(a.id);out.push(a);
+      }
+      if(arr.length<100)return out;
+      token=arr.at(-1).id;
+    }
+    throw new Error('Broker cash activity pagination incomplete');
   },
   async getFillActivities(afterId?: string): Promise<any[]> {
     // Ascending pages via page_token; `after` filters by TIME, so we page from the start and cut on

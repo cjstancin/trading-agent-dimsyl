@@ -15,6 +15,7 @@ import { dayTradeGuard } from "../book/equity.js";
 import { sleeveValue9 } from "../book/trims.js";
 import { totalCash } from "../settled-cash.js";
 import type { ExtraGuard } from "../order-gateway.js";
+import { economicRights, etDate } from '../accounting.js';
 
 export type PostFn = (text: string) => Promise<unknown>;
 export type LatestPriceFn = (symbol: string) => Promise<number | null>;
@@ -72,9 +73,10 @@ export function sleeveEquityFor9(db: DatabaseSync, eff: EffectiveConfig, sleeve:
 
 /** Sleeve NAV for kill-switch math: marked sleeve positions + the sleeve's split share of total
  *  cash (the book does not attribute cash per-sleeve any finer than the split). */
-export function sleeveNavFor9(db: DatabaseSync, eff: EffectiveConfig, sleeve: Sleeve, prices: Map<string, D9>): D9 {
-  return sleeveValue9(db, sleeve, prices).value9
-    + mul9(totalCash(db), d9(String(eff.config.book.sleeveSplit[sleeve])));
+export function sleeveNavFor9(db: DatabaseSync, eff: EffectiveConfig, sleeve: Sleeve, prices: Map<string, D9>, asOf=etDate(new Date().toISOString())): D9 {
+  const rights=economicRights(db,asOf,prices,sleeve);
+  return sleeveValue9(db, sleeve, prices).value9 + rights.stock9
+    + mul9(totalCash(db)+rights.cash9, d9(String(eff.config.book.sleeveSplit[sleeve])));
 }
 
 /** Fetch latest prices for a symbol set into a d9 map. Missing prices are simply absent — callers

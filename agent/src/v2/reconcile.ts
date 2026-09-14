@@ -14,6 +14,7 @@ import { scanWash } from "./wash.js";
 import { recordCash, nextTradingDay } from "./settled-cash.js";
 import { markIntentStatus } from "./order-gateway.js";
 import type { BrokerPort, ReadPort } from "./broker.js";
+import { accountingEnabled, ingestBrokerCashActivities } from './accounting.js';
 
 const FILLS_CURSOR_KEY = "fills_cursor";
 
@@ -87,6 +88,20 @@ export async function replayFills(
         });
       }
       setState(db, FILLS_CURSOR_KEY, String(a.id));
+    }
+  }
+  if(accountingEnabled(db)) {
+    try{
+      const from=getState(db,'accounting:history-from');
+      if(!read.getCashActivities||!from)throw new Error('Broker cash activity read unavailable');
+      ingestBrokerCashActivities(db,await read.getCashActivities(from));
+    }catch(e){
+      const reason=e instanceof Error&&e.message==='Broker cash activity pagination incomplete'
+        ?'Broker nontrade activity pagination limit exceeded; accounting review required'
+        :'Broker cash activity read/replay incomplete; accounting review required';
+      if(!getState(db,'halt:book'))setState(db,'halt:book',reason);
+      if(!getState(db,'accounting:cash-read-failure'))setState(db,'accounting:cash-read-failure',reason);
+      throw e;
     }
   }
   return { newFills, newDisposals, untagged };
@@ -178,7 +193,11 @@ export async function reconcileBoot(
   const rows = db.prepare("SELECT amount9 FROM cash_events").all() as { amount9: string }[];
   const internalCash = rows.reduce((a, r) => a + d9(r.amount9), 0n);
   const cashDelta = internalCash - brokerCash;
-  if (account && cashDelta !== 0n) notes.push(`cash delta (internal − broker): ${d9str(cashDelta)} — expected only from pending self-credited dividends/fees`);
+  const cashMismatch=accountingEnabled(db)&&(!account||cashDelta>=d9('0.005')||cashDelta<=-d9('0.005'));
+  if(cashMismatch) {
+    if(!getState(db,'halt:book'))setState(db,'halt:book','Broker cash unavailable or execution cash mismatch; accounting review required');
+    notes.push('Execution cash reconciliation failed; book halted. Entitlements are nonspendable.');
+  } else if(account&&cashDelta!==0n)notes.push(`cash delta (internal − broker): ${d9str(cashDelta)}${accountingEnabled(db)?' — retained sub-cent rounding residue':' — accounting review required'}`);
 
   // 7 — stuck-order watchdog: a marketable order still `new` past N minutes → alert + cancel.
   const stuckMin = opts.stuckOrderMinutes ?? 10;
@@ -200,7 +219,7 @@ export async function reconcileBoot(
   }
 
   return {
-    ok: mismatches.length === 0 && replay.untagged.length === 0,
+    ok: mismatches.length === 0 && replay.untagged.length === 0 && !cashMismatch,
     newFills: replay.newFills,
     newDisposals: replay.newDisposals,
     washMatches,

@@ -7,6 +7,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { d9, d9str, type D9 } from "./../decimal.js";
 import { equityCurve, realizedMaxDrawdownPct } from "./equity.js";
+import { correctedMark } from '../accounting.js';
 
 export function ensureBenchTables(db: DatabaseSync): void {
   db.exec(`
@@ -21,14 +22,18 @@ export function ensureBenchTables(db: DatabaseSync): void {
 
 export function recordBench(db: DatabaseSync, date: string, series: string, value9: D9): void {
   ensureBenchTables(db);
+  const exists=db.prepare("SELECT name FROM sqlite_master WHERE name='accounting_marks'").get();
+  if(exists&&db.prepare("SELECT 1 FROM accounting_marks m JOIN accounting_repairs r ON r.id=m.repair_id WHERE m.date=? AND m.series=? AND r.reversed_ts IS NULL").get(date,series))throw new Error('Cannot overwrite a restated historical benchmark');
+  const cashOverlay=db.prepare("SELECT name FROM sqlite_master WHERE name='accounting_cash_overlays'").get();
+  if(cashOverlay&&db.prepare('SELECT 1 FROM accounting_cash_overlays WHERE date=? AND series=? LIMIT 1').get(date,series))throw new Error('Cannot overwrite a cash-overlay source benchmark');
   db.prepare("INSERT INTO bench_marks(date, series, value9) VALUES(?,?,?) ON CONFLICT(date, series) DO UPDATE SET value9=excluded.value9")
     .run(date, series, d9str(value9));
 }
 
 export function benchSeries(db: DatabaseSync, series: string): { date: string; value9: D9 }[] {
   ensureBenchTables(db);
-  const rows = db.prepare("SELECT date, value9 FROM bench_marks WHERE series=? ORDER BY date ASC").all(series) as any[];
-  return rows.map((r) => ({ date: r.date, value9: d9(r.value9) }));
+  const rows = db.prepare("SELECT * FROM bench_marks WHERE series=? ORDER BY date ASC").all(series) as any[];
+  return rows.map((r) => ({ date: r.date, value9: correctedMark(db,r.date,series,r)??d9(r.value9) }));
 }
 
 /** Total return over a window from a value series (first→last), as a fraction (0.1 = +10%).

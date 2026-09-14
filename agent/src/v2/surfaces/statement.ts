@@ -7,6 +7,7 @@ import { d9, d9num, type D9 } from "./../decimal.js";
 import { SLEEVES, SLEEVE_NAMES } from "./../types.js";
 import { equityCurve } from "./../book/equity.js";
 import { benchSeries, gateProgress } from "./../book/benchmarks.js";
+import { accountingEnabled } from '../accounting.js';
 
 function money(v: D9): string { return `$${d9num(v).toFixed(2)}`; }
 function pct(n: number | null): string { return n == null ? "—" : `${n >= 0 ? "+" : ""}${(n * 100).toFixed(2)}%`; }
@@ -30,13 +31,16 @@ export function monthlyStatement(db: DatabaseSync, month: string): string {
   lines.push(`🐂 **Bill the Bull — monthly statement · ${month}** (paper book)`);
   lines.push("");
   lines.push(`Equity: ${book.open != null ? money(book.open) : "—"} → ${book.close != null ? money(book.close) : "—"} (${pct(book.ret)}) · SPY ${pct(spy.ret)}`);
+  if(accountingEnabled(db))lines.push('Equity includes separately recorded undelivered economic entitlements. Cash and executable share balances exclude them; historical restatements retain the original reported marks.');
 
   // Realized P&L from disposals closed in the month — economic AND tax views, separately.
   const disp = db.prepare("SELECT realized9, wash_disallowed9, term, symbol, sleeve FROM disposals WHERE substr(close_ts,1,7)=?").all(month) as any[];
   const realized = disp.reduce((a, r) => a + d9(r.realized9), 0n);
   const disallowed = disp.reduce((a, r) => a + d9(r.wash_disallowed9), 0n);
   const shortTerm = disp.filter((r) => r.term === "short").reduce((a, r) => a + d9(r.realized9), 0n);
-  lines.push(`Realized this month: ${money(realized)} economic across ${disp.length} closes (${money(shortTerm)} short-term)` +
+  const fees=db.prepare("SELECT amount9 FROM cash_events WHERE kind='fee' AND substr(settles_on,1,7)=?").all(month) as {amount9:string}[];
+  if(fees.length)lines.push(`Broker-confirmed fees: ${money(fees.reduce((a,r)=>a+d9(r.amount9),0n))} (${fees.length} activity records).`);
+  lines.push(`Realized this month: ${money(realized)} ${accountingEnabled(db)?'execution-lot P&L':'economic'} across ${disp.length} closes (${money(shortTerm)} short-term)` +
     (disallowed > 0n ? ` · wash-disallowed ${money(disallowed)} deferred into replacement basis` : " · no wash-sale events"));
 
   lines.push("", "**Per sleeve (month)**");

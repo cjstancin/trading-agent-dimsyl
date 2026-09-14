@@ -67,10 +67,11 @@ export function preflightCorporateActions(db: DatabaseSync, today: string): DueA
 export async function nightlyCorpPoll(
   db: DatabaseSync, port: CorporateActionsPort, opts: { today: string; horizonDays?: number },
 ): Promise<{ plan: CorporateActionsPlan; held: string[] }> {
-  const held = [...ledgerPositions(db).keys()];
+  // Include closed positions: selling on/after an ex-date does not erase the entitlement.
+  const held = [...new Set([...ledgerPositions(db).keys(),...(db.prepare('SELECT DISTINCT symbol FROM fills WHERE ts>=?').all(addDays(opts.today,-60)+'T00:00:00Z') as {symbol:string}[]).map(r=>r.symbol)])];
   let plan: CorporateActionsPlan = { exitBefore: [], forwardSplits: [], dividends: [], unknown: [] };
   if (held.length) {
-    const anns = await port.announcements(held, opts.today, addDays(opts.today, opts.horizonDays ?? 14));
+    const anns = await port.announcements(held, addDays(opts.today,-45), addDays(opts.today, opts.horizonDays ?? 14));
     plan = planCorporateActions(anns, new Set(held));
   }
   storeCorpPlan(db, plan);
