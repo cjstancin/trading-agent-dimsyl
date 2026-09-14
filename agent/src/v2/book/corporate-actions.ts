@@ -12,7 +12,7 @@ import { withTimeout, DEFAULT_TIMEOUT_MS } from "../../http-utils.js";
 import { d9, d9str, type D9 } from "./../decimal.js";
 import { ledgerPositions } from "./../lots.js";
 import { getState, setState } from "./../db.js";
-import { accountingEnabled, captureDividend, entitlementKnown, historicalQty } from '../accounting.js';
+import { accountingEnabled, captureDividend, entitlementKnown, historicalQty, outstandingSplit, hash } from '../accounting.js';
 
 export interface CorporateAnnouncement {
   symbol: string;
@@ -196,7 +196,14 @@ export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, to
   const positions = ledgerPositions(db);
   const splits = new Map<string, Record<string, unknown> & DeferredCorporateAction>();
   for (const s of plan.forwardSplits) {
-    if (s.exDate > today || (positions.get(s.symbol) ?? 0n) <= 0n) continue;
+    if (s.exDate > today || ((positions.get(s.symbol) ?? 0n) <= 0n && !outstandingSplit(db,s.symbol))) continue;
+    if(accountingEnabled(db)){
+      const previous=db.prepare("SELECT * FROM corporate_entitlements WHERE id=?").get(`split:${s.symbol}:${s.exDate}`) as any;
+      if(previous&&(s.den<=0n||s.num<=s.den||d9(previous.eligible_qty9)*(s.num-s.den)/s.den!==d9(previous.extra_qty9))){
+        const evidence={kind:'forward_split',symbol:s.symbol,exDate:s.exDate,num:String(s.num),den:String(s.den)};
+        deferAction(db,`corp:conflict:split:${s.symbol}:${s.exDate}:${hash(evidence)}`,'Conflicting split evidence; accounting review required',evidence,true);
+      }
+    }
     if (getState(db, `corp:applied:${s.symbol}:${s.exDate}`) !== null) continue;
     splits.set(`${s.symbol}:${s.exDate}`, {
       symbol: s.symbol, exDate: s.exDate, num: String(s.num), den: String(s.den), source: "announcement",
@@ -226,6 +233,7 @@ export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, to
     const ex = /^\d{4}-\d{2}-\d{2}$/.test(evidence.exDate) ? new Date(evidence.exDate + 'T00:00:00Z') : null;
     if (evidence.source === 'announcement' && accountingEnabled(db) && getState(db, 'accounting:history-from')
       && ex && Number.isFinite(ex.getTime()) && ex.toISOString().slice(0,10) === evidence.exDate && evidence.exDate <= today
+      && !outstandingSplit(db,evidence.symbol)
       && getState(db, `split_stale:${evidence.symbol}`) === null && historicalQty(db, evidence.symbol, evidence.exDate) === 0n) {
       splits.delete(id); continue;
     }
@@ -246,7 +254,13 @@ export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, to
     const ref = `div:${dv.symbol}:${dv.exDate}`;
     const duplicates=plan.dividends.filter(d=>d.symbol===dv.symbol&&d.exDate===dv.exDate).length;
     if(duplicates>1&&historicalQty(db,dv.symbol,dv.exDate)>0n&&!getState(db,'halt:book'))setState(db,'halt:book','Ambiguous corporate distribution components; accounting review required');
-    if((duplicates===1||historicalQty(db,dv.symbol,dv.exDate)===0n)&&captureDividend(db,dv,today))continue;
+    try {
+      if((duplicates===1||historicalQty(db,dv.symbol,dv.exDate)===0n)&&captureDividend(db,dv,today))continue;
+    } catch {
+      // Preserve the first evidence and every distinct conflicting claim without leaking errors.
+      const evidence={kind:'cash_dividend',symbol:dv.symbol,exDate:dv.exDate,perShare9:d9str(dv.perShare9)};
+      deferAction(db,`corp:conflict:${ref}:${hash(evidence)}`,'Conflicting dividend evidence; accounting review required',evidence,true);
+    }
     if (db.prepare("SELECT id FROM cash_events WHERE kind='dividend' AND ref=?").get(ref)) continue;
     dividends.set(ref, dv);
     deferAction(db, `corp:pending:${ref}`, `dividend ${dv.symbol} (ex ${dv.exDate}) deferred`, {

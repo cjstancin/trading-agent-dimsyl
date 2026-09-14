@@ -17,6 +17,7 @@ import {
   type CorporateActionsPlan, type CorporateActionsPort, type DueActionsResult,
 } from "../book/corporate-actions.js";
 import { recordExit } from "../book/watchlist.js";
+import {accountingEnabled,historicalQty,outstandingSplit} from '../accounting.js';
 import { skipNote, tradeNote } from "../surfaces/notes.js";
 import { dtGuard, ownerSleeveFor, numToD9, type LatestPriceFn, type PostFn } from "./support.js";
 
@@ -73,6 +74,9 @@ export async function nightlyCorpPoll(
   if (held.length) {
     const anns = await port.announcements(held, addDays(opts.today,-45), addDays(opts.today, opts.horizonDays ?? 14));
     plan = planCorporateActions(anns, new Set(held));
+    plan.exitBefore=plan.exitBefore.filter(action=>action.effectiveDate>=opts.today
+      ||!accountingEnabled(db)||!getState(db,'accounting:history-from')
+      ||historicalQty(db,action.symbol,action.effectiveDate)>0n||outstandingSplit(db,action.symbol));
   }
   storeCorpPlan(db, plan);
   return { plan, held };
