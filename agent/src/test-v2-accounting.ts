@@ -122,6 +122,34 @@ test('pre-inception dividend lookback cannot create or retain a permanent valuat
   setState(db,'corp:pending:div:SGOV:2026-08-03','retained legacy evidence');
   assert.equal(entitlementKnown(db,'div:SGOV:2026-08-03'),true);assert.equal(getState(db,'corp:pending:div:SGOV:2026-08-03'),'retained legacy evidence');db.close();
 });
+test('historical split lookback and retained announcement evidence ignore proven zero eligibility without clearing halts',()=>{
+  for(const entry of ['2026-09-03T14:00:00Z','2026-09-04T14:00:00Z']){
+    const {db,evidence}=fixture(),p=prepareRepair(db,evidence);applyRepair(db,p,evidence,reviewHash(p),now);clearState(db,'halt:book');
+    ingestFill(db,{id:'new-buy',symbol:'NEW',side:'buy',qty9:d9('1'),price9:d9('10'),ts:entry,sleeve:'mom',raw:'{}'});
+    const split={symbol:'NEW',exDate:'2026-09-03',num:2n,den:1n};
+    const plan={exitBefore:[],forwardSplits:[split],dividends:[],unknown:[]};
+    assert.equal(applyDueActions(db,plan,'2026-09-14').splitsDeferred,0);assert.equal(getState(db,'halt:book'),null);
+    assert.equal(getState(db,'corp:pending:split:NEW:2026-09-03'),null);
+    const retained=JSON.stringify({symbol:'NEW',exDate:'2026-09-03',source:'announcement',num:'2',den:'1'});
+    setState(db,'corp:pending:split:NEW:2026-09-03',retained);
+    assert.equal(applyDueActions(db,{...plan,forwardSplits:[]},'2026-09-14').splitsDeferred,0);
+    assert.equal(getState(db,'halt:book'),null);assert.equal(getState(db,'corp:pending:split:NEW:2026-09-03'),retained);
+    setState(db,'halt:book','standing operator halt');applyDueActions(db,plan,'2026-09-14');assert.equal(getState(db,'halt:book'),'standing operator halt');db.close();
+  }
+});
+test('split lookback keeps true pre-ex holdings, legacy mutations and missing-history cases contained',()=>{
+  for(const scenario of ['pre-ex','legacy','history','policy','future-pending']){
+    const {db,evidence}=fixture(),p=prepareRepair(db,evidence);applyRepair(db,p,evidence,reviewHash(p),now);clearState(db,'halt:book');
+    ingestFill(db,{id:'new-buy',symbol:'NEW',side:'buy',qty9:d9('1'),price9:d9('10'),ts:scenario==='pre-ex'?'2026-09-03T03:59:59Z':'2026-09-04T14:00:00Z',sleeve:'mom',raw:'{}'});
+    if(scenario==='legacy')setState(db,'split_stale:NEW',JSON.stringify({ts:'2026-09-03T00:00:00Z',num:'2',den:'1'}));
+    if(scenario==='history')clearState(db,'accounting:history-from');
+    if(scenario==='policy')clearState(db,'accounting:policy');
+    const split={symbol:'NEW',exDate:scenario==='future-pending'?'2026-10-01':'2026-09-03',num:2n,den:1n};
+    if(scenario==='future-pending')setState(db,'corp:pending:split:NEW:2026-10-01',JSON.stringify({...split,num:'2',den:'1',source:'announcement'}));
+    const result=applyDueActions(db,{exitBefore:[],forwardSplits:[split],dividends:[],unknown:[]},'2026-09-14');
+    assert.ok(result.splitsDeferred>0,scenario);assert.ok(getState(db,'halt:book'),scenario);db.close();
+  }
+});
 test('fees must be exact negative receipts; unmatched dividends halt without cash/entitlement mutation',()=>{
   const {db,evidence}=fixture(),p=prepareRepair(db,evidence);applyRepair(db,p,evidence,reviewHash(p),now);
   assert.throws(()=>ingestBrokerCashActivities(db,[{...evidence.activities.at(-1),net_amount:'-0.02'}]),/Conflicting/);

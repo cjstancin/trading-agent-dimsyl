@@ -52,6 +52,10 @@ remain in the database, with reviewed entitlement rows providing their accountin
 Pre-inception ex-dates are known to have no rights in this initially empty book; old lookback
 announcements cannot create a permanent pending valuation gate.
 Future forward splits remain contained until the executable versus economic split is reviewed.
+Historical forward-split announcements with proven zero holdings before the ex-date are ignored
+under the reviewed history policy, including retained announcement-only pending records. Their
+evidence and any existing halt remain unchanged. Legacy split mutations, missing history and
+future pending evidence remain contained.
 
 ## Review and application runbook (coordinator only)
 

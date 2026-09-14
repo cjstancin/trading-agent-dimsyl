@@ -220,6 +220,15 @@ export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, to
     splits.set(`${evidence.symbol}:${evidence.exDate}`, evidence);
   }
   for (const [id, evidence] of splits) {
+    // The lookback can find a split before this book ever held the symbol. Apply the same
+    // historical proof to retained announcement-only pending rows, without deleting evidence
+    // or clearing an existing halt. Legacy quantity mutations and missing history stay gated.
+    const ex = /^\d{4}-\d{2}-\d{2}$/.test(evidence.exDate) ? new Date(evidence.exDate + 'T00:00:00Z') : null;
+    if (evidence.source === 'announcement' && accountingEnabled(db) && getState(db, 'accounting:history-from')
+      && ex && Number.isFinite(ex.getTime()) && ex.toISOString().slice(0,10) === evidence.exDate && evidence.exDate <= today
+      && getState(db, `split_stale:${evidence.symbol}`) === null && historicalQty(db, evidence.symbol, evidence.exDate) === 0n) {
+      splits.delete(id); continue;
+    }
     if(entitlementKnown(db,`split:${id}`)){splits.delete(id);continue;}
     deferAction(db, `corp:pending:split:${id}`, `split ${evidence.symbol} ${evidence.num ?? "?"}:${evidence.den ?? "?"} (ex ${evidence.exDate}) deferred`, {
       ...evidence, kind: "forward_split", detectedOn: today,
