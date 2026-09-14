@@ -74,9 +74,10 @@ export async function nightlyCorpPoll(
   if (held.length) {
     const anns = await port.announcements(held, addDays(opts.today,-45), addDays(opts.today, opts.horizonDays ?? 14));
     plan = planCorporateActions(anns, new Set(held));
-    plan.exitBefore=plan.exitBefore.filter(action=>action.effectiveDate>=opts.today
-      ||!accountingEnabled(db)||!getState(db,'accounting:history-from')
-      ||historicalQty(db,action.symbol,action.effectiveDate)>0n||outstandingSplit(db,action.symbol));
+    plan.exitBefore=plan.exitBefore.filter(action=>{
+      if(action.effectiveDate>=opts.today||!accountingEnabled(db)||!getState(db,'accounting:history-from'))return true;
+      try{return historicalQty(db,action.symbol,action.effectiveDate)>0n||outstandingSplit(db,action.symbol);}catch{return true;}
+    });
   }
   storeCorpPlan(db, plan);
   return { plan, held };

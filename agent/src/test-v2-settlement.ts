@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {openDb,setState,getState,clearState} from './v2/db.js';
-import {d9,mul9} from './v2/decimal.js';
+import {d9} from './v2/decimal.js';
 import {ingestFill,ledgerPositions} from './v2/lots.js';
 import {seedBook,recordCash,totalCash} from './v2/settled-cash.js';
 import {ACCOUNTING_POLICY,ensureAccountingTables,putEntitlement,hash,economicRights,historicalQty,ingestBrokerCashActivities,captureDividend} from './v2/accounting.js';
@@ -79,6 +79,19 @@ test('settled receipt ID changing to a fee cannot debit cash and durably halts',
  assert.throws(()=>ingestBrokerCashActivities(db,[{...receipt,activity_type:'FEE',net_amount:'-1'}]),/receipt changed/);
  assert.equal(totalCash(db),d9('800.4'));assert.ok(getState(db,'halt:book'));
  clearState(db,'halt:book');ingestBrokerCashActivities(db,[receipt]);assert.ok(getState(db,'halt:book'));db.close();
+});
+test('receipt key order and added descriptive metadata do not re-halt a settled receipt',()=>{
+ const {db,id,receipt,evidence}=fixture(),e=evidence();e.activityUntil=e.observedAt;
+ const p=prepareSettlement(db,e,id,receipt.id);applySettlement(db,p,e,hash(p));clearState(db,'halt:book');
+ const reordered=Object.fromEntries(Object.entries(receipt).reverse());
+ assert.equal(ingestBrokerCashActivities(db,[{...reordered,description:'provider additive metadata'}]),0);
+ assert.equal(getState(db,'halt:book'),null);assert.equal(totalCash(db),d9('800.4'));db.close();
+});
+test('dividend in split ex-to-delivery interval remains gated without legacy marker',()=>{
+ const {db,id,receipt,evidence}=fixture('split'),e=evidence();e.activityUntil=e.observedAt;
+ const p=prepareSettlement(db,e,id,receipt.id);applySettlement(db,p,e,hash(p));
+ assert.equal(captureDividend(db,{symbol:'ABC',exDate:'2026-08-13',perShare9:d9('0.1')},'2026-08-14'),false);
+ assert.equal(captureDividend(db,{symbol:'ABC',exDate:'2026-08-14',perShare9:d9('0.1')},'2026-08-14'),true);db.close();
 });
 {
  const {db}=fixture();const {plan}=await nightlyCorpPoll(db,{announcements:async()=>[{symbol:'ABC',type:'reverse_split',effectiveDate:'2026-08-12'},{symbol:'ABC',type:'cash_merger',effectiveDate:'2026-08-15'}]},{today:'2026-08-15'});

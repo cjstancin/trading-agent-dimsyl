@@ -9,7 +9,7 @@
 // corporate-actions endpoint with the same auth as bars/quotes.
 import type { DatabaseSync } from "node:sqlite";
 import { withTimeout, DEFAULT_TIMEOUT_MS } from "../../http-utils.js";
-import { d9, d9str, type D9 } from "./../decimal.js";
+import { d9, d9str, mul9, div9, type D9 } from "./../decimal.js";
 import { ledgerPositions } from "./../lots.js";
 import { getState, setState } from "./../db.js";
 import { accountingEnabled, captureDividend, entitlementKnown, historicalQty, outstandingSplit, hash, containAccountingConflicts } from '../accounting.js';
@@ -200,7 +200,7 @@ export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, to
     if (s.exDate > today || ((positions.get(s.symbol) ?? 0n) <= 0n && !outstandingSplit(db,s.symbol))) continue;
     if(accountingEnabled(db)){
       const previous=db.prepare("SELECT * FROM corporate_entitlements WHERE id=?").get(`split:${s.symbol}:${s.exDate}`) as any;
-      if(previous&&(s.den<=0n||s.num<=s.den||d9(previous.eligible_qty9)*(s.num-s.den)/s.den!==d9(previous.extra_qty9))){
+      if(previous&&(s.den<=0n||s.num<=s.den||div9(mul9(d9(previous.eligible_qty9),d9(String(s.num))),d9(String(s.den)))-d9(previous.eligible_qty9)!==d9(previous.extra_qty9))){
         const evidence={kind:'forward_split',symbol:s.symbol,exDate:s.exDate,num:String(s.num),den:String(s.den)};
         deferAction(db,`corp:conflict:split:${s.symbol}:${s.exDate}:${hash(evidence)}`,'Conflicting split evidence; accounting review required',evidence,true);
       }
@@ -260,7 +260,7 @@ export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, to
     } catch {
       // Preserve the first evidence and every distinct conflicting claim without leaking errors.
       const evidence={kind:'cash_dividend',symbol:dv.symbol,exDate:dv.exDate,perShare9:d9str(dv.perShare9)};
-      deferAction(db,`corp:conflict:${ref}:${hash(evidence)}`,'Conflicting dividend evidence; accounting review required',evidence,true);
+      deferAction(db,`corp:conflict:${ref}:${hash(evidence)}`,'Dividend evidence could not be certified; accounting review required',evidence,true);
     }
     if (db.prepare("SELECT id FROM cash_events WHERE kind='dividend' AND ref=?").get(ref)) continue;
     dividends.set(ref, dv);

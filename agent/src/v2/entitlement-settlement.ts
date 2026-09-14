@@ -1,7 +1,7 @@
 // Reviewed, full-delivery settlements only. No orders, fake fills, halt clearing or inference
 // from announcements. Original rights remain immutable; receipts retire them as of delivery.
 import type {DatabaseSync} from 'node:sqlite';
-import {accountingEnabled,ensureAccountingTables,hash,overlayEconomicCash,etDate} from './accounting.js';
+import {accountingEnabled,ensureAccountingTables,hash,overlayEconomicCash,etDate,brokerActivityHash} from './accounting.js';
 import {getState} from './db.js';
 import {d9,d9str,mul9,type D9} from './decimal.js';
 import {recordCash,totalCash} from './settled-cash.js';
@@ -68,7 +68,7 @@ export function prepareSettlement(db:DatabaseSync,e:SettlementEvidence,entitleme
    }else if(a.activity_type==='FEE'||(a.activity_type==='JNLC'&&a.id===getState(db,'accounting:seed-activity-id'))){
      const c=db.prepare('SELECT * FROM cash_events WHERE kind=? AND ref=?').get(a.activity_type==='FEE'?'fee':'seed',a.activity_type==='FEE'?a.id:'seed') as any;
      requireThat(c&&d9(c.amount9)===d9(a.net_amount)&&c.settles_on===date(a.date),'Unaccounted fee/seed');
-   }else requireThat(prior.some(s=>s.activity_id===a.id&&s.activity_hash===hash(a)),'Other unresolved or changed broker activity');
+   }else requireThat(prior.some(s=>s.activity_id===a.id&&s.activity_hash===brokerActivityHash(a)),'Other unresolved or changed broker activity');
  }
  const cashAfter9=totalCash(db)+cash9;
  requireThat(cents(cashAfter9)===d9(e.account.cash),'Cash does not reconcile after exact receipt');
@@ -87,14 +87,14 @@ export function applySettlement(db:DatabaseSync,plan:SettlementPlan,e:Settlement
    requireThat(hash(prepareSettlement(db,e,plan.entitlementId,plan.activityId))===reviewedHash,'Fresh evidence differs from reviewed plan');
    ensureAccountingTables(db);
    if(d9(plan.cash9)!==0n){
-     requireThat(recordCash(db,{ts:plan.effectiveDate+'T12:00:00Z',kind:'dividend',amount9:d9(plan.cash9),settlesOn:plan.effectiveDate,ref:plan.activityId,note:'Reviewed broker dividend receipt'}),'Duplicate receipt');
+     requireThat(recordCash(db,{ts:plan.effectiveDate+'T12:00:00Z',kind:'dividend',symbol:plan.entitlement.symbol,amount9:d9(plan.cash9),settlesOn:plan.effectiveDate,ref:plan.activityId,note:'Reviewed broker dividend receipt'}),'Duplicate receipt');
      overlayEconomicCash(db,'settlement:'+plan.activityId,plan.effectiveDate,d9(plan.cash9)-d9(plan.entitlement.cash9));
    }
    if(plan.lot){
      const qty=d9str(d9(plan.lot.qty_open9)+d9(plan.qty9));
      db.prepare('UPDATE lots SET qty_open9=?,qty_remaining9=? WHERE lot_id=?').run(qty,qty,plan.lot.lot_id);
    }
-   db.prepare('INSERT INTO entitlement_settlements VALUES(?,?,?,?,?,?,?,?,?)').run(plan.entitlementId,plan.activityId,hash(plan.activity),plan.effectiveDate,plan.cash9,plan.qty9,reviewedHash,JSON.stringify(plan),new Date().toISOString());
+   db.prepare('INSERT INTO entitlement_settlements VALUES(?,?,?,?,?,?,?,?,?)').run(plan.entitlementId,plan.activityId,brokerActivityHash(plan.activity),plan.effectiveDate,plan.cash9,plan.qty9,reviewedHash,JSON.stringify(plan),new Date().toISOString());
    requireThat(totalCash(db)===d9(plan.cashAfter9),'Post-settlement cash mismatch');
    db.exec('COMMIT');return {applied:true,reviewHash:reviewedHash};
  }catch(error){db.exec('ROLLBACK');throw error;}

@@ -8,6 +8,10 @@ import { recordCash } from './settled-cash.js';
 
 export const ACCOUNTING_POLICY = 'broker-execution-entitlements-v1';
 export function hash(value: unknown): string { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
+/** Stable financial identity across raw REST row key order and additive provider metadata. */
+export function brokerActivityHash(row:any):string {
+  return hash(Object.fromEntries(['id','activity_type','activity_subtype','date','symbol','net_amount','qty','per_share_amount'].map(key=>[key,row[key]??null])));
+}
 export function accountingEnabled(db: DatabaseSync): boolean { return getState(db, 'accounting:policy') === ACCOUNTING_POLICY; }
 export function ensureAccountingTables(db: DatabaseSync): void {
   db.exec(`
@@ -114,6 +118,8 @@ export function captureDividend(db: DatabaseSync, dv: {symbol:string;exDate:stri
   if (!from || dv.exDate < from) return false;
   const splits = db.prepare("SELECT key FROM state WHERE key LIKE ?").all(`split_stale:${dv.symbol}`);
   ensureAccountingTables(db);
+  if(db.prepare(`SELECT 1 FROM corporate_entitlements e JOIN entitlement_settlements s ON s.entitlement_id=e.id
+    WHERE e.kind='split' AND e.symbol=? AND e.ex_date<=? AND s.effective_date>=?`).get(dv.symbol,dv.exDate,dv.exDate))return false;
   const marker=getState(db,`split_stale:${dv.symbol}`);
   let markerDate:string|null=null;
   try{const parsed=JSON.parse(marker??'null');if(typeof parsed?.ts==='string')markerDate=parsed.ts.slice(0,10);}catch{/* retain gate */}
@@ -164,10 +170,10 @@ export function ingestBrokerCashActivities(db: DatabaseSync, rows: any[], opts:{
   // a second cash event. Persist containment outside the ingestion savepoint.
   for(const r of rows){
     const settled=db.prepare('SELECT activity_hash FROM entitlement_settlements WHERE activity_id=?').get(r.id) as any;
-    if(settled&&settled.activity_hash!==hash(r)){
+    if(settled&&settled.activity_hash!==brokerActivityHash(r)){
       if(!getState(db,'halt:book'))setState(db,'halt:book','Settled broker receipt changed; accounting review required');
-      const key=`accounting:receipt-conflict:${r.id}:${hash(r)}`;
-      if(!getState(db,key))setState(db,key,JSON.stringify({id:r.id,previousHash:settled.activity_hash,observedHash:hash(r)}));
+      const key=`accounting:receipt-conflict:${r.id}:${brokerActivityHash(r)}`;
+      if(!getState(db,key))setState(db,key,JSON.stringify({id:r.id,previousHash:settled.activity_hash,observedHash:brokerActivityHash(r)}));
       throw Error('Settled broker receipt changed; accounting review required');
     }
   }
@@ -184,7 +190,7 @@ export function ingestBrokerCashActivities(db: DatabaseSync, rows: any[], opts:{
       if(r.activity_type !== 'FEE') {
         ensureAccountingTables(db);
         const settled=db.prepare('SELECT activity_hash FROM entitlement_settlements WHERE activity_id=?').get(r.id) as any;
-        if(settled && settled.activity_hash===hash(r))continue;
+        if(settled && settled.activity_hash===brokerActivityHash(r))continue;
         if(!getState(db,'halt:book'))setState(db,'halt:book','Unmatched broker cash/stock distribution; entitlement settlement requires review');
         const key=`accounting:unmatched:${r.id}`;
         const payload=JSON.stringify({status:'unresolved',id:r.id,type:r.activity_type,activityHash:hash(r),
