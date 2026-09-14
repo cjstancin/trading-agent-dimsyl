@@ -55,6 +55,8 @@ export interface ReadPort {
   getPositions(): Promise<any[]>;
   /** FILL activities ASCENDING, strictly after `afterId` when given (pages internally). */
   getFillActivities(afterId?: string): Promise<any[]>;
+  /** Complete non-FILL activity history; incomplete pages throw. Optional only for offline ports. */
+  getCashActivities?(): Promise<any[]>;
   /** Trading sessions (YYYY-MM-DD ascending) for [start, end] — feeds T+1 settlement. */
   getSessions(start: string, end: string): Promise<string[]>;
 }
@@ -118,6 +120,24 @@ export const alpacaReadPort: ReadPort = {
   async getPositions() {
     const j = await getJson("/v2/positions");
     return Array.isArray(j) ? j : [];
+  },
+  async getCashActivities() {
+    const out:any[]=[];
+    const seen=new Set<string>();
+    let token:string|undefined;
+    for(let page=0;page<50;page++) {
+      const qs=new URLSearchParams({direction:'asc',page_size:'100'});
+      if(token)qs.set('page_token',token);
+      const arr=await getJson(`/v2/account/activities?${qs}`);
+      if(!Array.isArray(arr))throw new Error('Invalid broker activity response');
+      for(const a of arr){
+        if(typeof a.id!=='string'||!a.id||seen.has(a.id))throw new Error('Duplicate/missing broker activity ID');
+        seen.add(a.id);if(a.activity_type!=='FILL')out.push(a);
+      }
+      if(arr.length<100)return out;
+      token=arr.at(-1).id;
+    }
+    throw new Error('Broker cash activity pagination incomplete');
   },
   async getFillActivities(afterId?: string): Promise<any[]> {
     // Ascending pages via page_token; `after` filters by TIME, so we page from the start and cut on

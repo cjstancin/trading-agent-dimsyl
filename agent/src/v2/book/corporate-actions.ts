@@ -12,6 +12,7 @@ import { withTimeout, DEFAULT_TIMEOUT_MS } from "../../http-utils.js";
 import { d9, d9str, type D9 } from "./../decimal.js";
 import { ledgerPositions } from "./../lots.js";
 import { getState, setState } from "./../db.js";
+import { captureDividend, entitlementKnown, historicalQty } from '../accounting.js';
 
 export interface CorporateAnnouncement {
   symbol: string;
@@ -219,6 +220,7 @@ export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, to
     splits.set(`${evidence.symbol}:${evidence.exDate}`, evidence);
   }
   for (const [id, evidence] of splits) {
+    if(entitlementKnown(db,`split:${id}`)){splits.delete(id);continue;}
     deferAction(db, `corp:pending:split:${id}`, `split ${evidence.symbol} ${evidence.num ?? "?"}:${evidence.den ?? "?"} (ex ${evidence.exDate}) deferred`, {
       ...evidence, kind: "forward_split", detectedOn: today,
       ledgerQty9: d9str(positions.get(evidence.symbol) ?? 0n),
@@ -231,6 +233,9 @@ export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, to
   for (const dv of plan.dividends) {
     if (dv.exDate > today) continue;
     const ref = `div:${dv.symbol}:${dv.exDate}`;
+    const duplicates=plan.dividends.filter(d=>d.symbol===dv.symbol&&d.exDate===dv.exDate).length;
+    if(duplicates>1&&historicalQty(db,dv.symbol,dv.exDate)>0n&&!getState(db,'halt:book'))setState(db,'halt:book','Ambiguous corporate distribution components; accounting review required');
+    if((duplicates===1||historicalQty(db,dv.symbol,dv.exDate)===0n)&&captureDividend(db,dv,today))continue;
     if (db.prepare("SELECT id FROM cash_events WHERE kind='dividend' AND ref=?").get(ref)) continue;
     dividends.set(ref, dv);
     deferAction(db, `corp:pending:${ref}`, `dividend ${dv.symbol} (ex ${dv.exDate}) deferred`, {

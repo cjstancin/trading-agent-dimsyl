@@ -26,6 +26,7 @@ import {
   type CoreDeps, type StepResult,
 } from "./support.js";
 import { d9num } from "../decimal.js";
+import { economicSymbols } from '../accounting.js';
 
 export const MOM_SIGNAL_MONTH_KEY = "mom:signal-month";
 
@@ -66,9 +67,9 @@ export async function runWeeklyRitual(deps: WeeklyDeps): Promise<WeeklyResult> {
 
   // ---- 2 · judgment kill-switches (pre-registered, never config-tuned). ------------------------
   await step(steps, post, "kill-switches", async () => {
-    const prices = await priceMap9(ledgerPositions(db).keys(), latestPrice);
+    const prices = await priceMap9([...ledgerPositions(db).keys(),...economicSymbols(db)], latestPrice);
     const sleeveNav9: Record<string, D9> = {};
-    for (const s of SLEEVES) sleeveNav9[s] = sleeveNavFor9(db, eff, s, prices);
+    for (const s of SLEEVES) sleeveNav9[s] = sleeveNavFor9(db, eff, s, prices, today);
     const flags = evaluateKillSwitches(db, { asOfDate: today, sleeveNav9 });
     for (const f of flags) {
       const kind = f.kind === "revert-mechanical" ? "jdg-kill-switch" : "jdg-rubric-fix";

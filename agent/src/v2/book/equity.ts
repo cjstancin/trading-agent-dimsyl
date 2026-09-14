@@ -6,6 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { d9, d9str, mul9, type D9 } from "./../decimal.js";
 import { totalCash } from "./../settled-cash.js";
 import { ledgerPositions } from "./../lots.js";
+import { accountingEnabled, correctedMark, economicRights, economicSymbols } from '../accounting.js';
 
 export function ensureBookTables(db: DatabaseSync): void {
   db.exec(`
@@ -36,6 +37,8 @@ export function markEquity(db: DatabaseSync, date: string, prices: Map<string, D
   dial?: string; brakeTier?: number;
 } = {}): EquityMark {
   ensureBookTables(db);
+  const priorCorrection=db.prepare("SELECT name FROM sqlite_master WHERE name='accounting_marks'").get();
+  if(priorCorrection&&db.prepare("SELECT 1 FROM accounting_marks m JOIN accounting_repairs r ON r.id=m.repair_id WHERE m.date=? AND m.series='book' AND r.reversed_ts IS NULL").get(date))throw new Error('Cannot overwrite a restated historical mark');
   const cash = totalCash(db);
   const held = ledgerPositions(db);
   const prevRow = db.prepare("SELECT positions_json FROM book_marks WHERE date < ? ORDER BY date DESC LIMIT 1").get(date) as
@@ -58,21 +61,29 @@ export function markEquity(db: DatabaseSync, date: string, prices: Map<string, D
     value += v;
     positions.push({ symbol, qty9: d9str(qty), price9: d9str(px), value9: d9str(v) });
   }
-  const equity = cash + value;
+  const entitlementPrices=new Map(prices);
+  for(const symbol of economicSymbols(db))if(!entitlementPrices.has(symbol)&&prevPrices.has(symbol)){entitlementPrices.set(symbol,prevPrices.get(symbol)!);if(!missing.includes(symbol))missing.push(symbol);}
+  const rights=economicRights(db,date,entitlementPrices);
+  const equity = cash + value + rights.cash9 + rights.stock9;
+  db.exec('SAVEPOINT equity_mark');
+  try {
+  if(accountingEnabled(db))db.prepare('INSERT INTO accounting_mark_rights(date,cash_rights9,stock_rights9,evidence_json) VALUES(?,?,?,?) ON CONFLICT(date) DO UPDATE SET cash_rights9=excluded.cash_rights9,stock_rights9=excluded.stock_rights9,evidence_json=excluded.evidence_json').run(date,d9str(rights.cash9),d9str(rights.stock9),JSON.stringify({executableCash9:d9str(cash),executablePositionValue9:d9str(value)}));
   db.prepare(
     `INSERT INTO book_marks(date, equity9, cash9, positions_json, dial, brake_tier, created_ts)
      VALUES(?,?,?,?,?,?,?)
      ON CONFLICT(date) DO UPDATE SET equity9=excluded.equity9, cash9=excluded.cash9,
        positions_json=excluded.positions_json, dial=excluded.dial, brake_tier=excluded.brake_tier`,
   ).run(date, d9str(equity), d9str(cash), JSON.stringify(positions), extra.dial ?? null, extra.brakeTier ?? null, new Date().toISOString());
+  db.exec('RELEASE equity_mark');
+  }catch(e){db.exec('ROLLBACK TO equity_mark');db.exec('RELEASE equity_mark');throw e;}
   return { date, equity9: equity, cash9: cash, positions, missingPrices: missing };
 }
 
 /** Equity curve rows ascending (for drawdown, gate progress, dashboard). */
 export function equityCurve(db: DatabaseSync): { date: string; equity9: D9; dial: string | null; brakeTier: number | null }[] {
   ensureBookTables(db);
-  const rows = db.prepare("SELECT date, equity9, dial, brake_tier FROM book_marks ORDER BY date ASC").all() as any[];
-  return rows.map((r) => ({ date: r.date, equity9: d9(r.equity9), dial: r.dial, brakeTier: r.brake_tier }));
+  const rows = db.prepare("SELECT * FROM book_marks ORDER BY date ASC").all() as any[];
+  return rows.map((r) => ({ date: r.date, equity9: correctedMark(db,r.date,'book',r)??d9(r.equity9), dial: r.dial, brakeTier: r.brake_tier }));
 }
 
 /** Realized max drawdown (%) over the stored curve — the number the live gate holds against 15. */

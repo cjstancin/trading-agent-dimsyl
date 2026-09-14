@@ -13,6 +13,7 @@ import type { BrokerPort, ReadPort } from "../broker.js";
 import type { MarketDayCheck } from "../../market-calendar.js";
 import { SLEEVES } from "../types.js";
 import { replayFills } from "../reconcile.js";
+import { entitlementKnown, economicSymbols } from '../accounting.js';
 import { addDays, ledgerPosition, ledgerPositions } from "../lots.js";
 import { markEquity } from "../book/equity.js";
 import { recordBench } from "../book/benchmarks.js";
@@ -104,7 +105,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
     ? "fill replay incomplete"
     : !corporateEvidenceComplete ? "corporate-action evidence incomplete"
       : Object.keys(activeHalts()).length ? "active halt — ledger valuation awaits operator review"
-      : db.prepare("SELECT 1 FROM state WHERE key LIKE 'corp:pending:div:%' LIMIT 1").get()
+      : (db.prepare("SELECT key FROM state WHERE key LIKE 'corp:pending:div:%'").all() as {key:string}[]).some(r=>!entitlementKnown(db,r.key.slice('corp:pending:'.length)))
         ? "unverified dividend entitlement — total-return mark deferred" : null;
 
   if (deps.mode === "off") return { ok: true, skipped: "mode=off", steps };
@@ -198,7 +199,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
   await step(steps, post, "equity-mark", async () => {
     const blocked = valuationBlock();
     if (blocked) return `deferred — ${blocked}; no performance mark written`;
-    heldPrices = await priceMap9(ledgerPositions(db).keys(), latestPrice);
+    heldPrices = await priceMap9([...ledgerPositions(db).keys(),...economicSymbols(db)], latestPrice);
     if (valuationBlock()) return "deferred — halt appeared while pricing; no performance mark written";
     const dialRaw = getState(db, "dial:lei");
     const dialPos = dialRaw ? (JSON.parse(dialRaw) as { position: string }).position : undefined;
@@ -231,7 +232,7 @@ export async function runEveningRitual(deps: EveningDeps): Promise<EveningResult
     const blocked = valuationBlock() ?? (!performanceMarked ? "no completed equity mark this run" : null);
     if (!blocked) {
       for (const s of SLEEVES) {
-        recordBench(db, today, `sleeve:${s}`, sleeveNavFor9(db, eff, s, heldPrices));
+        recordBench(db, today, `sleeve:${s}`, sleeveNavFor9(db, eff, s, heldPrices, today));
       }
     }
     return `benches ${benchSyms.size - missing.length}/${benchSyms.size}${missing.length ? ` (missing ${missing.join(",")})` : ""} · ${blocked ? `sleeve marks deferred — ${blocked}` : "4 sleeve marks"}`;
