@@ -101,6 +101,12 @@ export function outstandingSplit(db:DatabaseSync,symbol:string):boolean {
     AND NOT EXISTS(SELECT 1 FROM entitlement_settlements s WHERE s.entitlement_id=e.id)`).get(symbol);
 }
 
+/** Clearing a halt or a feed reverting to old terms does not resolve contradictory evidence. */
+export function containAccountingConflicts(db:DatabaseSync):void {
+  if(db.prepare("SELECT 1 FROM state WHERE key GLOB 'corp:conflict:*' OR key GLOB 'accounting:receipt-conflict:*'").get()
+    &&!getState(db,'halt:book'))setState(db,'halt:book','Unresolved accounting evidence conflict; separate reviewed resolution required');
+}
+
 /** Capture a right, NEVER a receipt. Complex distributions and any earlier split remain gated. */
 export function captureDividend(db: DatabaseSync, dv: {symbol:string;exDate:string;perShare9:D9}, today: string): boolean {
   if (!accountingEnabled(db) || dv.exDate > today) return false;
@@ -152,6 +158,7 @@ export function economicSymbols(db: DatabaseSync): string[] {
  *  entitlement and an independently reviewed settlement; an unmatched receipt halts, never guesses. */
 export function ingestBrokerCashActivities(db: DatabaseSync, rows: any[], opts:{restating?:boolean}={}): number {
   if (!accountingEnabled(db)) return 0;
+  containAccountingConflicts(db);
   ensureAccountingTables(db);
   // Validate settled IDs before dispatch by type: a changed DIV -> FEE must not become
   // a second cash event. Persist containment outside the ingestion savepoint.

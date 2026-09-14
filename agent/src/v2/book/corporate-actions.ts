@@ -12,7 +12,7 @@ import { withTimeout, DEFAULT_TIMEOUT_MS } from "../../http-utils.js";
 import { d9, d9str, type D9 } from "./../decimal.js";
 import { ledgerPositions } from "./../lots.js";
 import { getState, setState } from "./../db.js";
-import { accountingEnabled, captureDividend, entitlementKnown, historicalQty, outstandingSplit, hash } from '../accounting.js';
+import { accountingEnabled, captureDividend, entitlementKnown, historicalQty, outstandingSplit, hash, containAccountingConflicts } from '../accounting.js';
 
 export interface CorporateAnnouncement {
   symbol: string;
@@ -193,6 +193,7 @@ function deferAction(db: DatabaseSync, key: string, title: string, evidence: Rec
  *  neither lots nor cash. Existing legacy split mutations/credits require separate reviewed repair.
  *  Also scans durable split evidence, so an empty/replaced nightly plan cannot erase containment. */
 export function applyDueActions(db: DatabaseSync, plan: CorporateActionsPlan, today: string): DueActionsResult {
+  containAccountingConflicts(db);
   const positions = ledgerPositions(db);
   const splits = new Map<string, Record<string, unknown> & DeferredCorporateAction>();
   for (const s of plan.forwardSplits) {

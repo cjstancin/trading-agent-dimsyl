@@ -52,7 +52,8 @@ test('changed dividend terms create one durable conflict card and preserve origi
  const plan={...empty,dividends:[{symbol:'ABC',exDate:'2026-08-12',perShare9:d9('0.3')}]};
  const result=applyDueActions(db,plan,'2026-08-14');assert.equal(result.halted,true);assert.equal(result.dividendsDeferred,1);
  const cards=db.prepare('SELECT count(*) n FROM approvals').get()!.n;applyDueActions(db,plan,'2026-08-14');assert.equal(db.prepare('SELECT count(*) n FROM approvals').get()!.n,cards);
- assert.equal(hash(db.prepare('SELECT * FROM corporate_entitlements').all()),old);assert.equal(totalCash(db),d9('800'));db.close();
+ assert.equal(hash(db.prepare('SELECT * FROM corporate_entitlements').all()),old);assert.equal(totalCash(db),d9('800'));
+ clearState(db,'halt:book');assert.equal(applyDueActions(db,empty,'2026-08-14').halted,true);db.close();
 });
 test('split receipt preserves basis, handles later FIFO sell and future dividend history',()=>{
  const {db,id,receipt,evidence}=fixture('split');setState(db,'split_stale:ABC',JSON.stringify({ts:'2026-08-12T00:00:00Z'}));const e=evidence();e.activityUntil=e.observedAt;
@@ -76,7 +77,8 @@ test('settled receipt ID changing to a fee cannot debit cash and durably halts',
  const {db,id,receipt,evidence}=fixture(),e=evidence();e.activityUntil=e.observedAt;
  const plan=prepareSettlement(db,e,id,receipt.id);applySettlement(db,plan,e,hash(plan));clearState(db,'halt:book');
  assert.throws(()=>ingestBrokerCashActivities(db,[{...receipt,activity_type:'FEE',net_amount:'-1'}]),/receipt changed/);
- assert.equal(totalCash(db),d9('800.4'));assert.ok(getState(db,'halt:book'));db.close();
+ assert.equal(totalCash(db),d9('800.4'));assert.ok(getState(db,'halt:book'));
+ clearState(db,'halt:book');ingestBrokerCashActivities(db,[receipt]);assert.ok(getState(db,'halt:book'));db.close();
 });
 {
  const {db}=fixture();const {plan}=await nightlyCorpPoll(db,{announcements:async()=>[{symbol:'ABC',type:'reverse_split',effectiveDate:'2026-08-12'},{symbol:'ABC',type:'cash_merger',effectiveDate:'2026-08-15'}]},{today:'2026-08-15'});
