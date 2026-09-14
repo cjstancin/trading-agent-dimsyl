@@ -91,8 +91,18 @@ export async function replayFills(
     }
   }
   if(accountingEnabled(db)) {
-    if(!read.getCashActivities)throw new Error('Broker cash activity read unavailable');
-    ingestBrokerCashActivities(db,await read.getCashActivities());
+    try{
+      const from=getState(db,'accounting:history-from');
+      if(!read.getCashActivities||!from)throw new Error('Broker cash activity read unavailable');
+      ingestBrokerCashActivities(db,await read.getCashActivities(from));
+    }catch(e){
+      const reason=e instanceof Error&&e.message==='Broker cash activity pagination incomplete'
+        ?'Broker nontrade activity pagination limit exceeded; accounting review required'
+        :'Broker cash activity read/replay incomplete; accounting review required';
+      if(!getState(db,'halt:book'))setState(db,'halt:book',reason);
+      if(!getState(db,'accounting:cash-read-failure'))setState(db,'accounting:cash-read-failure',reason);
+      throw e;
+    }
   }
   return { newFills, newDisposals, untagged };
 }

@@ -1,8 +1,7 @@
 // Explicit path only. Plan is read-only; apply/reverse need a reviewed exact plan hash.
 import { readFileSync,writeFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { prepareRepair,applyRepair,reverseRepair,type RepairEvidence,type RepairPlan } from './accounting-repair.js';
-import { hash } from './accounting.js';
+import { prepareRepair,applyRepair,reverseRepair,reviewHash,type RepairEvidence,type RepairPlan } from './accounting-repair.js';
 const args=process.argv.slice(2);
 const op=args.shift();
 const options=new Map<string,string>();
@@ -21,7 +20,7 @@ try{
     if(op==='plan'){
       const plan=prepareRepair(db,evidence);
       writeFileSync(required('--output'),JSON.stringify(plan,null,2)+'\n',{flag:'wx',mode:0o600});
-      console.log(JSON.stringify({planHash:hash(plan),reversals:plan.reversals.length,fees:plan.fees.length,lots:plan.lots.length,entitlements:plan.entitlements.length,restatements:plan.marks.length,cashAfter9:plan.cashAfter9,roundingResidue9:plan.roundingResidue9}));
+      console.log(JSON.stringify({reviewHash:reviewHash(plan),evidenceHash:plan.evidenceHash,reversals:plan.reversals.length,fees:plan.fees.length,lots:plan.lots.length,entitlements:plan.entitlements.length,restatements:plan.marks.length,cashAfter9:plan.cashAfter9,roundingResidue9:plan.roundingResidue9}));
     }else{
       const plan=JSON.parse(readFileSync(required('--plan'),'utf8')) as RepairPlan;
       console.log(JSON.stringify(applyRepair(db,plan,evidence,required('--reviewed-hash'))));

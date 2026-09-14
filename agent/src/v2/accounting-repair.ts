@@ -19,23 +19,40 @@ function cents(v:D9):D9 {return (v<0n?-1n:1n)*(((v<0n?-v:v)+5_000_000n)/10_000_0
 export interface RepairEvidence {
   observedAt:string;activityUntil:string;complete:boolean;stable:boolean;
   before:Record<string,string>;after:Record<string,string>;
-  account:{cash:string};positions:{symbol:string;qty:string}[];activities:any[];
+  account:{cash:string;status:string;trading_blocked:boolean;equity?:string};positions:{symbol:string;qty:string}[];activities:any[];
   openOrders:any[];
   actions:{corporate_actions:Record<string,any[]>;next_page_token?:string|null};
 }
 interface MarkCorrection {date:string;series:string;sourceHash:string;execution9:string;economic9:string;evidence:unknown;}
 export interface RepairPlan {
-  id:string;policy:string;observedAt:string;evidenceHash:string;before:Record<string,string>;
+  id:string;policy:string;observedAt:string;evidenceHash:string;financialEvidenceHash:string;before:Record<string,string>;
   historyFrom:string;seedActivityId:string;cashBefore9:string;cashAfter9:string;brokerCash9:string;roundingResidue9:string;
   reversals:{source:any;ref:string}[];fees:any[];lots:{before:any;qty9:string}[];entitlements:Entitlement[];
   marks:MarkCorrection[];brakePeakBefore:string|null;brakePeakAfter:string;stateBefore:Record<string,string|null>;
 }
 
+/** Bind every captured decision input, including account status and complete guarded source rows.
+ *  Wall-clock capture metadata and unused quote-derived account equity are audit metadata only. */
+export function financialEvidenceHash(e:RepairEvidence):string{
+  const {observedAt,activityUntil,account,...stable}=e;
+  const {equity,...accountInputs}=account;
+  return hash({...stable,account:accountInputs});
+}
+export function reviewHash(plan:RepairPlan):string{
+  const {observedAt,evidenceHash,...reviewed}=plan;
+  return hash(reviewed);
+}
+
 export function prepareRepair(db:DatabaseSync,e:RepairEvidence):RepairPlan {
   requireThat(e.complete&&e.stable&&hash(e.before)===hash(e.after),'Evidence not complete/stable');
   requireThat(Array.isArray(e.openOrders)&&e.openOrders.length===0,'Open-order read must confirm no pending orders');
+  requireThat(e.account.status==='ACTIVE'&&e.account.trading_blocked===false,'Fresh paper account is not active/unblocked');
   requireThat(hash(fingerprints(db,CAPTURE_TABLES))===hash(e.before),'Snapshot differs from broker capture');
   requireThat(!getState(db,'accounting:policy'),'Accounting policy already enabled');
+  for(const table of ['accounting_mark_rights','accounting_cash_overlays']){
+    const exists=db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table);
+    requireThat(!exists||rows(db,table).length===0,'Existing derived accounting epoch requires separate review');
+  }
   requireThat(getState(db,'halt:book'),'Standing book halt required');
   const fills=rows(db,'fills'),cash=rows(db,'cash_events'),lots=rows(db,'lots');
   const seed=cash.filter(r=>r.kind==='seed');requireThat(seed.length===1,'Exactly one inception seed required');
@@ -104,7 +121,7 @@ export function prepareRepair(db:DatabaseSync,e:RepairEvidence):RepairPlan {
   const peak=marks.filter(m=>m.series==='book').reduce((p,m)=>d9(m.economic9)>p?d9(m.economic9):p,0n);
   requireThat(getState(db,'brake:tier')==='0','Nonzero brake tier requires independent policy review');
   const stateKeys=['accounting:policy','accounting:history-from','accounting:history-evidence','accounting:seed-activity-id','brake:peak9'];
-  return {id:REPAIR_ID,policy:ACCOUNTING_POLICY,observedAt:e.observedAt,evidenceHash:hash(e),before:fingerprints(db),historyFrom,seedActivityId:journals[0].id,
+  return {id:REPAIR_ID,policy:ACCOUNTING_POLICY,observedAt:e.observedAt,evidenceHash:hash(e),financialEvidenceHash:financialEvidenceHash(e),before:fingerprints(db),historyFrom,seedActivityId:journals[0].id,
     cashBefore9:d9str(totalCash(db)),cashAfter9:d9str(cashAfter),brokerCash9:d9str(brokerCash),roundingResidue9:d9str(cashAfter-brokerCash),
     reversals:credits.map(source=>({source,ref:`repair:${REPAIR_ID}:credit:${source.id}`})),fees,lots:lotCorrections,entitlements,marks,
     brakePeakBefore:getState(db,'brake:peak9'),brakePeakAfter:peak.toString(),stateBefore:Object.fromEntries(stateKeys.map(k=>[k,getState(db,k)]))};
@@ -168,17 +185,19 @@ function buildRestatements(db:DatabaseSync,cash:any[],fees:any[],fills:any[],ent
 }
 
 export function applyRepair(db:DatabaseSync,plan:RepairPlan,e:RepairEvidence,approvedHash:string,now=new Date()):{applied:boolean;planHash:string}{
-  requireThat(hash(plan)===approvedHash,'Exact reviewed plan hash required');
+  requireThat(reviewHash(plan)===approvedHash,'Exact reviewed financial plan hash required');
   ensureAccountingTables(db);
   const prior=db.prepare('SELECT plan_hash,reversed_ts FROM accounting_repairs WHERE id=?').get(plan.id) as any;
   if(prior){requireThat(prior.plan_hash===approvedHash&&!prior.reversed_ts,'Repair ID conflict');return {applied:false,planHash:approvedHash};}
   const age=now.getTime()-Date.parse(e.observedAt);
   requireThat(age>=0&&age<=10*60_000,'Fresh evidence within ten minutes required');
-  requireThat(hash(e)===plan.evidenceHash,'Evidence hash differs');
+  requireThat(financialEvidenceHash(e)===plan.financialEvidenceHash,'Financial evidence hash differs');
   db.exec('BEGIN IMMEDIATE');
   try{
     requireThat(hash(fingerprints(db))===hash(plan.before),'Financial rows changed; recapture and re-review');
-    requireThat(hash(prepareRepair(db,e))===approvedHash,'Plan does not match independently derived repair');
+    const freshPlan=prepareRepair(db,e);
+    requireThat(reviewHash(freshPlan)===approvedHash,'Plan does not match independently derived repair');
+    plan=freshPlan; // retain the actual fresh capture hash/time in the immutable application journal
     for(const r of plan.reversals)requireThat(recordCash(db,{ts:now.toISOString(),kind:'adjust',symbol:r.source.symbol,amount9:-d9(r.source.amount9),settlesOn:etDate(now.toISOString()),ref:r.ref,note:`Reverse unsupported cash credit ${r.source.id}; evidence ${plan.evidenceHash}`}), 'Reversal already exists');
     // Fee ingestion requires policy only inside this transaction; any failure rolls everything back.
     setState(db,'accounting:policy',ACCOUNTING_POLICY);
@@ -207,6 +226,7 @@ export function reverseRepair(db:DatabaseSync,approvedHash:string,now=new Date()
     if(r.reversed_ts){db.exec('COMMIT');return false;}
     requireThat(getState(db,'halt:book'),'Rollback requires standing book halt');
     requireThat(hash(fingerprints(db,AFTER_TABLES))===r.after_hash,'Post-repair activity changed; automatic inverse refused');
+    requireThat(rows(db,'accounting_mark_rights').length===0&&rows(db,'accounting_cash_overlays').length===0,'Derived accounting epoch is not empty; reviewed forward repair required');
     const p=JSON.parse(r.plan_json) as RepairPlan;
     for(const c of p.reversals)requireThat(recordCash(db,{ts:now.toISOString(),kind:'adjust',symbol:c.source.symbol,amount9:d9(c.source.amount9),settlesOn:etDate(now.toISOString()),ref:`inverse:${c.ref}`,note:`Compensating inverse of ${c.ref}`}), 'Inverse already exists');
     for(const fee of p.fees)requireThat(recordCash(db,{ts:now.toISOString(),kind:'adjust',amount9:-d9(fee.net_amount),settlesOn:etDate(now.toISOString()),ref:`inverse:${p.id}:fee:${fee.id}`,note:'Compensating inverse; original broker fee evidence retained'}), 'Fee inverse already exists');

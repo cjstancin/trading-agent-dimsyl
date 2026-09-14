@@ -39,6 +39,8 @@ export function markEquity(db: DatabaseSync, date: string, prices: Map<string, D
   ensureBookTables(db);
   const priorCorrection=db.prepare("SELECT name FROM sqlite_master WHERE name='accounting_marks'").get();
   if(priorCorrection&&db.prepare("SELECT 1 FROM accounting_marks m JOIN accounting_repairs r ON r.id=m.repair_id WHERE m.date=? AND m.series='book' AND r.reversed_ts IS NULL").get(date))throw new Error('Cannot overwrite a restated historical mark');
+  const cashOverlay=db.prepare("SELECT name FROM sqlite_master WHERE name='accounting_cash_overlays'").get();
+  if(cashOverlay&&db.prepare("SELECT 1 FROM accounting_cash_overlays WHERE date=? AND series='book' LIMIT 1").get(date))throw new Error('Cannot overwrite a cash-overlay source mark');
   const cash = totalCash(db);
   const held = ledgerPositions(db);
   const prevRow = db.prepare("SELECT positions_json FROM book_marks WHERE date < ? ORDER BY date DESC LIMIT 1").get(date) as

@@ -35,15 +35,22 @@ trade or cash balancing entry. The remaining sub-cent difference must reconcile 
 ## Recurrence protection
 
 After the reviewed repair enables `accounting:policy`, the ordinary fill replay also requires a
-complete broker cash-activity read. It ingests exact negative fee receipts once. New/unmatched
+complete broker cash-activity read scoped to `category=non_trade_activity` from the verified book
+inception. The live paper endpoint retained all eleven fee receipts and the seed journal while
+excluding all 52 fills; it also avoids a fixed allowlist dropping unfamiliar nontrade types. A cap
+failure latches an explicit accounting halt. It ingests exact negative fee receipts once. New/unmatched
 cash or stock distributions are held for an independently reviewed entitlement settlement; their
 arrival is never guessed from the payable date. New journals also require review. Missing cash
 evidence or an unexplained cash difference of at least half a cent fails reconciliation and halts
-the book. No automatic repair or halt clearing is included.
+the book. Repeated unresolved receipts retain their evidence without timestamp churn, but still
+re-arm the halt if it was cleared without settlement. Acknowledging an incident is not settlement;
+that requires a new reviewed financial adjustment. No automatic repair or halt clearing is included.
 
 Corporate polling includes recently closed positions and a 45-day lookback. Proven historical
 dividends are recorded as nonspendable rights; future ex-dates wait. Pending/stale incident records
 remain in the database, with reviewed entitlement rows providing their accounting disposition.
+Pre-inception ex-dates are known to have no rights in this initially empty book; old lookback
+announcements cannot create a permanent pending valuation gate.
 Future forward splits remain contained until the executable versus economic split is reviewed.
 
 ## Review and application runbook (coordinator only)
@@ -63,18 +70,24 @@ Future forward splits remain contained until the executable versus economic spli
    node --import tsx src/v2/accounting-cli.ts plan --db /private/snapshot.sqlite --evidence /private/evidence.json --output /private/reviewed-plan.json
    ```
 
-4. Review the exact source SHA and plan contents with independent Codex and Claude reviewers.
-   A prior plan is stale if any guarded row or financial evidence changes. Re-capture and review the
-   changed plan; do not bypass the guards or substitute an old timestamp. The production apply CLI
-   uses actual wall time and requires evidence no more than ten minutes old.
+4. Review the exact source SHA and the plan's **financial `reviewHash`** with independent Codex and
+   Claude reviewers. It binds all guarded rows, cash, share quantities/basis, activities, corporate
+   terms, account status/trading-blocked flag, entitlements and correction arithmetic. Only capture
+   timestamps, the full audit hash, and unused live quote-derived account equity are excluded from
+   this stable review view. The full fresh capture hash and time are retained in the application journal.
+   A financially identical recapture therefore retains the approved hash; changing any bound value
+   requires a new reviewed financial hash. The apply operation derives the plan again from fresh
+   evidence, checks its stable hash against the approval, requires the account active/unblocked,
+   and independently enforces actual wall time with evidence no more than ten minutes old. Never
+   bypass a changed financial hash, substitute an old timestamp or use a simulated clock in production.
 5. Only the coordinator applies after release and final comparison. This command is intentionally
    absent from npm startup/ritual scripts:
 
    ```bash
-   node --import tsx src/v2/accounting-cli.ts apply --db /home/cj/bull/agent/runtime/v2/bull.db --evidence /private/evidence.json --plan /private/reviewed-plan.json --reviewed-hash EXACT_PLAN_SHA256
+   node --import tsx src/v2/accounting-cli.ts apply --db /home/cj/bull/agent/runtime/v2/bull.db --evidence /private/fresh-evidence.json --plan /private/reviewed-plan.json --reviewed-hash EXACT_FINANCIAL_REVIEW_HASH
    ```
 
-   The exact plan hash, evidence hash, fresh read, standing book halt and all financial row guards
+   The exact financial review hash, financial evidence hash, fresh read, standing book halt and all row guards
    are checked under `BEGIN IMMEDIATE`. All changes commit together. Repeating that exact applied
    plan is a no-op; a conflicting ID/hash fails.
 6. Reconcile using read-only broker account/positions/activity queries, inspect economic and execution
@@ -90,6 +103,10 @@ It refuses any changed post-apply financial/evidence row, requires the standing 
 original cash/fee/mark evidence, appends inverse cash entries, restores the original two quantity
 fields and policy/peak before-values, and marks its rights/overlay journal inactive. It never clears
 the original halts. After later activity, use a new independently reviewed adjustment plan instead.
+The bounded repair refuses a pre-existing derived accounting epoch. The inverse also requires the
+post-apply rights/overlay tables to remain empty, so it cannot leave untagged derived marks that a
+future activation could resurrect. Historical restatements are tagged with the repair ID and become
+inactive when its journal is reversed; entitlement rows are retained as void audit records.
 
 Code rollback alone is unsafe after policy activation: old code does not understand entitlements
 or economic overlays. Keep the book halted and the affected timers stopped until the matching

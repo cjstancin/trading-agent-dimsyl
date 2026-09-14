@@ -24,6 +24,8 @@ export function recordBench(db: DatabaseSync, date: string, series: string, valu
   ensureBenchTables(db);
   const exists=db.prepare("SELECT name FROM sqlite_master WHERE name='accounting_marks'").get();
   if(exists&&db.prepare("SELECT 1 FROM accounting_marks m JOIN accounting_repairs r ON r.id=m.repair_id WHERE m.date=? AND m.series=? AND r.reversed_ts IS NULL").get(date,series))throw new Error('Cannot overwrite a restated historical benchmark');
+  const cashOverlay=db.prepare("SELECT name FROM sqlite_master WHERE name='accounting_cash_overlays'").get();
+  if(cashOverlay&&db.prepare('SELECT 1 FROM accounting_cash_overlays WHERE date=? AND series=? LIMIT 1').get(date,series))throw new Error('Cannot overwrite a cash-overlay source benchmark');
   db.prepare("INSERT INTO bench_marks(date, series, value9) VALUES(?,?,?) ON CONFLICT(date, series) DO UPDATE SET value9=excluded.value9")
     .run(date, series, d9str(value9));
 }

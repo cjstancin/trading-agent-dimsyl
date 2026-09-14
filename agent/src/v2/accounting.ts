@@ -60,6 +60,11 @@ export function putEntitlement(db: DatabaseSync, e: Entitlement): boolean {
 }
 export function entitlementKnown(db: DatabaseSync, id: string): boolean {
   if (!accountingEnabled(db)) return false;
+  const dividend=/^div:[^:]+:(\d{4}-\d{2}-\d{2})$/.exec(id);
+  const from=getState(db,'accounting:history-from');
+  // The reviewed inception proof establishes a new, initially empty book. Earlier ex-dates
+  // have no entitlement in this book and must not become permanent pending valuation gates.
+  if(dividend&&from&&dividend[1]<from)return true;
   ensureAccountingTables(db);
   return !!db.prepare("SELECT 1 FROM corporate_entitlements WHERE id=? AND status='outstanding'").get(id);
 }
@@ -133,7 +138,12 @@ export function ingestBrokerCashActivities(db: DatabaseSync, rows: any[], opts:{
       }
       if(r.activity_type !== 'FEE') {
         if(!getState(db,'halt:book'))setState(db,'halt:book','Unmatched broker cash/stock distribution; entitlement settlement requires review');
-        setState(db,`accounting:unmatched:${r.id}`,JSON.stringify({id:r.id,type:r.activity_type}));
+        const key=`accounting:unmatched:${r.id}`;
+        const payload=JSON.stringify({status:'unresolved',id:r.id,type:r.activity_type,activityHash:hash(r),
+          evidence:Object.fromEntries(['date','net_amount','symbol','qty','per_share_amount'].filter(k=>r[k]!=null).map(k=>[k,r[k]]))});
+        const previous=getState(db,key);
+        if(previous===null)setState(db,key,payload);
+        else if(previous!==payload)throw new Error('Unmatched activity evidence changed; reviewed settlement required');
         continue;
       }
       const amount=d9(String(r.net_amount));if(amount>=0n)throw new Error('Invalid fee sign');
