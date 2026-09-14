@@ -72,6 +72,12 @@ test('changed split ratio survives legacy applied marker and blocks settlement',
  const result=applyDueActions(db,{...empty,forwardSplits:[{symbol:'ABC',exDate:'2026-08-12',num:3n,den:1n}]},'2026-08-14');assert.equal(result.halted,true);
  assert.throws(()=>prepareSettlement(db,evidence(),id,receipt.id),/Conflicting entitlement/);db.close();
 });
+test('settled receipt ID changing to a fee cannot debit cash and durably halts',()=>{
+ const {db,id,receipt,evidence}=fixture(),e=evidence();e.activityUntil=e.observedAt;
+ const plan=prepareSettlement(db,e,id,receipt.id);applySettlement(db,plan,e,hash(plan));clearState(db,'halt:book');
+ assert.throws(()=>ingestBrokerCashActivities(db,[{...receipt,activity_type:'FEE',net_amount:'-1'}]),/receipt changed/);
+ assert.equal(totalCash(db),d9('800.4'));assert.ok(getState(db,'halt:book'));db.close();
+});
 {
  const {db}=fixture();const {plan}=await nightlyCorpPoll(db,{announcements:async()=>[{symbol:'ABC',type:'reverse_split',effectiveDate:'2026-08-12'},{symbol:'ABC',type:'cash_merger',effectiveDate:'2026-08-15'}]},{today:'2026-08-15'});
  assert.deepEqual(plan.exitBefore.map(x=>x.effectiveDate),['2026-08-12','2026-08-15']);

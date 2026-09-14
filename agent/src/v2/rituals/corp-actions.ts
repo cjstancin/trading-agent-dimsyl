@@ -17,7 +17,7 @@ import {
   type CorporateActionsPlan, type CorporateActionsPort, type DueActionsResult,
 } from "../book/corporate-actions.js";
 import { recordExit } from "../book/watchlist.js";
-import {accountingEnabled,historicalQty,outstandingSplit} from '../accounting.js';
+import {accountingEnabled,historicalQty,outstandingSplit,economicSymbols} from '../accounting.js';
 import { skipNote, tradeNote } from "../surfaces/notes.js";
 import { dtGuard, ownerSleeveFor, numToD9, type LatestPriceFn, type PostFn } from "./support.js";
 
@@ -69,7 +69,7 @@ export async function nightlyCorpPoll(
   db: DatabaseSync, port: CorporateActionsPort, opts: { today: string; horizonDays?: number },
 ): Promise<{ plan: CorporateActionsPlan; held: string[] }> {
   // Include closed positions: selling on/after an ex-date does not erase the entitlement.
-  const held = [...new Set([...ledgerPositions(db).keys(),...(db.prepare('SELECT DISTINCT symbol FROM fills WHERE ts>=?').all(addDays(opts.today,-60)+'T00:00:00Z') as {symbol:string}[]).map(r=>r.symbol)])];
+  const held = [...new Set([...ledgerPositions(db).keys(),...economicSymbols(db),...(db.prepare('SELECT DISTINCT symbol FROM fills WHERE ts>=?').all(addDays(opts.today,-60)+'T00:00:00Z') as {symbol:string}[]).map(r=>r.symbol)])];
   let plan: CorporateActionsPlan = { exitBefore: [], forwardSplits: [], dividends: [], unknown: [] };
   if (held.length) {
     const anns = await port.announcements(held, addDays(opts.today,-45), addDays(opts.today, opts.horizonDays ?? 14));

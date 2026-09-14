@@ -152,6 +152,18 @@ export function economicSymbols(db: DatabaseSync): string[] {
  *  entitlement and an independently reviewed settlement; an unmatched receipt halts, never guesses. */
 export function ingestBrokerCashActivities(db: DatabaseSync, rows: any[], opts:{restating?:boolean}={}): number {
   if (!accountingEnabled(db)) return 0;
+  ensureAccountingTables(db);
+  // Validate settled IDs before dispatch by type: a changed DIV -> FEE must not become
+  // a second cash event. Persist containment outside the ingestion savepoint.
+  for(const r of rows){
+    const settled=db.prepare('SELECT activity_hash FROM entitlement_settlements WHERE activity_id=?').get(r.id) as any;
+    if(settled&&settled.activity_hash!==hash(r)){
+      if(!getState(db,'halt:book'))setState(db,'halt:book','Settled broker receipt changed; accounting review required');
+      const key=`accounting:receipt-conflict:${r.id}:${hash(r)}`;
+      if(!getState(db,key))setState(db,key,JSON.stringify({id:r.id,previousHash:settled.activity_hash,observedHash:hash(r)}));
+      throw Error('Settled broker receipt changed; accounting review required');
+    }
+  }
   let inserted=0;
   db.exec('SAVEPOINT cash_activities');
   try {
