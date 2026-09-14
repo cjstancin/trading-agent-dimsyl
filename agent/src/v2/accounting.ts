@@ -8,6 +8,10 @@ import { recordCash } from './settled-cash.js';
 
 export const ACCOUNTING_POLICY = 'broker-execution-entitlements-v1';
 export function hash(value: unknown): string { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
+/** Stable financial identity across raw REST row key order and additive provider metadata. */
+export function brokerActivityHash(row:any):string {
+  return hash(Object.fromEntries(['id','activity_type','activity_subtype','date','symbol','net_amount','qty','per_share_amount'].map(key=>[key,row[key]??null])));
+}
 export function accountingEnabled(db: DatabaseSync): boolean { return getState(db, 'accounting:policy') === ACCOUNTING_POLICY; }
 export function ensureAccountingTables(db: DatabaseSync): void {
   db.exec(`
@@ -35,6 +39,12 @@ export function ensureAccountingTables(db: DatabaseSync): void {
       source_id TEXT NOT NULL, date TEXT NOT NULL, series TEXT NOT NULL,
       source_hash TEXT NOT NULL, delta9 TEXT NOT NULL,
       PRIMARY KEY(source_id,date,series)
+    );
+    CREATE TABLE IF NOT EXISTS entitlement_settlements (
+      entitlement_id TEXT PRIMARY KEY REFERENCES corporate_entitlements(id),
+      activity_id TEXT NOT NULL UNIQUE, activity_hash TEXT NOT NULL,
+      effective_date TEXT NOT NULL, cash9 TEXT NOT NULL, qty9 TEXT NOT NULL,
+      plan_hash TEXT NOT NULL, plan_json TEXT NOT NULL, applied_ts TEXT NOT NULL
     );
   `);
 }
@@ -77,9 +87,28 @@ export function etDate(ts: string): string {
 }
 export function historicalQty(db: DatabaseSync, symbol: string, exDate: string): D9 {
   const rows = db.prepare('SELECT side,qty9,ts FROM fills WHERE symbol=? ORDER BY ts,id').all(symbol) as any[];
-  let qty = 0n;
-  for (const r of rows) if (etDate(r.ts) < exDate) { qty += r.side === 'buy' ? d9(r.qty9) : -d9(r.qty9); if (qty < 0n) throw new Error('Incomplete historical holdings'); }
+  const events=rows.map(r=>({date:etDate(r.ts),order:r.ts,qty:r.side==='buy'?d9(r.qty9):-d9(r.qty9)}));
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE name='entitlement_settlements'").get()) {
+    const deliveries=db.prepare(`SELECT s.qty9,s.effective_date FROM entitlement_settlements s JOIN corporate_entitlements e ON e.id=s.entitlement_id
+      WHERE e.symbol=? AND s.effective_date<?`).all(symbol,exDate) as any[];
+    events.push(...deliveries.map(r=>({date:r.effective_date,order:'',qty:d9(r.qty9)})));
+  }
+  let qty=0n;
+  for(const event of events.sort((a,b)=>a.date.localeCompare(b.date)||a.order.localeCompare(b.order)))if(event.date<exDate){qty+=event.qty;if(qty<0n)throw Error('Incomplete historical holdings');}
   return qty;
+}
+
+export function outstandingSplit(db:DatabaseSync,symbol:string):boolean {
+  if(!accountingEnabled(db))return false;
+  ensureAccountingTables(db);
+  return !!db.prepare(`SELECT 1 FROM corporate_entitlements e WHERE e.kind='split' AND e.symbol=? AND e.status='outstanding'
+    AND NOT EXISTS(SELECT 1 FROM entitlement_settlements s WHERE s.entitlement_id=e.id)`).get(symbol);
+}
+
+/** Clearing a halt or a feed reverting to old terms does not resolve contradictory evidence. */
+export function containAccountingConflicts(db:DatabaseSync):void {
+  if(db.prepare("SELECT 1 FROM state WHERE key GLOB 'corp:conflict:*' OR key GLOB 'accounting:receipt-conflict:*'").get()
+    &&!getState(db,'halt:book'))setState(db,'halt:book','Unresolved accounting evidence conflict; separate reviewed resolution required');
 }
 
 /** Capture a right, NEVER a receipt. Complex distributions and any earlier split remain gated. */
@@ -89,7 +118,14 @@ export function captureDividend(db: DatabaseSync, dv: {symbol:string;exDate:stri
   if (!from || dv.exDate < from) return false;
   const splits = db.prepare("SELECT key FROM state WHERE key LIKE ?").all(`split_stale:${dv.symbol}`);
   ensureAccountingTables(db);
-  if (splits.length || db.prepare("SELECT 1 FROM corporate_entitlements WHERE kind='split' AND symbol=? AND ex_date<=? AND status='outstanding'").get(dv.symbol,dv.exDate)) return false;
+  if(db.prepare(`SELECT 1 FROM corporate_entitlements e JOIN entitlement_settlements s ON s.entitlement_id=e.id
+    WHERE e.kind='split' AND e.symbol=? AND e.ex_date<=? AND s.effective_date>=?`).get(dv.symbol,dv.exDate,dv.exDate))return false;
+  const marker=getState(db,`split_stale:${dv.symbol}`);
+  let markerDate:string|null=null;
+  try{const parsed=JSON.parse(marker??'null');if(typeof parsed?.ts==='string')markerDate=parsed.ts.slice(0,10);}catch{/* retain gate */}
+  const settledSplit=markerDate&&db.prepare(`SELECT 1 FROM entitlement_settlements s JOIN corporate_entitlements e ON e.id=s.entitlement_id
+    WHERE e.id=? AND s.effective_date<?`).get(`split:${dv.symbol}:${markerDate}`,dv.exDate);
+  if ((splits.length && !settledSplit) || outstandingSplit(db,dv.symbol)) return false;
   const qty = historicalQty(db,dv.symbol,dv.exDate);
   db.exec('SAVEPOINT dividend_right');
   try{
@@ -105,7 +141,8 @@ export function captureDividend(db: DatabaseSync, dv: {symbol:string;exDate:stri
 export function economicRights(db: DatabaseSync, date: string, prices: Map<string,D9>, sleeve?: string): {cash9:D9;stock9:D9} {
   if (!accountingEnabled(db)) return {cash9:0n,stock9:0n};
   ensureAccountingTables(db);
-  const rows = db.prepare("SELECT * FROM corporate_entitlements WHERE status='outstanding' AND ex_date<=?").all(date) as any[];
+  const rows = db.prepare(`SELECT * FROM corporate_entitlements e WHERE status='outstanding' AND ex_date<=?
+    AND NOT EXISTS(SELECT 1 FROM entitlement_settlements s WHERE s.entitlement_id=e.id AND s.effective_date<=?)`).all(date,date) as any[];
   let cash9=0n,stock9=0n;
   for (const r of rows) {
     cash9 += d9(r.cash9);
@@ -119,13 +156,27 @@ export function economicRights(db: DatabaseSync, date: string, prices: Map<strin
 export function economicSymbols(db: DatabaseSync): string[] {
   if(!accountingEnabled(db))return [];
   ensureAccountingTables(db);
-  return (db.prepare("SELECT DISTINCT symbol FROM corporate_entitlements WHERE kind='split' AND status='outstanding' AND extra_qty9!='0'").all() as any[]).map(r=>r.symbol);
+  return (db.prepare(`SELECT DISTINCT symbol FROM corporate_entitlements e WHERE kind='split' AND status='outstanding' AND extra_qty9!='0'
+    AND NOT EXISTS(SELECT 1 FROM entitlement_settlements s WHERE s.entitlement_id=e.id)`).all() as any[]).map(r=>r.symbol);
 }
 
 /** Fee receipts are identified by broker activity ID. Cash/stock distributions require a matched
  *  entitlement and an independently reviewed settlement; an unmatched receipt halts, never guesses. */
 export function ingestBrokerCashActivities(db: DatabaseSync, rows: any[], opts:{restating?:boolean}={}): number {
   if (!accountingEnabled(db)) return 0;
+  containAccountingConflicts(db);
+  ensureAccountingTables(db);
+  // Validate settled IDs before dispatch by type: a changed DIV -> FEE must not become
+  // a second cash event. Persist containment outside the ingestion savepoint.
+  for(const r of rows){
+    const settled=db.prepare('SELECT activity_hash FROM entitlement_settlements WHERE activity_id=?').get(r.id) as any;
+    if(settled&&settled.activity_hash!==brokerActivityHash(r)){
+      if(!getState(db,'halt:book'))setState(db,'halt:book','Settled broker receipt changed; accounting review required');
+      const key=`accounting:receipt-conflict:${r.id}:${brokerActivityHash(r)}`;
+      if(!getState(db,key))setState(db,key,JSON.stringify({id:r.id,previousHash:settled.activity_hash,observedHash:brokerActivityHash(r)}));
+      throw Error('Settled broker receipt changed; accounting review required');
+    }
+  }
   let inserted=0;
   db.exec('SAVEPOINT cash_activities');
   try {
@@ -137,6 +188,9 @@ export function ingestBrokerCashActivities(db: DatabaseSync, rows: any[], opts:{
         continue;
       }
       if(r.activity_type !== 'FEE') {
+        ensureAccountingTables(db);
+        const settled=db.prepare('SELECT activity_hash FROM entitlement_settlements WHERE activity_id=?').get(r.id) as any;
+        if(settled && settled.activity_hash===brokerActivityHash(r))continue;
         if(!getState(db,'halt:book'))setState(db,'halt:book','Unmatched broker cash/stock distribution; entitlement settlement requires review');
         const key=`accounting:unmatched:${r.id}`;
         const payload=JSON.stringify({status:'unresolved',id:r.id,type:r.activity_type,activityHash:hash(r),
@@ -176,7 +230,7 @@ export function correctedMark(db: DatabaseSync,date:string,series:string,source:
 /** Late fee receipts / dividend discoveries amend only derived economic history. Original marks
  *  are never rewritten. Sleeve cash deltas use the aggregate-before/after allocation, avoiding
  *  cumulative one-unit rounding errors from independently rounding each fee. */
-function overlayEconomicCash(db:DatabaseSync,sourceId:string,date:string,amount9:D9):void{
+export function overlayEconomicCash(db:DatabaseSync,sourceId:string,date:string,amount9:D9):void{
   ensureAccountingTables(db);
   if(amount9===0n)return;
   if(!db.prepare("SELECT 1 FROM sqlite_master WHERE name='book_marks'").get())return;
