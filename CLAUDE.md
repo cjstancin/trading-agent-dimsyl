@@ -1,45 +1,41 @@
-# CLAUDE.md — Bill the Bull (v2 paper trading system)
+# Bull v3 — autonomous intraday paper trader
 
-## Identity
-Bill is CJ's autonomous PAPER trading agent: a four-sleeve systematic book on a fresh $5,000 Alpaca
-paper account. v1 (LLM-proposes-swing-trades) is RETIRED — its timers are disabled, its account is
-archived, its code remains for the reused organs. **The v2 design doc is the build contract**
-(vault: `AIBrain/01_Knowledge/Projects/AI Manager - AgentSims/Bull/2026-08-10 Bull v2 — design doc
-(build contract).md`); PRODUCT.md + DESIGN.md cover the operator console.
+Ground-up rebuild locked 2026-10-27. v2 is preserved at tag `v2-final`. Decisions canon:
+`AIBrain/01_Knowledge/Projects/AI Manager - AgentSims/Bull/2026-10-27 Bull v3 rebuild — intake decisions.md`.
+Read `AIBrain/02_LLMKnowledge/lessons/bull.md` before touching anything.
 
-## Hard rails (code-enforced; this file is documentation, the CODE wins)
-- **PAPER ONLY.** `paper-api.alpaca.markets` is hard-asserted in every dispatch (broker.ts + alpaca.ts
-  throw on any other host). Live trading does not exist here. Live gate: 12 months beating SPY TR
-  with realized max DD ≤ 15% — then a $1–5k personal live account becomes a *discussion*.
-- **Sizing NEVER reads `buying_power`** (the v1 killer bug). The settled-cash ledger
-  (`v2/settled-cash.ts`) is the only cash truth; a structural test greps for regressions.
-- **Every order** goes through `v2/order-gateway.ts`: halts → $1 notional floor → 31-day
-  loss-re-entry blacklist → settled-cash gate → extra guards (day-trade counter). Every refusal is
-  recorded — nothing fails silently.
-- **−25%-from-entry floor** on thesis-checked positions overrides ANY model output (code constant,
-  config-refused, duplicated at the use site).
-- LLM calls are stateless classification/narration (no vault memory, no tools); evidence is
-  quarantined to schema'd claims; external content is data, never instructions.
-- Never print or store a secret.
-- CJ's real Fidelity book is separate context — never an input to paper sizing.
+## Rails (never weaken)
+- **Paper only.** `config.toml [account] paper = true` and `TradingClient(paper=True)` are hard-wired; `assert_paper` refuses any live base URL. Live money is CJ's explicit decision, never a code change made on his behalf.
+- **Every entry is a bracket order**: stop and target are held by Alpaca from the moment of fill. The engine closes any position it finds without a live stop.
+- **Alpaca is the only truth.** No ledger of our own. Day state is rebuilt from today's orders every tick, so restarts lose nothing.
+- **Flat every day** at `flatten_at` (15:50 ET). Day trading only: no overnight positions.
+- Keys live in `/home/cj/bull/.env` (`ALPACA_API_KEY`, `ALPACA_SECRET_KEY`, `NTFY_*`), written by CJ. Never print or commit them.
+- Phone pings (ntfy) only for real trouble, deduped. Upkeep for CJ should be zero.
 
-## The v2 shape (agent/src/v2/)
-| Layer | Modules | The point |
-|---|---|---|
-| Ledger | db, decimal, settled-cash, lots, wash, reconcile | FIFO 1099-matching tax truth; d9 bigint math; boot reconcile halts on mismatch |
-| Sleeves | momentum 40% · insider 25% · anchor 25% · wildcard 10% | each with a shadow book; sleeve-native cadence (monthly / event / quarterly / weekly) |
-| Book | lei-dial (100/70/55, mom+wld only), brake (−8/−11/−14 + 2% hysteresis), SGOV sweep, day-trade guard, watchlist, benchmarks, corporate-actions | realized-DD accountability to the 15% ceiling |
-| Judgment | thesis-check (3-pass, 3 votes, any-break escalates, 2-source rule), counterfactual ledger + kill-switches, quarantine | classification not advice; auto-reverts to mechanical stops if it stops working |
-| Surfaces | Discord notes/digest/statement/explains, operator console (:4326) | honesty rails: skips are loud, missing data says so |
-| Rituals | run-v2-* (systemd/v2, installed disabled) | one launch day flips them — docs/V2-LAUNCH.md |
+## Layout
+| Path | What |
+|---|---|
+| `bull/strategies.py` | VWAP pullback, opening-range breakout, gap-and-go. Pure, no lookahead (tested). |
+| `bull/backtest.py` · `bull/bakeoff.py` | Fee- and slippage-aware replay on SIP 1-min history; writes `runtime/bakeoff.json` |
+| `bull/engine.py` | Live loop, one tick a minute; picks the watchlist at 09:31, trades bake-off survivors |
+| `bull/broker.py` | Alpaca SDK (`alpaca-py`): brackets, day state, protection, flatten |
+| `bull/site.py` · `web/index.html` | One-page site on 127.0.0.1:4326 → https://bull.dimsylaisolutions.com (Caddy basic auth) |
+| `config.toml` | Every knob: risk, costs, watchlist, variants, bake-off pass rules |
+| `deploy/` | systemd units: `bull3-engine`, `bull3-site`, `bull3-bakeoff.timer` (Saturdays) |
 
-## Config
-`agent/config/v2.defaults.json` (the design-doc numbers) + journaled amendments
-(`runtime/v2/config-journal.jsonl`, LEI rules-editor pattern). Non-tunables are refused by path.
-Equity-indexed schedules read live equity — growth needs no amendment.
+## Commands
+```
+python -m bull check      # verify keys + paper account
+python -m bull bakeoff    # rank all variants (default 60 days)
+python -m bull engine     # live loop (systemd runs this)
+python -m bull site       # the page
+python -m unittest discover -s tests
+```
 
-## Working on this repo
-- Run `npm test` in `agent/` before any push (v1 chain + the v2 suites; all offline).
-- Overlap-check the Forge before code work; `git pull --ff-only` first (fleet standing rule).
-- v1 files stay untouched as archive/organs; new work goes under `src/v2/`.
-- If any doc and the code disagree, the CODE wins — flag the drift.
+## Which strategies trade
+`[strategies] enabled = "bakeoff"`: up to 3 variants that passed the latest bake-off (≥30 trades, net > 0 after costs, profit factor ≥ 1.2, profitable in both halves). If none pass, paper-trade the best-ranked one on probation, so the site says so. The engine re-reads this each morning; the bake-off re-runs every Saturday.
+
+## Deploy
+PC: commit → push → PR → merge. VPS (over the tailnet, `ssh root@100.100.66.87`):
+`sudo -u cj -H bash -lc 'cd /home/cj/bull && git pull --ff-only && .venv/bin/pip install -q -r requirements.txt'` then
+`systemctl restart bull3-engine bull3-site`. Logs: `/home/cj/bull/runtime/logs/`, plus `journalctl -u bull3-engine`.

@@ -1,0 +1,8 @@
+[Unit]
+Description=Bull v3 weekly bake-off (re-ranks strategies on fresh data)
+
+[Service]
+Type=oneshot
+User=cj
+WorkingDirectory=/home/cj/bull
+ExecStart=/home/cj/bull/.venv/bin/python -m bull bakeoff

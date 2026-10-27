@@ -1,0 +1,15 @@
+[Unit]
+Description=Bull v3 one-page site (127.0.0.1:4326; Caddy owns outer access)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=cj
+WorkingDirectory=/home/cj/bull
+ExecStart=/home/cj/bull/.venv/bin/python -m bull site --port 4326
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
