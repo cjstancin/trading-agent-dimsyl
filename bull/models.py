@@ -24,6 +24,7 @@ class Signal:
     stop: float
     target: float
     why: str
+    features: dict = field(default_factory=dict)
 
     @property
     def risk_per_share(self) -> float:
@@ -39,6 +40,7 @@ class DayContext:
     vw: list[float] = field(default_factory=list)
     above: list[int] = field(default_factory=list)   # running count of closes above VWAP
     memo: dict = field(default_factory=dict)
+    extra: dict = field(default_factory=dict)        # atr, or_vol_avg: facts from before today
 
     def __post_init__(self) -> None:
         self.refresh()

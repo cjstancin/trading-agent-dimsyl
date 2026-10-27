@@ -14,7 +14,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest, StockSnapshotRequest
-from alpaca.data.timeframe import TimeFrame
+from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
 from .config import ET, alpaca_keys, runtime_dir
 from .models import Bar
@@ -152,3 +152,44 @@ def session_bars(c, symbol: str, minutes: int = 5) -> dict:
             out.append(bucket)
         bucket["vwap"] = round(pv / vol, 4) if vol else b.c
     return {"symbol": symbol, "day": day.isoformat(), "minutes": minutes, "bars": out}
+
+
+def day_minute_bars(c, day: date, symbols: list[str]) -> dict[str, list[Bar]]:
+    """Backtest: one day's SIP 1-min session bars for several symbols in one request, cached."""
+    out: dict[str, list[Bar]] = {}
+    missing = []
+    for s in symbols:
+        path = _cache_path(s, day)
+        if path.exists():
+            rows = json.loads(gzip.decompress(path.read_bytes()))
+            out[s] = [Bar(datetime.fromisoformat(r[0]), *r[1:]) for r in rows]
+        else:
+            missing.append(s)
+    if missing:
+        fetched = _fetch(c, missing, TimeFrame.Minute, datetime.combine(day, OPEN, ET),
+                         datetime.combine(day, CLOSE, ET), DataFeed.SIP)
+        for s in missing:
+            rows = _session(fetched.get(s, []))
+            out[s] = rows
+            if rows or fetched:  # an empty symbol in a successful request = no trading that day
+                payload = [[b.t.isoformat(), b.o, b.h, b.l, b.c, b.v] for b in rows]
+                _cache_path(s, day).write_bytes(gzip.compress(json.dumps(payload).encode()))
+    return out
+
+
+def opening_volumes(c, symbol: str, start: date, end: date, feed=DataFeed.SIP) -> dict[date, float]:
+    """Volume of the 09:30 five-minute bar per session (the opening range), cached per symbol."""
+    path = runtime_dir() / "cache" / f"or-vol-{feed.value}" / f"{symbol}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cached = {}
+    if path.exists():
+        blob = json.loads(path.read_text(encoding="utf-8"))
+        if blob["start"] <= start.isoformat() and blob["end"] >= end.isoformat():
+            return {date.fromisoformat(d): v for d, v in blob["vols"].items()}
+        cached = blob["vols"]
+    bars = _fetch(c, [symbol], TimeFrame(5, TimeFrameUnit.Minute), datetime.combine(start, time(9, 30), ET),
+                  min(datetime.combine(end, time(10, 0), ET), datetime.now(timezone.utc) - timedelta(minutes=16)),
+                  feed).get(symbol, [])
+    vols = {**cached, **{b.t.date().isoformat(): b.v for b in bars if b.t.time() == OPEN}}
+    path.write_text(json.dumps({"start": start.isoformat(), "end": end.isoformat(), "vols": vols}), encoding="utf-8")
+    return {date.fromisoformat(d): v for d, v in vols.items()}

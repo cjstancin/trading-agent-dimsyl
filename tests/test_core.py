@@ -6,7 +6,7 @@ from types import SimpleNamespace as NS
 
 from bull import broker
 from bull.backtest import metrics, passes, run_portfolio, simulate_exit
-from bull.config import ET, assert_paper, load_config, variants
+from bull.config import ET, assert_paper, load_config, shadow_variants, variants
 from bull.models import Bar, DayContext, Signal
 from bull.risk import DayState, entry_block, sell_fees, size_position
 from bull.strategies import evaluate
@@ -46,10 +46,11 @@ class StrategyTests(unittest.TestCase):
         for seed in range(6):
             full = random_day(seed)
             prev_close = full[0].o / (1.04 if seed % 2 else 0.96)
-            ctx_full = DayContext("TEST", prev_close, full)
-            for v in variants(CFG):
+            extra = {"atr": 2.5, "or_vol_avg": 3000.0}
+            ctx_full = DayContext("TEST", prev_close, full, extra=extra)
+            for v in variants(CFG) + shadow_variants(CFG):
                 for k in range(1, len(full), 7):
-                    ctx_cut = DayContext("TEST", prev_close, full[:k + 1])
+                    ctx_cut = DayContext("TEST", prev_close, full[:k + 1], extra=extra)
                     a, b = evaluate(v, ctx_full, k), evaluate(v, ctx_cut, k)
                     self.assertEqual(a, b, f"{v['name']} seed {seed} k {k}")
 
@@ -86,6 +87,48 @@ class StrategyTests(unittest.TestCase):
         self.assertIsNotNone(evaluate(v, ctx, 6))
         ctx_small = DayContext("X", 103.0, bars_from(prices, spread=0.02))
         self.assertIsNone(evaluate(v, ctx_small, 6))
+
+
+class FilterTests(unittest.TestCase):
+    def gap_day(self, open_vol=1000):
+        prices = [104.0, 104.2, 104.1, 104.3, 104.2, 104.25, 104.9]
+        bars = bars_from(prices, spread=0.02, vol=open_vol)
+        return DayContext("X", 100.0, bars, extra={"atr": 2.0, "or_vol_avg": 2000.0})
+
+    def v(self, **params):
+        return {"name": "g", "strategy": "gap_and_go", "params": {"side": "long", "min_gap_pct": 3.0, **params}}
+
+    def test_rvol_filter(self):
+        self.assertIsNone(evaluate(self.v(min_rvol=2.0), self.gap_day(open_vol=500), 6))   # 2500/2000 = 1.25x
+        self.assertIsNotNone(evaluate(self.v(min_rvol=2.0), self.gap_day(open_vol=1000), 6))  # 5000/2000 = 2.5x
+        no_hist = DayContext("X", 100.0, self.gap_day().bars)
+        self.assertIsNone(evaluate(self.v(min_rvol=2.0), no_hist, 6), "no history means no rvol, so no trade")
+
+    def test_gap_and_time_filters(self):
+        self.assertIsNone(evaluate(self.v(min_gap_pct=5.0), self.gap_day(), 6))          # +4% gap
+        self.assertIsNone(evaluate(self.v(last_entry="09:36"), self.gap_day(), 6))        # fires at 09:36
+        self.assertIsNotNone(evaluate(self.v(last_entry="09:40"), self.gap_day(), 6))
+
+    def test_atr_stop(self):
+        ctx = self.gap_day()
+        lo = min(b.l for b in ctx.bars[:5])
+        wide = evaluate(self.v(stop_atr=0.5, max_stop_pct=5.0), ctx, 6)        # ATR 2.0 -> cap 1.0
+        self.assertEqual(wide.stop, round(lo, 2), "range low is closer than half an ATR")
+        ctx.extra["atr"] = 0.6                                                  # cap 0.3
+        tight = evaluate(self.v(stop_atr=0.5, max_stop_pct=5.0), ctx, 6)
+        self.assertEqual(tight.stop, round(104.9 - 0.3, 2), "half an ATR is closer than the range low")
+        ctx.extra["atr"] = None
+        self.assertIsNone(evaluate(self.v(stop_atr=0.5), ctx, 6), "no ATR history, no ATR-stop trade")
+
+    def test_features(self):
+        from bull.features import atr14, entry_features, or_volume_avg
+        daily = [Bar(t(0, 0) - timedelta(days=20 - i), 100, 102, 99, 101, 1) for i in range(20)]
+        self.assertAlmostEqual(atr14(daily, DAY), 3.0)
+        self.assertIsNone(atr14(daily[:10], DAY))
+        vols = {DAY - timedelta(days=i): 100.0 * i for i in range(1, 20)}
+        self.assertAlmostEqual(or_volume_avg(vols, DAY), sum(100.0 * i for i in range(1, 15)) / 14)
+        f = entry_features(self.gap_day(), 6, 103.0, -0.4)
+        self.assertEqual((f["gap_pct"], f["rvol"], f["minute"], f["spy_chg"]), (4.0, 2.5, 6, -0.4))
 
 
 class BacktestTests(unittest.TestCase):
