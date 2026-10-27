@@ -509,10 +509,11 @@ function renderTables(s) {
   const strat = (e.strategies || []).map(v => `<b>${esc(v.label)}</b> <span class="dim num">${esc(v.name)}</span>`).join("<br>");
   $("strategy").innerHTML = (strat ? `<div class="sect">Running</div>${strat}<div class="dim" style="margin-top:6px">${esc(e.strategies_why)}</div>` : `<div class="sect">Running</div><span class="dim">Nothing — ${esc(e.strategies_why || "no strategy selected")}</span>`);
 
-  $("bake-note").textContent = b ? `${b.period[0]} → ${b.period[1]} · ${b.days} days · after fees + slippage · SPY ${pct(b.spy_return_pct)}` : "";
+  const rl = b?.rules;
+  $("bake-note").textContent = b ? `${b.period[0]} → ${b.period[1]} · ${b.days} days · after fees + slippage · SPY ${pct(b.spy_return_pct)}` + (rl?.min_t_stat ? ` · pass: t ≥ ${rl.min_t_stat}, most years up, ${rl.min_trades}+ trades` : "") : "";
   $("bake").innerHTML = b
-    ? `<thead><tr><th>VARIANT</th><th class="l">METHOD</th><th>TRADES</th><th>WIN %</th><th>NET</th><th>RETURN</th><th>PROFIT FACTOR</th><th>MAX DD</th><th>PASSED</th></tr></thead><tbody>` +
-      b.results.map(r => `<tr><td>${esc(r.name)}</td><td class="l">${esc(r.strategy.replace(/_/g, " "))}</td><td>${r.trades}</td><td>${r.win_rate}</td><td class="${cls(r.net_pnl)}">${money(r.net_pnl, true)}</td><td class="${cls(r.return_pct)}">${pct(r.return_pct)}</td><td>${r.profit_factor}</td><td>${r.max_drawdown_pct}%</td><td class="${r.passed ? "yes" : "no"}">${r.passed ? "YES" : "no"}</td></tr>`).join("") + "</tbody>"
+    ? `<thead><tr><th>VARIANT</th><th class="l">METHOD</th><th>TRADES</th><th>WIN %</th><th>NET</th><th>RETURN</th><th>T-STAT</th><th>YEARS UP</th><th>MAX DD</th><th>PASSED</th></tr></thead><tbody>` +
+      b.results.map(r => `<tr><td>${esc(r.name)}</td><td class="l">${esc(r.strategy.replace(/_/g, " "))}</td><td>${r.trades}</td><td>${r.win_rate}</td><td class="${cls(r.net_pnl)}">${money(r.net_pnl, true)}</td><td class="${cls(r.return_pct)}">${pct(r.return_pct)}</td><td class="${r.t_stat >= (rl?.min_t_stat ?? 2) ? "up" : ""}">${r.t_stat ?? "—"}</td><td>${r.counted_years != null ? r.positive_years + "/" + r.counted_years : "—"}</td><td>${r.max_drawdown_pct}%</td><td class="${r.passed ? "yes" : "no"}">${r.passed ? "YES" : "no"}</td></tr>`).join("") + "</tbody>"
     : `<tbody><tr><td class="empty">The first bake-off hasn't run yet.</td></tr></tbody>`;
 
   $("events").innerHTML = s.events.map(ev => {

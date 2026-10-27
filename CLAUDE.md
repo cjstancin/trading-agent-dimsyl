@@ -36,7 +36,7 @@ python -m unittest discover -s tests
 ```
 
 ## Which strategies trade
-`[strategies] enabled = "bakeoff"`: up to 3 variants that passed the latest bake-off (≥30 trades, net > 0 after costs, profit factor ≥ 1.2, profitable in both halves). If none pass, paper-trade the best-ranked one on probation, so the site says so. The engine re-reads this each morning; the bake-off re-runs every Saturday.
+`[strategies] enabled = "bakeoff"`: up to 3 candidates (methods plus pre-registered filters) that passed the latest **4-year** bake-off: ≥100 trades, net > 0 after costs, t-stat on mean R ≥ 2, and profitable in more than half the years with 10+ trades. If none pass, the strongest by t-stat trades on paper **probation**, and the site says so. The engine re-reads this each morning; the bake-off re-runs every Saturday. (Changed 2026-10-27: a 60-day pass turned out breakeven over 4 years.)
 
 ## Learning loop
 - `[[shadow]]` variants are pre-registered filters. The engine records what each would have done (never trades them) and the journal resolves them at the close, so their forward record builds alongside the real one.

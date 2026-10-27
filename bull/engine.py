@@ -28,7 +28,8 @@ MAX_KEEP = 3  # trade at most this many passing variants at once
 
 def active_variants(cfg: dict) -> tuple[list[dict], str]:
     """Which variants trade today, and a one-line reason the site shows."""
-    by_name = {v["name"]: v for v in variants(cfg)}
+    from .bakeoff import candidates  # methods + pre-registered filters, same pool the bake-off ranks
+    by_name = {v["name"]: v for v in candidates(cfg)}
     enabled = cfg["strategies"]["enabled"]
     if enabled != "bakeoff":
         chosen = [by_name[n] for n in enabled if n in by_name]
@@ -42,7 +43,7 @@ def active_variants(cfg: dict) -> tuple[list[dict], str]:
         return [by_name[n] for n in passed], "passed the bake-off"
     ranking = [n for n in res.get("ranking", []) if n in by_name]
     if cfg["strategies"].get("paper_trade_best_if_none_pass") and ranking:
-        return [by_name[ranking[0]]], "probation: nothing passed, paper-testing the best"
+        return [by_name[ranking[0]]], "probation: nothing passed the 4-year test, paper-testing the strongest"
     return [], "nothing passed the bake-off"
 
 

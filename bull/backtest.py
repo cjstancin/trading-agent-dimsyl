@@ -5,6 +5,8 @@ filled at the worse open, and a bar that touches both stop and target counts as 
 """
 from __future__ import annotations
 
+import math
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 
@@ -138,6 +140,18 @@ def metrics(trades: list[Trade], start_equity: float, days: list[date]) -> dict:
     first = sum(t.pnl for t in trades if t.day < mid)
     second = sum(t.pnl for t in trades if t.day >= mid)
     gross_loss = abs(sum(losses))
+    rs = [t.r for t in trades]
+    mean_r = sum(rs) / len(rs) if rs else 0.0
+    se_r = (math.sqrt(sum((r - mean_r) ** 2 for r in rs) / (len(rs) - 1)) / math.sqrt(len(rs))) if len(rs) > 1 else None
+    by_year = defaultdict(list)
+    for t in trades:
+        by_year[t.day[:4]].append(t)
+    years = {y: {"trades": len(ts), "net_pnl": round(sum(t.pnl for t in ts), 2),
+                 "win_rate": round(sum(t.pnl > 0 for t in ts) / len(ts) * 100, 1)}
+             for y, ts in sorted(by_year.items())}
+    # A year counts only with enough trades to mean something; a 2-trade stub year is noise.
+    counted = [y for y in years.values() if y["trades"] >= 10]
+    positive = sum(1 for y in counted if y["net_pnl"] > 0)
     return {
         "trades": len(trades),
         "win_rate": round(len(wins) / len(trades) * 100, 1) if trades else 0.0,
@@ -150,14 +164,29 @@ def metrics(trades: list[Trade], start_equity: float, days: list[date]) -> dict:
         "first_half_pnl": round(first, 2),
         "second_half_pnl": round(second, 2),
         "exits": {r: sum(1 for t in trades if t.reason == r) for r in ("target", "stop", "close")},
+        "mean_r": round(mean_r, 4),
+        "se_r": round(se_r, 4) if se_r else None,
+        "t_stat": round(mean_r / se_r, 2) if se_r else 0.0,
+        "by_year": years,
+        "positive_years": positive,
+        "counted_years": len(counted),
+        "positive_year_share": round(positive / len(counted), 3) if counted else 0.0,
     }
 
 
 def passes(m: dict, bcfg: dict) -> bool:
-    ok = m["trades"] >= bcfg["min_trades"] and m["net_pnl"] > 0 and m["profit_factor"] >= bcfg["min_profit_factor"]
-    if bcfg.get("require_both_halves"):
-        ok = ok and m["first_half_pnl"] > 0 and m["second_half_pnl"] > 0
-    return ok
+    """Proven means: enough trades, net profit after costs, a mean R at least t_stat standard errors
+    above zero, and profitable in MORE than min_positive_year_share of the years it traded."""
+    return (m["trades"] >= bcfg["min_trades"]
+            and m["net_pnl"] > 0
+            and m["profit_factor"] >= bcfg.get("min_profit_factor", 1.0)
+            and m["t_stat"] >= bcfg["min_t_stat"]
+            and m["positive_year_share"] > bcfg["min_positive_year_share"])
+
+
+def rank_key(name: str, m: dict) -> tuple:
+    """Passing variants first, then by statistical strength (t-stat), not raw dollars."""
+    return (m["passed"], m["t_stat"], m["net_pnl"])
 
 
 def trade_dicts(trades: list[Trade]) -> list[dict]:

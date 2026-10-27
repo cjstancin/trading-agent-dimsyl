@@ -171,6 +171,41 @@ class BacktestTests(unittest.TestCase):
         self.assertFalse(passes(m, CFG["bakeoff"]))  # too few trades to trust
 
 
+class PassRuleTests(unittest.TestCase):
+    def trades(self, per_year):
+        from bull.backtest import Trade
+        out = []
+        for year, pnls in per_year.items():
+            for i, p in enumerate(pnls):
+                out.append(Trade("v", "X", "long", f"{year}-06-{(i % 28) + 1:02d}", "", "", 100, 101, 10, "target",
+                                 0, p, p / 50, ""))
+        return out
+
+    def test_t_stat_and_years(self):
+        from bull.backtest import metrics, passes
+        rule = CFG["bakeoff"]
+        strong = self.trades({"2023": [60, -50, 70] * 15, "2024": [60, -50, 70] * 15, "2025": [-50, 55, -50] * 5})
+        m = metrics(strong, 5000, [DAY])
+        self.assertEqual((m["positive_years"], m["counted_years"]), (2, 3))
+        self.assertGreaterEqual(m["t_stat"], 2.0)
+        self.assertTrue(passes(m, rule))
+        coinflip = self.trades({"2023": [50, -50] * 40, "2024": [52, -50] * 40})
+        m2 = metrics(coinflip, 5000, [DAY])
+        self.assertLess(m2["t_stat"], 2.0)
+        self.assertFalse(passes(m2, rule), "a tiny positive edge with t < 2 is not proven")
+        one_good_year = self.trades({"2023": [90, -50] * 40, "2024": [-50, 40] * 20, "2025": [-50, 40] * 20})
+        m3 = metrics(one_good_year, 5000, [DAY])
+        self.assertEqual(m3["positive_years"], 1)
+        self.assertFalse(passes(m3, rule), "profitable in only 1 of 3 years fails")
+
+    def test_candidate_pool_dedupes_control(self):
+        from bull.bakeoff import candidates
+        names = [v["name"] for v in candidates(CFG)]
+        self.assertIn("gap_early", names)
+        self.assertNotIn("gap_control", names, "gap_control is the same rule as gap_long_2r")
+        self.assertEqual(len(names), len(set(names)))
+
+
 class RiskTests(unittest.TestCase):
     def test_sizing(self):
         r = CFG["risk"]

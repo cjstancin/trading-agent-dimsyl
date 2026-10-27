@@ -1,6 +1,9 @@
-"""Bake-off: run every variant over the same recent days with costs, then keep only survivors.
+"""Bake-off: replay every candidate over years of history with costs, keep only proven survivors.
 
-Writes runtime/bakeoff.json (summary the engine and site read) and runtime/bakeoff-trades.json.
+Candidates are the [[variant]] methods plus the pre-registered [[shadow]] filters. "Proven" is
+the [bakeoff] rule: enough trades, net profit, a t-stat on mean R of at least min_t_stat, and
+profitable in most years. Writes runtime/bakeoff.json (read by the engine and site) and
+runtime/bakeoff-trades.json.
 """
 from __future__ import annotations
 
@@ -10,11 +13,10 @@ from datetime import date, datetime, timedelta
 
 from alpaca.trading.requests import GetCalendarRequest
 
-from . import broker, data
-from .backtest import day_candidates, metrics, passes, run_portfolio, trade_dicts
-from .config import ET, runtime_dir, universe, variants
-from .models import DayContext
-from .watchlist import pick
+from . import broker
+from .backtest import metrics, passes, rank_key, run_portfolio, trade_dicts
+from .config import ET, runtime_dir, shadow_variants, variants
+from .replay import replay, spy_returns
 
 log = logging.getLogger("bull.bakeoff")
 
@@ -26,51 +28,29 @@ def trading_days(n: int) -> list[date]:
     return [d for d in days if d < today][-n:]
 
 
-def daily_stats(dc, symbols: list[str], days: list[date]) -> dict[date, dict[str, dict]]:
-    daily = data.daily_bars(dc, symbols, days[0] - timedelta(days=10), days[-1] + timedelta(days=1))
-    out: dict[date, dict[str, dict]] = {d: {} for d in days}
-    for sym, bars in daily.items():
-        by_day = {b.t.date(): b for b in bars}
-        ordered = sorted(by_day)
-        for i, d in enumerate(ordered):
-            if d not in out or i == 0:
-                continue
-            prev = by_day[ordered[i - 1]]
-            out[d][sym] = {"prev_close": prev.c, "open": by_day[d].o, "prev_dollar_volume": prev.c * prev.v}
-    return out
+def candidates(cfg: dict) -> list[dict]:
+    """Methods plus filters, dropping a filter that is the same rule as an existing method."""
+    pool = list(variants(cfg))
+    seen = {(v["strategy"], json.dumps(v.get("params", {}), sort_keys=True)) for v in pool}
+    for v in shadow_variants(cfg):
+        key = (v["strategy"], json.dumps(v.get("params", {}), sort_keys=True))
+        if key not in seen:
+            pool.append(v)
+            seen.add(key)
+    return pool
 
 
 def run(cfg: dict, days_n: int | None = None) -> dict:
     days_n = days_n or cfg["bakeoff"]["days"]
     days = trading_days(days_n)
-    dc = data.client()
-    syms = universe()
-    log.info("bake-off over %d days %s..%s, %d symbols", len(days), days[0], days[-1], len(syms))
-
-    stats = daily_stats(dc, syms + ["SPY"], days)
-    watch = {d: pick(stats[d], cfg["watchlist"]) for d in days}
-    needed: dict[str, list[date]] = {}
-    for d, wl in watch.items():
-        for s in wl:
-            needed.setdefault(s, []).append(d)
-
-    vs = variants(cfg)
-    cands: dict[str, dict[date, list]] = {v["name"]: {d: [] for d in days} for v in vs}
-    for i, (sym, sym_days) in enumerate(sorted(needed.items())):
-        log.info("[%d/%d] %s: %d days", i + 1, len(needed), sym, len(sym_days))
-        bars_by_day = data.history_minute_bars(dc, sym, sym_days)
-        for d in sym_days:
-            bars = bars_by_day.get(d) or []
-            if len(bars) < 30:
-                continue
-            ctx = DayContext(sym, stats[d].get(sym, {}).get("prev_close"), bars)
-            for sig, ex in day_candidates(vs, ctx, cfg):
-                cands[sig.variant][d].append((sig, ex))
+    vs = candidates(cfg)
+    log.info("bake-off over %d days %s..%s, %d candidates", len(days), days[0], days[-1], len(vs))
+    rep = replay(cfg, vs, days)
 
     start_eq = float(cfg["account"]["start_equity"])
     results, all_trades = {}, {}
     for v in vs:
-        trades = run_portfolio(cands[v["name"]], cfg)
+        trades = run_portfolio(rep["cands"].get(v["name"], {}), cfg)
         m = metrics(trades, start_eq, days)
         m["passed"] = passes(m, cfg["bakeoff"])
         m["strategy"] = v["strategy"]
@@ -78,15 +58,16 @@ def run(cfg: dict, days_n: int | None = None) -> dict:
         results[v["name"]] = m
         all_trades[v["name"]] = trade_dicts(trades)
 
-    ranking = sorted(results, key=lambda n: (results[n]["passed"], results[n]["net_pnl"]), reverse=True)
-    spy = [b for b in data.daily_bars(dc, ["SPY"], days[0], days[-1] + timedelta(days=1)).get("SPY", [])]
-    spy_ret = round((spy[-1].c / spy[0].o - 1) * 100, 2) if spy else None
+    ranking = sorted(results, key=lambda n: rank_key(n, results[n]), reverse=True)
+    spy_total, spy_years = spy_returns(rep["daily"], days)
     summary = {
         "generated_at": datetime.now(ET).isoformat(timespec="seconds"),
         "period": [days[0].isoformat(), days[-1].isoformat()],
         "days": len(days),
+        "symbol_days": rep["symbol_days"],
         "start_equity": start_eq,
-        "spy_return_pct": spy_ret,
+        "spy_return_pct": spy_total,
+        "spy_by_year": spy_years,
         "rules": cfg["bakeoff"],
         "costs": cfg["costs"],
         "results": results,
@@ -100,12 +81,16 @@ def run(cfg: dict, days_n: int | None = None) -> dict:
 
 
 def print_table(summary: dict) -> None:
+    r = summary["rules"]
     print(f"Bake-off {summary['period'][0]}..{summary['period'][1]} ({summary['days']} days), "
           f"${summary['start_equity']:,.0f} book, SPY {summary['spy_return_pct']}%")
-    print(f"{'variant':<16}{'trades':>7}{'win%':>7}{'net $':>10}{'ret%':>7}{'PF':>6}{'avgR':>7}"
-          f"{'maxDD%':>8}{'H1 $':>9}{'H2 $':>9}{'fees':>7}  pass")
+    print(f"Pass rule: >= {r['min_trades']} trades, net > 0, t >= {r['min_t_stat']}, "
+          f"positive in > {r['min_positive_year_share']:.0%} of years (10+ trades)")
+    print(f"{'variant':<17}{'trades':>7}{'win%':>7}{'net $':>11}{'ret%':>8}{'PF':>6}{'avgR':>8}{'t':>6}"
+          f"{'yrs+':>7}{'maxDD%':>8}  pass")
     for n in summary["ranking"]:
         m = summary["results"][n]
-        print(f"{n:<16}{m['trades']:>7}{m['win_rate']:>7}{m['net_pnl']:>10}{m['return_pct']:>7}"
-              f"{m['profit_factor']:>6}{m['avg_r']:>7}{m['max_drawdown_pct']:>8}{m['first_half_pnl']:>9}"
-              f"{m['second_half_pnl']:>9}{m['fees']:>7}  {'YES' if m['passed'] else 'no'}")
+        print(f"{n:<17}{m['trades']:>7}{m['win_rate']:>7}{m['net_pnl']:>11}{m['return_pct']:>8}"
+              f"{m['profit_factor']:>6}{m['mean_r']:>8.3f}{m['t_stat']:>6}"
+              f"{str(m['positive_years']) + '/' + str(m['counted_years']):>7}{m['max_drawdown_pct']:>8}"
+              f"  {'YES' if m['passed'] else 'no'}")

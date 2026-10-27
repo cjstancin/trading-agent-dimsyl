@@ -34,10 +34,12 @@ enabled = "bakeoff"
 paper_trade_best_if_none_pass = true
 
 [bakeoff]
-days = 60
-min_trades = 30
-min_profit_factor = 1.2
-require_both_halves = true   # profitable in the first AND second half of the window
+# Changed 2026-10-27 after a 60-day pass turned out breakeven over 4 years.
+days = 1000                  # ~4 years of trading days, re-run every Saturday
+min_trades = 100
+min_profit_factor = 1.0
+min_t_stat = 2.0             # mean R per trade at least 2 standard errors above zero
+min_positive_year_share = 0.5  # profitable in MORE than half the years (years with 10+ trades)
 
 [[variant]]
 name = "vwap_long_2r"
