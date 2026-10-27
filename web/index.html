@@ -323,7 +323,7 @@ function renderTiles(s) {
 
   const wr = closed.length ? wins.length / closed.length * 100 : null;
   $("t-win").textContent = wr == null ? "—" : wr.toFixed(1) + "%";
-  $("t-gauge").innerHTML = gauge(wr ?? 0);
+  $("t-gauge").innerHTML = gauge(wr);
 
   const aw = wins.length ? wins.reduce((a, t) => a + t.pnl, 0) / wins.length : 0;
   const al = losses.length ? Math.abs(losses.reduce((a, t) => a + t.pnl, 0) / losses.length) : 0;
@@ -347,9 +347,10 @@ function spark(vals, w, h) {
     <path d="${d} L${w} ${h} L0 ${h} Z" fill="url(#sg)"/><path d="${d}" fill="none" stroke="${css("--blue")}" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`;
 }
 function gauge(p) {
-  const r = 48, cx = 60, cy = 60, a = Math.PI * (1 - p / 100);
+  const r = 48, cx = 60, cy = 60, a = Math.PI * (1 - (p ?? 0) / 100);
   const x = cx + r * Math.cos(a), y = cy - r * Math.sin(a);
   const arc = (x1, y1, x2, y2, col) => `<path d="M${x1} ${y1} A${r} ${r} 0 0 1 ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="14"/>`;
+  if (p == null) return arc(cx - r, cy, cx + r, cy, css("--line2"));
   return arc(cx - r, cy, cx + r, cy, css("--down")) + (p > 0 ? arc(cx - r, cy, x.toFixed(2), y.toFixed(2), css("--blue")) : "");
 }
 
