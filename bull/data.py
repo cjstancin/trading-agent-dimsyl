@@ -109,49 +109,74 @@ def history_minute_bars(c, symbol: str, days: list[date]) -> dict[date, list[Bar
 
 
 def snapshots(c, symbols: list[str]) -> dict[str, dict]:
-    """Last price, change vs prior close and today's gap, IEX feed. Display only."""
+    """Last price, change vs prior close and today's gap, IEX feed. Display only.
+
+    Before the open the snapshot's daily bar is still yesterday's, so the gap is the premarket
+    price against yesterday's close (an indicative gap), and high/low are blank.
+    """
     if not symbols:
         return {}
+    today = datetime.now(ET).date()
     raw = c.get_stock_snapshot(StockSnapshotRequest(symbol_or_symbols=symbols, feed=DataFeed.IEX)) or {}
     out = {}
     for sym, snap in raw.items():
         snap = snap or {}
-        prev = (snap.get("prevDailyBar") or {}).get("c")
         day = snap.get("dailyBar") or {}
-        last = (snap.get("latestTrade") or {}).get("p") or day.get("c")
+        trade = snap.get("latestTrade") or {}
+        last = trade.get("p") or day.get("c")
         if not last:
             continue
+        day_date = datetime.fromisoformat(day["t"].replace("Z", "+00:00")).astimezone(ET).date() if day.get("t") else None
+        if day_date and day_date < today:  # premarket / holiday: today's session hasn't printed a daily bar
+            ref = day.get("c")
+            out[sym] = {"last": float(last), "chg_pct": round((last / ref - 1) * 100, 2) if ref else None,
+                        "gap_pct": round((last / ref - 1) * 100, 2) if ref else None, "high": None, "low": None,
+                        "premarket": True, "t": trade.get("t")}
+            continue
+        prev = (snap.get("prevDailyBar") or {}).get("c")
         out[sym] = {
             "last": float(last),
             "chg_pct": round((last / prev - 1) * 100, 2) if prev else None,
             "gap_pct": round((day["o"] / prev - 1) * 100, 2) if prev and day.get("o") else None,
-            "high": day.get("h"), "low": day.get("l"),
+            "high": day.get("h"), "low": day.get("l"), "premarket": False, "t": trade.get("t"),
         }
     return out
 
 
+_prev_day_cache: dict[tuple[str, date], Bar | None] = {}
+
+
+def _prev_day(c, symbol: str, day: date) -> Bar | None:
+    key = (symbol, day)
+    if key not in _prev_day_cache:
+        bars = [b for b in daily_bars(c, [symbol], day - timedelta(days=10), day).get(symbol, []) if b.t.date() < day]
+        _prev_day_cache[key] = bars[-1] if bars else None
+    return _prev_day_cache[key]
+
+
 def session_bars(c, symbol: str, minutes: int = 5) -> dict:
-    """The latest session's bars for one symbol (today if trading has started), bucketed, with VWAP."""
+    """Chart data for the latest session: N-minute candles with VWAP, key levels, and the forming
+    candle pushed to the latest trade so the chart moves between minute bars."""
+    from .features import bucket_bars, key_levels
     now = datetime.now(ET)
     raw = _fetch(c, [symbol], TimeFrame.Minute, now - timedelta(days=6), None, DataFeed.IEX).get(symbol, [])
-    bars = _session(raw)
-    if not bars:
-        return {"symbol": symbol, "day": None, "bars": []}
-    day = bars[-1].t.date()
-    bars = [b for b in bars if b.t.date() == day]
-    out, pv, vol = [], 0.0, 0.0
-    bucket = None
-    for b in bars:
-        pv += (b.h + b.l + b.c) / 3 * b.v
-        vol += b.v
-        key = b.t.replace(minute=b.t.minute - b.t.minute % minutes, second=0)
-        if bucket and bucket["t"] == key.strftime("%H:%M"):
-            bucket.update(h=max(bucket["h"], b.h), l=min(bucket["l"], b.l), c=b.c, v=bucket["v"] + b.v)
-        else:
-            bucket = {"t": key.strftime("%H:%M"), "o": b.o, "h": b.h, "l": b.l, "c": b.c, "v": b.v}
-            out.append(bucket)
-        bucket["vwap"] = round(pv / vol, 4) if vol else b.c
-    return {"symbol": symbol, "day": day.isoformat(), "minutes": minutes, "bars": out}
+    session = _session(raw)
+    if not session:
+        return {"symbol": symbol, "day": None, "bars": [], "levels": []}
+    day = session[-1].t.date()
+    session = [b for b in session if b.t.date() == day]
+    premarket = [b for b in raw if b.t.date() == day and time(4) <= b.t.time() < OPEN]
+    out = bucket_bars(session, minutes)
+    live = day == now.date() and OPEN <= now.time() < CLOSE
+    if live and out:
+        try:
+            last = snapshots(c, [symbol]).get(symbol, {}).get("last")
+        except Exception:
+            last = None
+        if last:
+            out[-1].update(c=last, h=max(out[-1]["h"], last), l=min(out[-1]["l"], last))
+    return {"symbol": symbol, "day": day.isoformat(), "minutes": minutes, "bars": out, "live": live,
+            "levels": key_levels(_prev_day(c, symbol, day), premarket, session)}
 
 
 def day_minute_bars(c, day: date, symbols: list[str]) -> dict[str, list[Bar]]:

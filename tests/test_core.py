@@ -206,6 +206,48 @@ class PassRuleTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
 
 
+class LiveChartTests(unittest.TestCase):
+    def test_bucket_bars(self):
+        from bull.features import bucket_bars
+        bars = bars_from([100 + i * 0.1 for i in range(12)])
+        five = bucket_bars(bars, 5)
+        self.assertEqual([b["t"] for b in five], ["09:30", "09:35", "09:40"])
+        self.assertEqual(five[0]["o"], bars[0].o)
+        self.assertEqual(five[1]["c"], bars[9].c)
+        self.assertEqual(len(bucket_bars(bars, 1)), 12)
+
+    def test_key_levels(self):
+        from bull.features import key_levels
+        prev = Bar(t(0, 0) - timedelta(days=1), 99, 101.5, 98.2, 100.4, 1)
+        pre = bars_from([100.5, 100.9, 100.2], start=(8, 0))
+        sess = bars_from([101 + (i % 4) * 0.1 for i in range(20)])
+        lv = {x["k"]: x["v"] for x in key_levels(prev, pre, sess)}
+        self.assertEqual((lv["PDH"], lv["PDL"], lv["PDC"]), (101.5, 98.2, 100.4))
+        self.assertEqual((lv["PMH"], lv["PML"]), (round(max(b.h for b in pre), 2), round(min(b.l for b in pre), 2)))
+        self.assertIn("OR15H", lv)
+        early = {x["k"] for x in key_levels(prev, [], sess[:8])}
+        self.assertIn("OR5H", early)
+        self.assertNotIn("OR15H", early, "15-min range isn't drawn until 15 minutes have passed")
+
+    def test_snapshot_premarket_gap(self):
+        from bull import data
+        today = datetime.now(ET).date()
+        yday = (today - timedelta(days=1)).isoformat() + "T04:00:00Z"
+        tday = today.isoformat() + "T04:00:00Z"
+        class C:
+            def __init__(self, raw): self.raw = raw
+            def get_stock_snapshot(self, req): return self.raw
+        pre = C({"X": {"dailyBar": {"t": yday, "o": 9, "h": 11, "l": 9, "c": 10}, "latestTrade": {"p": 10.5}}})
+        q = data.snapshots(pre, ["X"])["X"]
+        self.assertTrue(q["premarket"])
+        self.assertEqual((q["gap_pct"], q["high"]), (5.0, None))
+        live = C({"X": {"dailyBar": {"t": tday, "o": 10.4, "h": 10.9, "l": 10.1, "c": 10.6},
+                        "prevDailyBar": {"t": yday, "c": 10.0}, "latestTrade": {"p": 10.8}}})
+        q = data.snapshots(live, ["X"])["X"]
+        self.assertFalse(q["premarket"])
+        self.assertEqual((q["gap_pct"], q["chg_pct"], q["high"]), (4.0, 8.0, 10.9))
+
+
 class RiskTests(unittest.TestCase):
     def test_sizing(self):
         r = CFG["risk"]

@@ -12,6 +12,7 @@
   --ink: #e3e8f0; --dim: #8592a6; --faint: #4f5c70;
   --up: #22d36b; --up-bg: rgba(34, 211, 107, .10); --down: #ff4d4f; --down-bg: rgba(255, 77, 79, .10);
   --blue: #3d8bff; --blue-bg: rgba(61, 139, 255, .14); --vwap: #f2c94c; --spy: #7d8aa0;
+  --pm: #b48cff; --or: #3fd0d4;
   --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
 }
 * { box-sizing: border-box; }
@@ -118,6 +119,7 @@ select { background: var(--panel2); color: var(--ink); border: 1px solid var(--l
 .tbl tr.click:hover td { background: var(--cell); }
 .tbl tr.sel td { background: var(--blue-bg) !important; }
 .scroll { overflow: auto; max-height: 360px; }
+#scanner-wrap { max-height: 420px; }
 .tri { font-size: 10px; }
 .yes { color: var(--up); font-weight: 700; } .no { color: var(--faint); }
 .strat { padding: 10px 12px; border-top: 1px solid var(--line); line-height: 1.5; }
@@ -125,6 +127,11 @@ details summary { cursor: pointer; color: var(--dim); padding: 10px 12px; font-w
 .ev { font: 12px var(--mono); padding: 4px 12px; border-top: 1px solid var(--line); color: var(--dim); }
 .ev b { color: var(--ink); font-weight: 600; }
 .err { color: var(--down); }
+.livetag { font: 700 10px Inter, sans-serif; letter-spacing: .8px; color: var(--up); padding: 3px 6px; border: 1px solid var(--up); border-radius: 3px; animation: pulse 2s infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+.tbl th.sort { cursor: pointer; user-select: none; }
+.tbl th.sorted { color: var(--ink); }
+.flag { color: var(--blue); } .pmtag { color: var(--pm); font-size: 10px; margin-left: 4px; }
 .lossrow { display: flex; gap: 8px; flex-wrap: wrap; }
 .lossrow span { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 5px 9px; }
 .lossrow b { font-family: var(--mono); margin-left: 6px; }
@@ -186,12 +193,12 @@ details summary { cursor: pointer; color: var(--dim); padding: 10px 12px; font-w
     <div class="ph">
       <h2>Chart</h2>
       <select id="chart-sym" aria-label="Symbol"></select>
-      <span class="dim num">5m</span>
-      <div class="right"><span class="dim num" id="chart-day"></span></div>
+      <div class="seg" id="tf-seg"><button data-tf="1">1m</button><button data-tf="5" class="on">5m</button></div>
+      <div class="right"><span id="chart-live" class="livetag" hidden>LIVE</span><span class="dim num" id="chart-day"></span></div>
     </div>
     <div class="ohlc" id="ohlc"></div>
     <div class="chartbox"><svg id="chart" preserveAspectRatio="none"></svg></div>
-    <div class="legend"><span><i style="background:var(--vwap)"></i>VWAP</span><span><i style="background:var(--blue)"></i>Entry</span><span><i style="background:var(--down)"></i>Stop</span><span><i style="background:var(--up)"></i>Target</span></div>
+    <div class="legend"><span><i style="background:var(--vwap)"></i>VWAP</span><span><i style="background:var(--spy)"></i>Prior day</span><span><i style="background:var(--pm)"></i>Premarket</span><span><i style="background:var(--or)"></i>Opening range</span><span><i style="background:var(--blue)"></i>Entry</span><span><i style="background:var(--down)"></i>Stop</span><span><i style="background:var(--up)"></i>Target</span></div>
   </section>
 
   <section class="c4 panel">
@@ -243,7 +250,7 @@ details summary { cursor: pointer; color: var(--dim); padding: 10px 12px; font-w
   <!-- row C -->
   <section class="c5 panel">
     <div class="ph"><h2>Scanner</h2><div class="right dim" id="scan-note"></div></div>
-    <div class="scroll"><table class="tbl" id="scanner"></table></div>
+    <div class="scroll" id="scanner-wrap"><table class="tbl" id="scanner"></table></div>
   </section>
 
   <section class="c4 panel">
@@ -293,7 +300,8 @@ const px = (n) => n == null ? "—" : n.toFixed(2);
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const reasonText = {target: "target", stop: "stop", close: "close", open: "open"};
 
-let S = null, balView = "all", calMonth = null, chartSym = null, chartData = null;
+let S = null, balView = "all", calMonth = null, chartSym = null, chartData = null, chartTf = 5;
+let scanSort = {key: "gap_pct", dir: 1};
 
 /* ---------- derived stats ---------- */
 function daily(s) {
@@ -482,11 +490,20 @@ function renderCalendar(s) {
 /* ---------- scanner / log / positions / strategy ---------- */
 function renderTables(s) {
   const traded = new Set(s.today_trades.map(t => t.symbol));
-  $("scan-note").textContent = s.watchlist.length ? `${s.watchlist.length} symbols · IEX` : "";
-  $("scanner").innerHTML = s.watchlist.length
-    ? `<thead><tr><th>SYM</th><th>LAST</th><th>CHG %</th><th>GAP %</th><th>HIGH</th><th>LOW</th><th>TRADED</th></tr></thead><tbody>` +
-      s.watchlist.map(q => `<tr class="click${q.symbol === chartSym ? " sel" : ""}" data-sym="${esc(q.symbol)}"><td>${esc(q.symbol)}</td><td>${px(q.last)}</td><td class="${cls(q.chg_pct)}">${pct(q.chg_pct)}</td><td class="${cls(q.gap_pct)}">${pct(q.gap_pct)}</td><td>${px(q.high)}</td><td>${px(q.low)}</td><td>${traded.has(q.symbol) ? '<span class="yes">●</span>' : ""}</td></tr>`).join("") + "</tbody>"
-    : `<tbody><tr><td class="empty">The watchlist is picked at 09:31 ET each trading day.</td></tr></tbody>`;
+  const sc = s.scanner || [];
+  const pm = sc.some(q => q.premarket);
+  $("scan-note").textContent = sc.length ? `${sc.length} symbols · IEX · ${pm ? "premarket gaps vs yesterday's close" : "live"} · ★ bot watchlist` : "";
+  const val = (q, k) => k === "symbol" ? q.symbol : (k === "gap_pct" || k === "chg_pct") ? Math.abs(q[k] ?? 0) : (q[k] ?? -1e9);
+  const sorted = sc.slice().sort((a, b) => scanSort.dir * (scanSort.key === "symbol" ? a.symbol.localeCompare(b.symbol) : val(b, scanSort.key) - val(a, scanSort.key)));
+  const th = (k, label) => `<th class="sort${scanSort.key === k ? " sorted" : ""}" data-k="${k}">${label}${scanSort.key === k ? (scanSort.dir > 0 ? " ▼" : " ▲") : ""}</th>`;
+  $("scanner").innerHTML = sc.length
+    ? `<thead><tr>${th("symbol", "SYM")}${th("last", "LAST")}${th("chg_pct", "CHG %")}${th("gap_pct", pm ? "PM GAP %" : "GAP %")}${th("high", "HIGH")}${th("low", "LOW")}<th></th></tr></thead><tbody>` +
+      sorted.map(q => `<tr class="click${q.symbol === chartSym ? " sel" : ""}" data-sym="${esc(q.symbol)}"><td>${esc(q.symbol)}</td><td>${px(q.last)}</td><td class="${cls(q.chg_pct)}">${pct(q.chg_pct)}</td><td class="${cls(q.gap_pct)}">${pct(q.gap_pct)}</td><td>${q.high == null ? "—" : px(q.high)}</td><td>${q.low == null ? "—" : px(q.low)}</td><td>${q.watch ? '<span class="flag">★</span>' : ""}${traded.has(q.symbol) || q.held ? ' <span class="yes">●</span>' : ""}</td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td class="empty">Waiting for quotes.</td></tr></tbody>`;
+  document.querySelectorAll("#scanner th.sort").forEach(h => h.onclick = () => {
+    scanSort = {key: h.dataset.k, dir: scanSort.key === h.dataset.k ? -scanSort.dir : 1};
+    if (S) renderTables(S);
+  });
 
   const rows = [];
   for (const t of s.trades) {
@@ -558,7 +575,8 @@ function renderLearning(s) {
 /* ---------- candle chart ---------- */
 function symbolChoices(s) {
   const seen = new Set(), list = [];
-  for (const x of [...s.positions.map(p => p.symbol), ...s.today_trades.map(t => t.symbol), ...s.watchlist.map(q => q.symbol), ...s.tape.map(q => q.symbol)])
+  const gappers = (s.scanner || []).slice().sort((a, b) => Math.abs(b.gap_pct ?? 0) - Math.abs(a.gap_pct ?? 0)).slice(0, 12).map(q => q.symbol);
+  for (const x of [...s.positions.map(p => p.symbol), ...s.today_trades.map(t => t.symbol), ...s.tape.map(q => q.symbol), ...gappers])
     if (!seen.has(x)) { seen.add(x); list.push(x); }
   return list.length ? list : ["SPY"];
 }
@@ -569,7 +587,7 @@ async function selectSymbol(sym) {
   sel.value = sym;
   document.querySelectorAll("tr.click").forEach(tr => tr.classList.toggle("sel", tr.dataset.sym === sym));
   try {
-    const r = await fetch("api/bars?symbol=" + encodeURIComponent(sym), {cache: "no-store"});
+    const r = await fetch(`api/bars?symbol=${encodeURIComponent(sym)}&tf=${chartTf}`, {cache: "no-store"});
     chartData = await r.json();
     if (!r.ok) throw new Error(chartData.error || r.status);
   } catch (err) { chartData = {symbol: sym, bars: [], error: err.message}; }
@@ -594,7 +612,11 @@ function drawCandles() {
     if (t.target) levels.push({v: t.target, c: css("--up"), l: "target"});
   }
   const padR = 64, padB = 22, volH = (H - padB) * .2, priceH = H - padB - volH - 6;
-  let lo = Math.min(...bars.map(b => b.l), ...levels.map(x => x.v)), hi = Math.max(...bars.map(b => b.h), ...levels.map(x => x.v));
+  const bLo = Math.min(...bars.map(b => b.l)), bHi = Math.max(...bars.map(b => b.h)), near = (bHi - bLo) * .6 + bHi * .004;
+  const keyColor = (k) => k.startsWith("PD") ? css("--spy") : k.startsWith("PM") ? css("--pm") : css("--or");
+  const keyLv = (chartData.levels || []).filter(x => x.v >= bLo - near && x.v <= bHi + near);
+  const offChart = (chartData.levels || []).filter(x => !keyLv.includes(x));
+  let lo = Math.min(bLo, ...levels.map(x => x.v), ...keyLv.map(x => x.v)), hi = Math.max(bHi, ...levels.map(x => x.v), ...keyLv.map(x => x.v));
   const pad = (hi - lo) * .06 || .5; lo -= pad; hi += pad;
   const n = Math.max(bars.length, 78), cw = (W - padR) / n;
   const X = (i) => i * cw + cw / 2, Y = (v) => 6 + (1 - (v - lo) / (hi - lo)) * (priceH - 6);
@@ -616,6 +638,15 @@ function drawCandles() {
     const vh = b.v / vmax * volH;
     g += `<rect x="${x - cw * .36}" y="${H - padB - vh}" width="${Math.max(cw * .72, 1)}" height="${vh}" fill="${col}" opacity=".45"/>`;
   });
+  const placed = [];  // stagger labels sideways when levels sit within a line of each other
+  for (const kl of keyLv.slice().sort((a, b) => b.v - a.v)) {
+    const c = keyColor(kl.k), y = Y(kl.v);
+    let x = 6;
+    while (placed.some(p => Math.abs(p.y - y) < 12 && p.x === x)) x += 96;
+    placed.push({x, y});
+    g += `<line x1="0" x2="${W - padR}" y1="${y}" y2="${y}" stroke="${c}" stroke-dasharray="2 4" stroke-width="1.2" opacity=".85"/>`;
+    g += `<text x="${x}" y="${y - 4}" fill="${c}" font-family="JetBrains Mono" font-size="10.5" font-weight="600">${kl.k} ${kl.v.toFixed(2)}</text>`;
+  }
   g += `<path d="${bars.map((b, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(b.vwap).toFixed(1)).join(" ")}" fill="none" stroke="${css("--vwap")}" stroke-width="1.5"/>`;
   for (const lv of levels) {
     g += `<line x1="0" x2="${W - padR}" y1="${Y(lv.v)}" y2="${Y(lv.v)}" stroke="${lv.c}" stroke-dasharray="6 4" stroke-width="1.2"/>`;
@@ -634,7 +665,9 @@ function drawCandles() {
   for (let i = 0; i < bars.length; i += step) g += `<text x="${X(i)}" y="${H - 6}" text-anchor="${i === 0 ? "start" : "middle"}" fill="${dim}" font-family="JetBrains Mono" font-size="11">${bars[i].t}</text>`;
   svg.innerHTML = g;
   const chg = (last.c / bars[0].o - 1) * 100;
-  $("ohlc").innerHTML = `<span class="sym">${esc(chartData.symbol)} · 5</span><span>O<span class="${cls(chg)}"> ${px(bars[0].o)}</span></span><span>H<span class="${cls(chg)}"> ${px(Math.max(...bars.map(b => b.h)))}</span></span><span>L<span class="${cls(chg)}"> ${px(Math.min(...bars.map(b => b.l)))}</span></span><span>C<span class="${cls(chg)}"> ${px(last.c)} ${pct(chg)}</span></span><span>VWAP <span style="color:var(--vwap)">${px(last.vwap)}</span></span>`;
+  $("chart-live").hidden = !chartData.live;
+  $("ohlc").innerHTML = `<span class="sym">${esc(chartData.symbol)} · ${chartData.minutes || chartTf}</span><span>O<span class="${cls(chg)}"> ${px(bars[0].o)}</span></span><span>H<span class="${cls(chg)}"> ${px(Math.max(...bars.map(b => b.h)))}</span></span><span>L<span class="${cls(chg)}"> ${px(Math.min(...bars.map(b => b.l)))}</span></span><span>C<span class="${cls(chg)}"> ${px(last.c)} ${pct(chg)}</span></span><span>VWAP <span style="color:var(--vwap)">${px(last.vwap)}</span></span>` +
+    (offChart.length ? `<span class="dim">off-chart: ${offChart.map(x => `${x.k} ${x.v.toFixed(2)}`).join(" · ")}</span>` : "");
 }
 
 /* ---------- load ---------- */
@@ -642,8 +675,9 @@ function render(s) {
   S = s;
   renderTop(s); renderTiles(s); renderBalance(s); renderPerf(s); renderCalendar(s); renderTables(s); renderLearning(s);
   const sel = $("chart-sym"), choices = symbolChoices(s);
+  if (chartSym && !choices.includes(chartSym)) choices.push(chartSym);
   sel.innerHTML = choices.map(c => `<option>${esc(c)}</option>`).join("");
-  if (!chartSym || !choices.includes(chartSym)) selectSymbol(choices[0]); else { sel.value = chartSym; selectSymbol(chartSym); }
+  if (!chartSym) selectSymbol(choices[0]); else sel.value = chartSym;
 }
 async function load() {
   try {
@@ -668,7 +702,12 @@ const shiftMonth = (d) => { const [y, m] = calMonth.split("-").map(Number); cons
 $("cal-prev").onclick = () => shiftMonth(-1); $("cal-next").onclick = () => shiftMonth(1);
 let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (S) { renderBalance(S); drawCandles(); } }, 120); });
 tick(); setInterval(tick, 1000);
-load(); setInterval(load, 30000);
+document.querySelectorAll("#tf-seg button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#tf-seg button").forEach(x => x.classList.toggle("on", x === b));
+  chartTf = +b.dataset.tf; if (chartSym) selectSymbol(chartSym);
+});
+load(); setInterval(load, 10000);
+setInterval(() => { if (chartSym && !document.hidden) selectSymbol(chartSym); }, 15000);
 </script>
 </body>
 </html>
