@@ -1,0 +1,15 @@
+[Unit]
+Description=Bull v3 engine (Alpaca paper day trader)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=cj
+WorkingDirectory=/home/cj/bull
+ExecStart=/home/cj/bull/.venv/bin/python -m bull engine
+Restart=always
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bull</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #14171c; --muted: #646c78; --line: #e3e6eb;
+  --up: #0f8a4f; --down: #c8352b; --accent: #2457d6; --spy: #9aa3af; --warn: #b7791f;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0d0f12; --panel: #15181d; --ink: #e8ebef; --muted: #8b939e; --line: #242931;
+          --up: #3ccf86; --down: #ff6b5e; --accent: #6e9bff; --spy: #6b7380; --warn: #e3a948; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+       font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { padding: 20px clamp(16px, 2.5vw, 40px) 40px; display: grid; gap: 16px; }
+header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 22px; letter-spacing: .3px; }
+h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.pill { padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); }
+.pill.trading { color: var(--up); border-color: currentColor; }
+.pill.halted, .pill.down { color: var(--down); border-color: currentColor; }
+.pill.idle, .pill.waiting { color: var(--warn); border-color: currentColor; }
+.muted { color: var(--muted); }
+.updated { margin-left: auto; font-size: 13px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-width: 0; }
+.big { font-size: clamp(22px, 2.2vw, 32px); font-weight: 650; font-variant-numeric: tabular-nums; }
+.sub { font-size: 13px; color: var(--muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.up { color: var(--up); } .down { color: var(--down); }
+.row2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+.chart-head { display: flex; align-items: center; gap: 12px; }
+.chart-head h2 { margin: 0; }
+.tabs { margin-left: auto; display: flex; gap: 4px; }
+.tabs button { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 6px; padding: 3px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.tabs button.on { color: var(--ink); border-color: var(--ink); }
+.legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+svg { width: 100%; height: 280px; display: block; margin-top: 8px; }
+.list { display: grid; gap: 8px; }
+.trade { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); }
+.trade:first-child { border-top: 0; }
+.sym { font-weight: 650; }
+.pnl { font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; }
+.detail { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 7px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; border-top: 0; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+.scroll { overflow-x: auto; }
+.yes { color: var(--up); font-weight: 600; } .no { color: var(--muted); }
+details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.ev { font-size: 13px; padding: 4px 0; border-top: 1px solid var(--line); font-family: ui-monospace, Consolas, monospace; }
+.empty { color: var(--muted); padding: 6px 0; }
+.err { color: var(--down); }
+@media (max-width: 900px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .row2 { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Bull</h1>
+    <span id="pill" class="pill">…</span>
+    <span id="msg" class="muted"></span>
+    <span id="updated" class="updated muted"></span>
+  </header>
+
+  <section class="kpis">
+    <div class="card"><h2>Equity</h2><div id="equity" class="big">—</div><div id="equity-sub" class="sub"></div></div>
+    <div class="card"><h2>Today</h2><div id="today" class="big">—</div><div id="today-sub" class="sub"></div></div>
+    <div class="card"><h2>Since start</h2><div id="since" class="big">—</div><div id="since-sub" class="sub"></div></div>
+    <div class="card"><h2>Win rate</h2><div id="win" class="big">—</div><div id="win-sub" class="sub"></div></div>
+  </section>
+
+  <section class="row2">
+    <div class="card">
+      <div class="chart-head">
+        <h2>Performance</h2>
+        <div class="tabs"><button data-view="all" class="on">Since start</button><button data-view="today">Today</button></div>
+      </div>
+      <svg id="chart" preserveAspectRatio="none"></svg>
+      <div id="legend" class="legend"></div>
+    </div>
+    <div class="card">
+      <h2>Today's trades</h2>
+      <div id="today-trades" class="list"></div>
+      <h2 style="margin-top:16px">Open now</h2>
+      <div id="positions" class="list"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Strategy</h2>
+    <div id="strategy"></div>
+    <div class="scroll"><table id="bake"></table></div>
+  </section>
+
+  <section class="card">
+    <h2>All trades</h2>
+    <div class="scroll"><table id="history"></table></div>
+  </section>
+
+  <section class="card">
+    <details><summary>Engine activity</summary><div id="events"></div></details>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (n, sign) => n == null ? "—" : (sign && n > 0 ? "+" : n < 0 ? "−" : "") + "$" + Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const pct = (n) => n == null ? "—" : (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(2) + "%";
+const cls = (n) => n > 0 ? "up" : n < 0 ? "down" : "";
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const hm = (iso) => iso ? iso.slice(11, 16) : "";
+const verb = (t) => t.side === "long" ? "Bought" : "Shorted";
+const reasonText = {target: "hit target", stop: "stopped out", close: "closed at end of day", open: "still open"};
+let view = "all", last = null;
+
+function line(points, color, w, h, lo, hi, dashed) {
+  if (points.length < 2) return "";
+  const xs = (i) => (i / (points.length - 1)) * w;
+  const ys = (v) => h - ((v - lo) / (hi - lo || 1)) * h;
+  const d = points.map((v, i) => (i ? "L" : "M") + xs(i).toFixed(1) + " " + ys(v).toFixed(1)).join(" ");
+  return `<path d="${d}" fill="none" stroke="${color}" stroke-width="2.2" vector-effect="non-scaling-stroke" ${dashed ? 'stroke-dasharray="5 4"' : ""}/>`;
+}
+
+function drawChart(s) {
+  const svg = $("chart"), w = 1000, h = 280;
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  const css = getComputedStyle(document.documentElement);
+  const accent = css.getPropertyValue("--accent"), spyc = css.getPropertyValue("--spy"), grid = css.getPropertyValue("--line");
+  let series = [], legend = "";
+  if (view === "all") {
+    const bull = s.curve.map(p => p.bull_pct), spy = s.curve.map(p => p.spy_pct ?? 0);
+    const all = bull.concat(spy, [0]);
+    const lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * 0.1 || 0.5;
+    const L = lo - pad, H = hi + pad, zero = h - ((0 - L) / (H - L)) * h;
+    series = `<line x1="0" x2="${w}" y1="${zero}" y2="${zero}" stroke="${grid}" stroke-width="1" vector-effect="non-scaling-stroke"/>`
+      + line(spy, spyc, w, h, L, H, true) + line(bull, accent, w, h, L, H);
+    legend = `<span><i style="background:${accent}"></i>Bull ${pct(bull.at(-1))}</span><span><i style="background:${spyc}"></i>SPY ${pct(spy.at(-1))}</span><span>since ${esc(s.account.start_date)}</span>`;
+    if (s.curve.length < 2) legend += `<span>· chart fills in after the first full day</span>`;
+  } else {
+    const eq = s.today_curve.map(p => p.equity);
+    if (eq.length) {
+      const lo = Math.min(...eq), hi = Math.max(...eq), pad = (hi - lo) * 0.1 || 5;
+      series = line(eq, accent, w, h, lo - pad, hi + pad);
+      legend = `<span><i style="background:${accent}"></i>Equity today, ${esc(s.today_curve[0].t)}–${esc(s.today_curve.at(-1).t)}</span>`;
+    } else legend = "<span>No intraday data yet</span>";
+  }
+  svg.innerHTML = series;
+  $("legend").innerHTML = legend;
+}
+
+function tradeRow(t) {
+  const exitBit = t.exit != null ? ` → ${reasonText[t.reason]} at $${t.exit.toFixed(2)}` : ` · stop $${t.stop?.toFixed(2) ?? "—"} · target $${t.target?.toFixed(2) ?? "—"}`;
+  return `<div class="trade"><span class="sym">${esc(t.symbol)}</span><span class="muted">${esc(t.strategy)}</span>
+    <span class="pnl ${cls(t.pnl)}">${t.pnl == null ? "open" : money(t.pnl, true)}</span>
+    <span class="detail">${hm(t.t_entry)} ${verb(t)} ${t.qty} at $${t.entry.toFixed(2)}${exitBit}</span></div>`;
+}
+
+function render(s) {
+  last = s;
+  const e = s.engine, a = s.account;
+  let state = e.state || "unknown", msg = e.message || "";
+  if (e.stale && state !== "closed") { state = "down"; msg = "Engine not responding."; }
+  const labels = {trading: "Trading", closed: "Market closed", waiting: "Waiting", done: "Flat for the day", halted: "Stopped for today", idle: "Not trading", down: "Engine down", unknown: "Unknown"};
+  $("pill").className = "pill " + state; $("pill").textContent = labels[state] || state;
+  $("msg").textContent = msg;
+  $("updated").textContent = "Updated " + s.now.slice(11, 16) + " ET";
+
+  $("equity").textContent = money(a.equity);
+  $("equity-sub").textContent = `Started at ${money(a.start_equity)} · cash ${money(a.cash)}`;
+  $("today").innerHTML = `<span class="${cls(a.day_pnl)}">${money(a.day_pnl, true)}</span>`;
+  $("today-sub").textContent = `${pct(a.day_pct)} · ${s.today_totals.trades} closed trade${s.today_totals.trades === 1 ? "" : "s"}`;
+  $("since").innerHTML = `<span class="${cls(a.since_start_pct)}">${pct(a.since_start_pct)}</span>`;
+  $("since-sub").textContent = `SPY ${pct(a.spy_since_start_pct)} over the same days`;
+  $("win").textContent = s.totals.win_rate == null ? "—" : s.totals.win_rate + "%";
+  $("win-sub").textContent = `${s.totals.trades} trades · ${money(s.totals.net, true)} net`;
+
+  drawChart(s);
+  $("today-trades").innerHTML = s.today_trades.length ? s.today_trades.map(tradeRow).join("") : `<div class="empty">None yet today.</div>`;
+  $("positions").innerHTML = s.positions.length ? s.positions.map(p =>
+    `<div class="trade"><span class="sym">${esc(p.symbol)}</span><span class="muted">${p.side} ${p.qty} at $${p.entry.toFixed(2)}</span><span class="pnl ${cls(p.pnl)}">${money(p.pnl, true)}</span></div>`).join("")
+    : `<div class="empty">Nothing open.</div>`;
+
+  const strat = (e.strategies || []).map(v => `<b>${esc(v.label)}</b> <span class="muted">(${esc(v.name)})</span>`).join(", ");
+  const b = s.bakeoff;
+  $("strategy").innerHTML = (strat ? `Running ${strat} — ${esc(e.strategies_why)}.` : `Not trading — ${esc(e.strategies_why || "no strategy selected")}.`)
+    + (b ? ` <span class="muted">Backtest ${esc(b.period[0])} → ${esc(b.period[1])}, ${b.days} days, after fees and slippage. SPY did ${pct(b.spy_return_pct)}.</span>` : "");
+  $("bake").innerHTML = b ? `<tr><th>Variant</th><th>Method</th><th>Trades</th><th>Win %</th><th>Net</th><th>Return</th><th>Profit factor</th><th>Max drawdown</th><th>Passed</th></tr>`
+    + b.results.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.strategy.replace(/_/g, " "))}</td><td>${r.trades}</td><td>${r.win_rate}</td>
+      <td class="${cls(r.net_pnl)}">${money(r.net_pnl, true)}</td><td>${pct(r.return_pct)}</td><td>${r.profit_factor}</td><td>${r.max_drawdown_pct}%</td>
+      <td class="${r.passed ? "yes" : "no"}">${r.passed ? "yes" : "no"}</td></tr>`).join("") : "";
+
+  $("history").innerHTML = s.trades.length ? `<tr><th>When</th><th>Trade</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Result</th><th>P&amp;L</th></tr>`
+    + s.trades.map(t => `<tr><td>${esc(t.t_entry.slice(5, 10))} ${hm(t.t_entry)}</td><td>${verb(t)} ${esc(t.symbol)} · ${esc(t.strategy)}</td><td>${t.qty}</td>
+      <td>$${t.entry.toFixed(2)}</td><td>${t.exit == null ? "—" : "$" + t.exit.toFixed(2)}</td><td>${reasonText[t.reason]}</td>
+      <td class="${cls(t.pnl)}">${t.pnl == null ? "—" : money(t.pnl, true)}</td></tr>`).join("")
+    : `<tr><td class="empty">No trades yet.</td></tr>`;
+
+  $("events").innerHTML = s.events.map(ev => {
+    const {t, kind, ...rest} = ev;
+    return `<div class="ev">${esc(t.slice(5, 16).replace("T", " "))} ${esc(kind)} ${esc(Object.entries(rest).map(([k, v]) => k + "=" + (Array.isArray(v) ? v.join(",") : v)).join(" "))}</div>`;
+  }).join("") || `<div class="empty">No activity yet.</div>`;
+}
+
+async function load() {
+  try {
+    const r = await fetch("api/state", {cache: "no-store"});
+    const s = await r.json();
+    if (!r.ok) throw new Error(s.error || r.status);
+    render(s);
+  } catch (err) {
+    $("pill").className = "pill down"; $("pill").textContent = "Can't reach Alpaca";
+    $("msg").innerHTML = `<span class="err">${esc(err.message)}</span>`;
+  }
+}
+document.querySelectorAll(".tabs button").forEach(btn => btn.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === btn));
+  view = btn.dataset.view; if (last) drawChart(last);
+});
+load(); setInterval(load, 30000);
+</script>
+</body>
+</html>

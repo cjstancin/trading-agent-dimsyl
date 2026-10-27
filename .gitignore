@@ -42,3 +42,8 @@ Signals/trade-log.md
 
 # Phase 0 generated artifacts (regenerable; the committed deliverable is backtest/phase0/PHASE0_RESULTS.md)
 backtest/phase0/out/
+
+# Bull v3 runtime (status, events, bake-off results, data cache, logs)
+runtime/
+.venv/
+__pycache__/

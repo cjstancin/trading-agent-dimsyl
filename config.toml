@@ -1,0 +1,85 @@
+# Bull v3 — every tunable knob. Keys live in .env, never here.
+
+[account]
+paper = true                 # hard requirement; the engine refuses to start otherwise
+start_equity = 5000
+start_date = "2026-10-27"    # site measures "since start" from here
+
+[risk]
+risk_per_trade_pct = 1.0     # loss if the stop is hit, as % of equity
+max_position_pct = 100       # notional cap per position, % of equity
+max_positions = 3
+max_trades_per_day = 6
+daily_loss_limit_pct = 2.0   # no new entries for the day past this drawdown
+no_new_entries_after = "15:30"
+flatten_at = "15:50"         # everything closed, every day
+
+[costs]                      # used by the backtest; Alpaca charges no commission
+slippage_bps = 5             # per side
+sec_fee_per_million = 20.60  # on sells, effective 2026-04-04
+taf_per_share = 0.000195     # on sells, 2026
+taf_max = 9.79
+
+[watchlist]
+size = 30                    # free IEX feed streams at most 30 symbols
+gappers = 10
+min_gap_pct = 2.0
+min_price = 5.0
+min_dollar_volume = 50_000_000
+
+[strategies]
+# "bakeoff" = trade whatever passed the latest bake-off. Or list variant names.
+enabled = "bakeoff"
+# Paper only: if nothing passes, trade the best-ranked variant anyway to gather forward evidence.
+paper_trade_best_if_none_pass = true
+
+[bakeoff]
+days = 60
+min_trades = 30
+min_profit_factor = 1.2
+require_both_halves = true   # profitable in the first AND second half of the window
+
+[[variant]]
+name = "vwap_long_2r"
+strategy = "vwap_pullback"
+params = { side = "long", target_r = 2.0 }
+
+[[variant]]
+name = "vwap_both_2r"
+strategy = "vwap_pullback"
+params = { side = "both", target_r = 2.0 }
+
+[[variant]]
+name = "vwap_long_1.5r"
+strategy = "vwap_pullback"
+params = { side = "long", target_r = 1.5 }
+
+[[variant]]
+name = "orb15_long_2r"
+strategy = "orb"
+params = { side = "long", or_minutes = 15, target_r = 2.0 }
+
+[[variant]]
+name = "orb15_both_2r"
+strategy = "orb"
+params = { side = "both", or_minutes = 15, target_r = 2.0 }
+
+[[variant]]
+name = "orb5_long_2r"
+strategy = "orb"
+params = { side = "long", or_minutes = 5, target_r = 2.0 }
+
+[[variant]]
+name = "gap_long_2r"
+strategy = "gap_and_go"
+params = { side = "long", min_gap_pct = 3.0, target_r = 2.0 }
+
+[[variant]]
+name = "gap_both_2r"
+strategy = "gap_and_go"
+params = { side = "both", min_gap_pct = 3.0, target_r = 2.0 }
+
+[[variant]]
+name = "gap_long_1.5r"
+strategy = "gap_and_go"
+params = { side = "long", min_gap_pct = 3.0, target_r = 1.5 }
