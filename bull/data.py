@@ -182,12 +182,16 @@ def opening_volumes(c, symbol: str, start: date, end: date, feed=DataFeed.SIP) -
     path = runtime_dir() / "cache" / f"or-vol-{feed.value}" / f"{symbol}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     cached = {}
+    fetch_from = start
     if path.exists():
         blob = json.loads(path.read_text(encoding="utf-8"))
         if blob["start"] <= start.isoformat() and blob["end"] >= end.isoformat():
             return {date.fromisoformat(d): v for d, v in blob["vols"].items()}
         cached = blob["vols"]
-    bars = _fetch(c, [symbol], TimeFrame(5, TimeFrameUnit.Minute), datetime.combine(start, time(9, 30), ET),
+        if blob["start"] <= start.isoformat():  # only the newer days are missing: fetch the tail
+            fetch_from = date.fromisoformat(blob["end"]) + timedelta(days=1)
+            start = date.fromisoformat(blob["start"])
+    bars = _fetch(c, [symbol], TimeFrame(5, TimeFrameUnit.Minute), datetime.combine(fetch_from, time(9, 30), ET),
                   min(datetime.combine(end, time(10, 0), ET), datetime.now(timezone.utc) - timedelta(minutes=16)),
                   feed).get(symbol, [])
     vols = {**cached, **{b.t.date().isoformat(): b.v for b in bars if b.t.time() == OPEN}}

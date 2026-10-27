@@ -117,9 +117,11 @@ class State:
             bake_view = {
                 "period": bake["period"], "days": bake["days"], "spy_return_pct": bake["spy_return_pct"],
                 "generated_at": bake["generated_at"], "passed": bake["passed"],
-                "results": [{"name": n, **{k: bake["results"][n][k] for k in (
+                "rules": bake.get("rules"),
+                "results": [{"name": n, **{k: bake["results"][n].get(k) for k in (
                     "strategy", "trades", "win_rate", "net_pnl", "return_pct", "profit_factor",
-                    "max_drawdown_pct", "passed")}} for n in bake["ranking"]],
+                    "max_drawdown_pct", "passed", "t_stat", "positive_years", "counted_years")}}
+                            for n in bake["ranking"]],
             }
 
         tape = ["SPY", "QQQ", "IWM", "DIA"]
