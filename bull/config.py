@@ -64,6 +64,10 @@ def variants(cfg: dict) -> list[dict]:
     return cfg.get("variant", [])
 
 
+def shadow_variants(cfg: dict) -> list[dict]:
+    return cfg.get("shadow", [])
+
+
 def universe() -> list[str]:
     lines = (ROOT / "universe.txt").read_text(encoding="utf-8").splitlines()
     return [s.strip().upper() for s in lines if s.strip() and not s.startswith("#")]

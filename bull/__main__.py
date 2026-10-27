@@ -1,4 +1,4 @@
-"""python -m bull engine | site | bakeoff [--days N] | check"""
+"""python -m bull engine | site | bakeoff [--days N] | experiment [--days N] | check"""
 from __future__ import annotations
 
 import argparse
@@ -29,6 +29,8 @@ def main() -> None:
     s.add_argument("--port", type=int, default=4326)
     b = sub.add_parser("bakeoff")
     b.add_argument("--days", type=int)
+    x = sub.add_parser("experiment")
+    x.add_argument("--days", type=int, default=1000)
     sub.add_parser("check")
     args = ap.parse_args()
 
@@ -44,6 +46,9 @@ def main() -> None:
         serve(cfg, port=args.port)
     elif args.cmd == "bakeoff":
         from .bakeoff import print_table, run
+        print_table(run(cfg, args.days))
+    elif args.cmd == "experiment":
+        from .experiment import print_table, run
         print_table(run(cfg, args.days))
     elif args.cmd == "check":
         from . import broker

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import time
 
+from .features import opening_bars, rvol
 from .models import DayContext, Signal
 
 MIN_STOP_PCT = 0.10  # stops tighter than this are noise, not risk control
@@ -36,17 +37,22 @@ def _signal(name, ctx, k, side, stop, p, why) -> Signal | None:
 
 
 def _range(ctx: DayContext, n: int) -> tuple[float, float]:
+    """High/low of the first n minutes by clock time."""
     key = ("range", n)
     if key not in ctx.memo:
-        first = ctx.bars[:n]
+        first = opening_bars(ctx, n) or ctx.bars[:1]
         ctx.memo[key] = (max(b.h for b in first), min(b.l for b in first))
     return ctx.memo[key]
+
+
+def _after_open(t, n: int) -> bool:
+    return t.hour * 60 + t.minute >= 9 * 60 + 30 + n
 
 
 def orb(name: str, ctx: DayContext, k: int, p: dict) -> Signal | None:
     """Opening-range breakout: first close outside the first N minutes' range."""
     n = p.get("or_minutes", 15)
-    if k < n or not _in_window(ctx.bars[k].t, "09:30", p.get("last_entry", "11:30")):
+    if k < 1 or not _after_open(ctx.bars[k].t, n) or not _in_window(ctx.bars[k].t, "09:30", p.get("last_entry", "11:30")):
         return None
     hi, lo = _range(ctx, n)
     bar, prev = ctx.bars[k], ctx.bars[k - 1]
@@ -89,21 +95,36 @@ def vwap_pullback(name: str, ctx: DayContext, k: int, p: dict) -> Signal | None:
 
 
 def gap_and_go(name: str, ctx: DayContext, k: int, p: dict) -> Signal | None:
-    """Big overnight gap, then a break of the first few minutes' range in the gap's direction."""
+    """Big overnight gap, then a break of the first few minutes' range in the gap's direction.
+
+    Optional filters (each off unless set): last_entry (time cutoff), min_gap_pct, min_rvol
+    (opening volume vs its 14-session average) and stop_atr (stop = range edge, capped at
+    stop_atr x ATR14 instead of the flat percentage cap).
+    """
     n = p.get("range_minutes", 5)
-    if not ctx.prev_close or k < n or not _in_window(ctx.bars[k].t, "09:30", p.get("last_entry", "10:30")):
+    if not ctx.prev_close or k < 1 or not _after_open(ctx.bars[k].t, n)             or not _in_window(ctx.bars[k].t, "09:30", p.get("last_entry", "10:30")):
         return None
     gap = (ctx.bars[0].o / ctx.prev_close - 1) * 100
     min_gap = p.get("min_gap_pct", 3.0)
+    if abs(gap) < min_gap:
+        return None
+    if p.get("min_rvol"):
+        rv = rvol(ctx, n)
+        if rv is None or rv < p["min_rvol"]:
+            return None
     hi, lo = _range(ctx, n)
     bar, prev = ctx.bars[k], ctx.bars[k - 1]
     max_stop = p.get("max_stop_pct", 3.0)
+    atr = ctx.extra.get("atr")
+    if p.get("stop_atr") and not atr:
+        return None
+    cap = p["stop_atr"] * atr if p.get("stop_atr") else bar.c * max_stop / 100 * 0.75
     for side in _sides(p):
         if side == "long" and gap >= min_gap and bar.c > hi and prev.c <= hi and bar.c > ctx.vw[k]:
-            stop = max(lo, bar.c * (1 - max_stop / 100 * 0.75))
+            stop = max(lo, bar.c - cap)
             return _signal(name, ctx, k, "long", stop, {**p, "max_stop_pct": max_stop}, f"gapped +{gap:.1f}% and broke {hi:.2f}")
         if side == "short" and gap <= -min_gap and bar.c < lo and prev.c >= lo and bar.c < ctx.vw[k]:
-            stop = min(hi, bar.c * (1 + max_stop / 100 * 0.75))
+            stop = min(hi, bar.c + cap)
             return _signal(name, ctx, k, "short", stop, {**p, "max_stop_pct": max_stop}, f"gapped {gap:.1f}% and broke {lo:.2f}")
     return None
 
