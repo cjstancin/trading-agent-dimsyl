@@ -193,3 +193,12 @@ def opening_volumes(c, symbol: str, start: date, end: date, feed=DataFeed.SIP) -
     vols = {**cached, **{b.t.date().isoformat(): b.v for b in bars if b.t.time() == OPEN}}
     path.write_text(json.dumps({"start": start.isoformat(), "end": end.isoformat(), "vols": vols}), encoding="utf-8")
     return {date.fromisoformat(d): v for d, v in vols.items()}
+
+
+def opening_volumes_multi(c, symbols: list[str], start: date, end: date, feed=DataFeed.IEX) -> dict[str, dict[date, float]]:
+    """Live: opening-range (09:30 five-minute bar) volume per session for many symbols in one request."""
+    if not symbols:
+        return {}
+    bars = _fetch(c, symbols, TimeFrame(5, TimeFrameUnit.Minute), datetime.combine(start, time(9, 30), ET),
+                  datetime.combine(end, time(10, 0), ET), feed)
+    return {s: {b.t.date(): b.v for b in rows if b.t.time() == OPEN} for s, rows in bars.items()}

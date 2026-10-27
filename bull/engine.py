@@ -13,11 +13,13 @@ from datetime import date, datetime, timedelta
 
 from alpaca.trading.stream import TradingStream
 
-from . import broker, data, notify
-from .config import ET, alpaca_keys, hhmm, runtime_dir, universe, variants
+from . import broker, data, journal, notify
+from .config import ET, alpaca_keys, hhmm, runtime_dir, shadow_variants, universe, variants
+from .features import atr14, entry_features, or_volume_avg
 from .models import DayContext
 from .risk import entry_block, size_position
 from .strategies import LABELS, evaluate
+from .trades import round_trips
 from .watchlist import pick
 
 log = logging.getLogger("bull.engine")
@@ -44,6 +46,17 @@ def active_variants(cfg: dict) -> tuple[list[dict], str]:
     return [], "nothing passed the bake-off"
 
 
+def read_events(day: date) -> list[dict]:
+    prefix = '{"t": "' + day.isoformat()
+    out = []
+    try:
+        with open(runtime_dir() / "events.jsonl", encoding="utf-8") as f:
+            out = [json.loads(line) for line in f if line.startswith(prefix)]
+    except (OSError, ValueError):
+        pass
+    return out
+
+
 def append_event(kind: str, **fields) -> None:
     row = {"t": datetime.now(ET).isoformat(timespec="seconds"), "kind": kind, **fields}
     with open(runtime_dir() / "events.jsonl", "a", encoding="utf-8") as f:
@@ -65,6 +78,11 @@ class Engine:
         self.loss_pinged = False
         self.failures = 0
         self.status: dict = {}
+        self.extra: dict[str, dict] = {}
+        self.spy_prev: float | None = None
+        self.shadow_vs = shadow_variants(cfg)
+        self.shadows: list[dict] = []
+        self.journaled = False
 
     # ---- status the site reads -------------------------------------------------------------
     def write_status(self, state: str, message: str, **extra) -> None:
@@ -86,7 +104,7 @@ class Engine:
     def start_day(self, today: date) -> bool:
         """Pick the watchlist once the first minute bar exists. Deterministic, so a restart re-picks the same list."""
         syms = universe()
-        daily = data.daily_bars(self.dc, syms, today - timedelta(days=10), today)
+        daily = data.daily_bars(self.dc, syms, today - timedelta(days=40), today)
         first = data.today_minute_bars(self.dc, syms, today)
         stats = {}
         for s in syms:
@@ -100,7 +118,18 @@ class Engine:
         self.day = today
         self.watch = pick(stats, self.cfg["watchlist"])
         self.prev_close = {s: stats[s]["prev_close"] for s in self.watch}
+        spy_prev = [b for b in daily.get("SPY", []) if b.t.date() < today]
+        self.spy_prev = spy_prev[-1].c if spy_prev else None
+        try:  # facts from before today for the filters and the journal; a missing one just disables a filter
+            vols = data.opening_volumes_multi(self.dc, self.watch, today - timedelta(days=30), today - timedelta(days=1))
+        except Exception as exc:
+            log.warning("opening volumes unavailable: %s", exc)
+            vols = {}
+        self.extra = {s: {"atr": atr14(daily.get(s, []), today), "or_vol_avg": or_volume_avg(vols.get(s, {}), today)}
+                      for s in self.watch}
         self.active, self.active_why = active_variants(self.cfg)
+        self.shadows = journal.load_shadows(today)
+        self.journaled = today.isoformat() in journal.journaled_days()
         self.last_eval.clear()
         self.flattened = False
         self.loss_pinged = False
@@ -116,6 +145,8 @@ class Engine:
         clock = self.tc.get_clock()
         now = datetime.now(ET)
         if not clock.is_open:
+            if self.day and not self.journaled:  # engine missed the 15:52 window; journal the day now
+                self.close_journal(self.day, self.tc.get_account())
             self.day = None
             nxt = clock.next_open.astimezone(ET)
             self.write_status("closed", f"Market closed. Next open {nxt:%a %b %d %H:%M} ET.")
@@ -136,6 +167,8 @@ class Engine:
                 broker.flatten(self.tc)
                 append_event("flatten", symbols=[p.symbol for p in positions])
             self.flattened = True
+            if not self.journaled and now.time() >= hhmm("15:52"):
+                self.close_journal(today, account)
             left = self.tc.get_all_positions()
             if left and now.time() >= hhmm("15:57"):
                 notify.ping("flatten", "positions still open near the close",
@@ -159,8 +192,10 @@ class Engine:
                         "default", every_s=86_400)
 
         held = {p.symbol for p in positions}
-        if self.active and self.watch:
-            bars = data.today_minute_bars(self.dc, self.watch, today)
+        if (self.active or self.shadow_vs) and self.watch:
+            bars = data.today_minute_bars(self.dc, sorted(set(self.watch) | {"SPY"}), today)
+            spy = bars.get("SPY") or []
+            spy_chg = (spy[-1].c / self.spy_prev - 1) * 100 if spy and self.spy_prev else None
             for sym in self.watch:
                 done = [b for b in bars.get(sym, []) if b.t + timedelta(minutes=1) <= now]
                 if len(done) < 2 or now - done[-1].t > timedelta(minutes=3):
@@ -168,11 +203,14 @@ class Engine:
                 if self.last_eval.get(sym) == done[-1].t:
                     continue
                 self.last_eval[sym] = done[-1].t
-                ctx = DayContext(sym, self.prev_close.get(sym), done)
+                ctx = DayContext(sym, self.prev_close.get(sym), done, extra=self.extra.get(sym, {}))
+                k = len(done) - 1
+                self.record_shadows(ctx, k, spy_chg)
                 for v in self.active:
-                    sig = evaluate(v, ctx, len(done) - 1)
+                    sig = evaluate(v, ctx, k)
                     if not sig:
                         continue
+                    sig.features = entry_features(ctx, k, sig.stop, spy_chg)
                     block = entry_block(state, now, sig.variant, sym, risk)
                     if not block and sym in held:
                         block = "already holding this symbol"
@@ -194,7 +232,7 @@ class Engine:
                     state.trades_today += 1
                     state.taken.add((sig.variant, sym))
                     append_event("entry", variant=sig.variant, symbol=sym, side=sig.side, qty=qty,
-                                 ref=sig.ref, stop=sig.stop, target=sig.target, why=sig.why)
+                                 ref=sig.ref, stop=sig.stop, target=sig.target, why=sig.why, features=sig.features)
                     log.info("ENTRY %s %s %s x%d stop %.2f target %.2f", sig.variant, sig.side, sym, qty,
                              sig.stop, sig.target)
 
@@ -207,6 +245,43 @@ class Engine:
             st, msg = "trading", f"Watching {len(self.watch)} stocks."
         self.write_status(st, msg, trades_today=state.trades_today, **self._numbers(account, positions))
         return max(5.0, 65 - datetime.now(ET).second)  # just after the next minute bar closes
+
+    # ---- shadow tracking + journal -----------------------------------------------------------
+    def record_shadows(self, ctx: DayContext, k: int, spy_chg: float | None) -> None:
+        """Note what each pre-registered filter variant WOULD do. Never trades; resolved at the close."""
+        seen = {(s["variant"], s["symbol"]) for s in self.shadows}
+        added = False
+        for v in self.shadow_vs:
+            if (v["name"], ctx.symbol) in seen:
+                continue
+            sig = evaluate(v, ctx, k)
+            if sig:
+                self.shadows.append({"variant": sig.variant, "symbol": sig.symbol, "side": sig.side,
+                                     "t": sig.t.isoformat(), "ref": sig.ref, "stop": sig.stop, "target": sig.target,
+                                     "why": sig.why, "features": entry_features(ctx, k, sig.stop, spy_chg)})
+                added = True
+        if added:
+            journal.save_shadows(ctx.bars[0].t.date(), self.shadows)
+
+    def close_journal(self, today: date, account) -> None:
+        try:
+            vmap = {v["name"]: v["strategy"] for v in variants(self.cfg) + self.shadow_vs}
+            trips = [t for t in round_trips(broker.todays_orders(self.tc, today), vmap)
+                     if t["t_entry"].startswith(today.isoformat())]
+            entries = [e for e in read_events(today) if e.get("kind") == "entry"]
+            syms = sorted({t["symbol"] for t in trips} | {s["symbol"] for s in self.shadows} | {"SPY"})
+            bars = data.today_minute_bars(self.dc, syms, today)
+            spy = bars.get("SPY") or []
+            spy_day = (spy[-1].c / self.spy_prev - 1) * 100 if spy and self.spy_prev else None
+            n = journal.close_day(today, trips, entries, self.shadows, bars, spy_day,
+                                  float(account.last_equity or account.equity), self.cfg)
+            journal.prune_events()
+            append_event("journal", rows=n, real=len(trips), shadow=len(self.shadows))
+            log.info("journaled %d rows for %s", n, today)
+        except Exception:
+            log.exception("journal close failed; will retry next tick")
+            return
+        self.journaled = True
 
     @staticmethod
     def _numbers(account, positions) -> dict:
