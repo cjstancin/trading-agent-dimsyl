@@ -14,11 +14,12 @@ from alpaca.trading.enums import QueryOrderStatus
 from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
 
 from . import broker, data, journal
-from .config import ET, ROOT, runtime_dir, variants
+from .config import ET, ROOT, runtime_dir, universe, variants
 from .trades import round_trips, summarize
 
 log = logging.getLogger("bull.site")
-CACHE_S = 20
+CACHE_S = 10
+BAR_CACHE_S = 15
 
 
 class State:
@@ -29,7 +30,7 @@ class State:
         self.lock = threading.Lock()
         self.cached: tuple[float, dict] | None = None
         self.spy: tuple[float, list] | None = None
-        self.bar_cache: dict[str, tuple[float, dict]] = {}
+        self.bar_cache: dict[tuple[str, int], tuple[float, dict]] = {}
 
     def get(self) -> dict:
         with self.lock:
@@ -58,12 +59,12 @@ class State:
             self.spy = (time.time(), bars.get("SPY", []))
         return self.spy[1]
 
-    def bars(self, symbol: str) -> dict:
-        key = symbol.upper()
+    def bars(self, symbol: str, minutes: int = 5) -> dict:
+        key = (symbol.upper(), minutes)
         hit = self.bar_cache.get(key)
-        if hit and time.time() - hit[0] < 60:
+        if hit and time.time() - hit[0] < BAR_CACHE_S:
             return hit[1]
-        payload = data.session_bars(self.dc, key)
+        payload = data.session_bars(self.dc, key[0], minutes)
         self.bar_cache[key] = (time.time(), payload)
         return payload
 
@@ -125,11 +126,15 @@ class State:
             }
 
         tape = ["SPY", "QQQ", "IWM", "DIA"]
-        try:
-            quotes = data.snapshots(self.dc, sorted(set(tape + (status.get("watchlist") or []))))
+        watch = set(status.get("watchlist") or [])
+        held = {p.symbol for p in positions}
+        try:  # one request covers the tape and the whole universe scanner
+            quotes = data.snapshots(self.dc, sorted(set(tape) | set(universe()) | watch | held))
         except Exception as exc:  # quotes are decoration; never fail the page over them
             log.warning("snapshots failed: %s", exc)
             quotes = {}
+        scanner = [{"symbol": s, **q, "watch": s in watch, "held": s in held}
+                   for s, q in quotes.items() if s not in tape or s in universe()]
 
         exp = self._read_json("experiment.json")
         exp_view = None
@@ -152,6 +157,7 @@ class State:
             "shadow_order": [v["name"] for v in self.cfg.get("shadow", [])],
             "tape": [{"symbol": s, **quotes[s]} for s in tape if s in quotes],
             "watchlist": [{"symbol": s, **quotes.get(s, {})} for s in status.get("watchlist") or []],
+            "scanner": scanner,
             "engine": {**status, "stale": stale},
             "account": {
                 "equity": equity, "cash": float(account.cash), "start_equity": base_eq,
@@ -192,11 +198,13 @@ def serve(cfg: dict, host: str = "127.0.0.1", port: int = 4326) -> None:
         def do_GET(self):
             url = urlparse(self.path)
             if url.path == "/api/bars":
-                symbol = (parse_qs(url.query).get("symbol") or [""])[0]
-                if not symbol.isalnum() or len(symbol) > 6:
-                    return self._send(400, b'{"error":"bad symbol"}', "application/json")
+                q = parse_qs(url.query)
+                symbol = (q.get("symbol") or [""])[0]
+                tf = (q.get("tf") or ["5"])[0]
+                if not symbol.isalnum() or len(symbol) > 6 or tf not in ("1", "5"):
+                    return self._send(400, b'{"error":"bad request"}', "application/json")
                 try:
-                    return self._send(200, json.dumps(state.bars(symbol)).encode(), "application/json")
+                    return self._send(200, json.dumps(state.bars(symbol, int(tf))).encode(), "application/json")
                 except Exception as exc:
                     log.warning("bars %s failed: %s", symbol, exc)
                     return self._send(503, json.dumps({"error": str(exc)[:200]}).encode(), "application/json")

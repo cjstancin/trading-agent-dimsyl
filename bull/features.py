@@ -62,3 +62,35 @@ def entry_features(ctx: DayContext, k: int, stop: float, spy_chg: float | None) 
         "minute": bar.t.hour * 60 + bar.t.minute - (OPEN.hour * 60 + OPEN.minute),
         "spy_chg": round(spy_chg, 2) if spy_chg is not None else None,
     }
+
+
+def bucket_bars(bars: list[Bar], minutes: int) -> list[dict]:
+    """1-min bars -> N-minute candles for the chart, each carrying the running VWAP at its close."""
+    out, pv, vol, bucket = [], 0.0, 0.0, None
+    for b in bars:
+        pv += (b.h + b.l + b.c) / 3 * b.v
+        vol += b.v
+        key = b.t.replace(minute=b.t.minute - b.t.minute % minutes, second=0).strftime("%H:%M")
+        if bucket and bucket["t"] == key:
+            bucket.update(h=max(bucket["h"], b.h), l=min(bucket["l"], b.l), c=b.c, v=bucket["v"] + b.v)
+        else:
+            bucket = {"t": key, "o": b.o, "h": b.h, "l": b.l, "c": b.c, "v": b.v}
+            out.append(bucket)
+        bucket["vwap"] = round(pv / vol, 4) if vol else b.c
+    return out
+
+
+def key_levels(prev_day: Bar | None, premarket: list[Bar], session: list[Bar]) -> list[dict]:
+    """The levels day traders mark: prior day H/L/C, premarket H/L, 5- and 15-minute opening range."""
+    levels = []
+    if prev_day:
+        levels += [{"k": "PDH", "v": prev_day.h}, {"k": "PDL", "v": prev_day.l}, {"k": "PDC", "v": prev_day.c}]
+    if premarket:
+        levels += [{"k": "PMH", "v": max(b.h for b in premarket)}, {"k": "PML", "v": min(b.l for b in premarket)}]
+    for n in (5, 15):
+        cutoff = OPEN.hour * 60 + OPEN.minute + n
+        first = [b for b in session if b.t.hour * 60 + b.t.minute < cutoff]
+        last_needed = session and (session[-1].t.hour * 60 + session[-1].t.minute) >= cutoff - 1
+        if first and last_needed:
+            levels += [{"k": f"OR{n}H", "v": max(b.h for b in first)}, {"k": f"OR{n}L", "v": min(b.l for b in first)}]
+    return [{"k": x["k"], "v": round(x["v"], 2)} for x in levels]
