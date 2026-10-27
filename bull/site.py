@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from alpaca.trading.enums import QueryOrderStatus
 from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
 
-from . import broker, data
+from . import broker, data, journal
 from .config import ET, ROOT, runtime_dir, variants
 from .trades import round_trips, summarize
 
@@ -129,8 +129,25 @@ class State:
             log.warning("snapshots failed: %s", exc)
             quotes = {}
 
+        exp = self._read_json("experiment.json")
+        exp_view = None
+        if exp:
+            exp_view = {"period": exp["period"], "days": exp["days"], "spy_return_pct": exp["spy_return_pct"],
+                        "results": {n: {k: m.get(k) for k in ("trades", "win_rate", "net_pnl", "return_pct",
+                                                               "profit_factor", "mean_r", "se_r", "max_drawdown_pct",
+                                                               "vs_control")}
+                                    for n, m in exp["results"].items()}}
+        try:
+            journal_view = journal.summary()
+        except Exception as exc:
+            log.warning("journal summary failed: %s", exc)
+            journal_view = None
+
         return {
             "now": datetime.now(ET).isoformat(timespec="seconds"),
+            "experiment": exp_view,
+            "journal": journal_view,
+            "shadow_order": [v["name"] for v in self.cfg.get("shadow", [])],
             "tape": [{"symbol": s, **quotes[s]} for s in tape if s in quotes],
             "watchlist": [{"symbol": s, **quotes.get(s, {})} for s in status.get("watchlist") or []],
             "engine": {**status, "stale": stale},

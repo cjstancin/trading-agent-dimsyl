@@ -20,7 +20,10 @@ Read `AIBrain/02_LLMKnowledge/lessons/bull.md` before touching anything.
 | `bull/engine.py` | Live loop, one tick a minute; picks the watchlist at 09:31, trades bake-off survivors |
 | `bull/broker.py` | Alpaca SDK (`alpaca-py`): brackets, day state, protection, flatten |
 | `bull/site.py` · `web/index.html` | One-page site on 127.0.0.1:4326 → https://bull.dimsylaisolutions.com (Caddy basic auth) |
-| `config.toml` | Every knob: risk, costs, watchlist, variants, bake-off pass rules |
+| `bull/features.py` | RVOL, ATR, gap and entry features shared by live, journal and backtests |
+| `bull/journal.py` | `runtime/journal.csv`: one row per real or shadow trade, written at 15:52 ET (MAE/MFE in R, loss reason) |
+| `bull/experiment.py` | `python -m bull experiment --days N`: multi-year control-vs-filter replay → `runtime/experiment.json` |
+| `config.toml` | Every knob: risk, costs, watchlist, variants, bake-off pass rules, pre-registered `[[shadow]]` filters |
 | `deploy/` | systemd units: `bull3-engine`, `bull3-site`, `bull3-bakeoff.timer` (Saturdays) |
 
 ## Commands
@@ -34,6 +37,11 @@ python -m unittest discover -s tests
 
 ## Which strategies trade
 `[strategies] enabled = "bakeoff"`: up to 3 variants that passed the latest bake-off (≥30 trades, net > 0 after costs, profit factor ≥ 1.2, profitable in both halves). If none pass, paper-trade the best-ranked one on probation, so the site says so. The engine re-reads this each morning; the bake-off re-runs every Saturday.
+
+## Learning loop
+- `[[shadow]]` variants are pre-registered filters. The engine records what each would have done (never trades them) and the journal resolves them at the close, so their forward record builds alongside the real one.
+- Change live rules only when a filter beats the control in BOTH the multi-year experiment and the forward shadow record. One change at a time, never because of a single loss.
+- `events.jsonl` is pruned to 14 days. The journal is the permanent record (~300 bytes per trade).
 
 ## Deploy
 PC: commit → push → PR → merge. VPS (over the tailnet, `ssh root@100.100.66.87`):
