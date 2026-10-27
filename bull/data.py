@@ -13,7 +13,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from alpaca.data.enums import DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
+from alpaca.data.requests import StockBarsRequest, StockSnapshotRequest
 from alpaca.data.timeframe import TimeFrame
 
 from .config import ET, alpaca_keys, runtime_dir
@@ -106,3 +106,49 @@ def history_minute_bars(c, symbol: str, days: list[date]) -> dict[date, list[Bar
                 payload = [[b.t.isoformat(), b.o, b.h, b.l, b.c, b.v] for b in rows]
                 _cache_path(symbol, d).write_bytes(gzip.compress(json.dumps(payload).encode()))
     return out
+
+
+def snapshots(c, symbols: list[str]) -> dict[str, dict]:
+    """Last price, change vs prior close and today's gap, IEX feed. Display only."""
+    if not symbols:
+        return {}
+    raw = c.get_stock_snapshot(StockSnapshotRequest(symbol_or_symbols=symbols, feed=DataFeed.IEX)) or {}
+    out = {}
+    for sym, snap in raw.items():
+        snap = snap or {}
+        prev = (snap.get("prevDailyBar") or {}).get("c")
+        day = snap.get("dailyBar") or {}
+        last = (snap.get("latestTrade") or {}).get("p") or day.get("c")
+        if not last:
+            continue
+        out[sym] = {
+            "last": float(last),
+            "chg_pct": round((last / prev - 1) * 100, 2) if prev else None,
+            "gap_pct": round((day["o"] / prev - 1) * 100, 2) if prev and day.get("o") else None,
+            "high": day.get("h"), "low": day.get("l"),
+        }
+    return out
+
+
+def session_bars(c, symbol: str, minutes: int = 5) -> dict:
+    """The latest session's bars for one symbol (today if trading has started), bucketed, with VWAP."""
+    now = datetime.now(ET)
+    raw = _fetch(c, [symbol], TimeFrame.Minute, now - timedelta(days=6), None, DataFeed.IEX).get(symbol, [])
+    bars = _session(raw)
+    if not bars:
+        return {"symbol": symbol, "day": None, "bars": []}
+    day = bars[-1].t.date()
+    bars = [b for b in bars if b.t.date() == day]
+    out, pv, vol = [], 0.0, 0.0
+    bucket = None
+    for b in bars:
+        pv += (b.h + b.l + b.c) / 3 * b.v
+        vol += b.v
+        key = b.t.replace(minute=b.t.minute - b.t.minute % minutes, second=0)
+        if bucket and bucket["t"] == key.strftime("%H:%M"):
+            bucket.update(h=max(bucket["h"], b.h), l=min(bucket["l"], b.l), c=b.c, v=bucket["v"] + b.v)
+        else:
+            bucket = {"t": key.strftime("%H:%M"), "o": b.o, "h": b.h, "l": b.l, "c": b.c, "v": b.v}
+            out.append(bucket)
+        bucket["vwap"] = round(pv / vol, 4) if vol else b.c
+    return {"symbol": symbol, "day": day.isoformat(), "minutes": minutes, "bars": out}

@@ -8,6 +8,7 @@ import time
 from collections import deque
 from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 from alpaca.trading.enums import QueryOrderStatus
 from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
@@ -28,6 +29,7 @@ class State:
         self.lock = threading.Lock()
         self.cached: tuple[float, dict] | None = None
         self.spy: tuple[float, list] | None = None
+        self.bar_cache: dict[str, tuple[float, dict]] = {}
 
     def get(self) -> dict:
         with self.lock:
@@ -55,6 +57,15 @@ class State:
             bars = data.daily_bars(self.dc, ["SPY"], start - timedelta(days=7), date.today() + timedelta(days=1))
             self.spy = (time.time(), bars.get("SPY", []))
         return self.spy[1]
+
+    def bars(self, symbol: str) -> dict:
+        key = symbol.upper()
+        hit = self.bar_cache.get(key)
+        if hit and time.time() - hit[0] < 60:
+            return hit[1]
+        payload = data.session_bars(self.dc, key)
+        self.bar_cache[key] = (time.time(), payload)
+        return payload
 
     def build(self) -> dict:
         acct_cfg = self.cfg["account"]
@@ -111,8 +122,17 @@ class State:
                     "max_drawdown_pct", "passed")}} for n in bake["ranking"]],
             }
 
+        tape = ["SPY", "QQQ", "IWM", "DIA"]
+        try:
+            quotes = data.snapshots(self.dc, sorted(set(tape + (status.get("watchlist") or []))))
+        except Exception as exc:  # quotes are decoration; never fail the page over them
+            log.warning("snapshots failed: %s", exc)
+            quotes = {}
+
         return {
             "now": datetime.now(ET).isoformat(timespec="seconds"),
+            "tape": [{"symbol": s, **quotes[s]} for s in tape if s in quotes],
+            "watchlist": [{"symbol": s, **quotes.get(s, {})} for s in status.get("watchlist") or []],
             "engine": {**status, "stale": stale},
             "account": {
                 "equity": equity, "cash": float(account.cash), "start_equity": base_eq,
@@ -130,7 +150,7 @@ class State:
                 "pnl": float(p.unrealized_pl or 0),
             } for p in positions],
             "today_trades": today_trips,
-            "trades": trips[:200],
+            "trades": trips[:500],
             "totals": summarize(trips),
             "today_totals": summarize(today_trips),
             "bakeoff": bake_view,
@@ -151,6 +171,16 @@ def serve(cfg: dict, host: str = "127.0.0.1", port: int = 4326) -> None:
             self.wfile.write(body)
 
         def do_GET(self):
+            url = urlparse(self.path)
+            if url.path == "/api/bars":
+                symbol = (parse_qs(url.query).get("symbol") or [""])[0]
+                if not symbol.isalnum() or len(symbol) > 6:
+                    return self._send(400, b'{"error":"bad symbol"}', "application/json")
+                try:
+                    return self._send(200, json.dumps(state.bars(symbol)).encode(), "application/json")
+                except Exception as exc:
+                    log.warning("bars %s failed: %s", symbol, exc)
+                    return self._send(503, json.dumps({"error": str(exc)[:200]}).encode(), "application/json")
             if self.path in ("/", "/index.html"):
                 self._send(200, page, "text/html; charset=utf-8")
             elif self.path == "/api/state":
