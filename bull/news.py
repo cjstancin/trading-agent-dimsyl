@@ -250,7 +250,7 @@ class NewsWatcher:
 
         rows = []
         for s, its in by_sym.items():
-            its = sorted(its, key=lambda x: (WEIGHT[x["tier"]], x["dt"]), reverse=True)
+            its = sorted(its, key=lambda x: (-WEIGHT[x["tier"]], x["dt"]))  # strongest tier, first to break
             q, li = quotes.get(s, {}), self.listed.get(s, {})
             cap = li["shares"] * q["last"] if li.get("shares") and q.get("last") else None
             vol, avg = self.today_vol.get(s), self.avg_vol.get(s, (None, None))[1]
