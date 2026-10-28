@@ -19,6 +19,7 @@ from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
 
 from . import broker, data, journal
 from .live import LiveFeed
+from .fed import FedWatcher
 from .news import NewsWatcher
 from .config import ET, ROOT, runtime_dir, universe, variants
 from .trades import round_trips, summarize
@@ -35,6 +36,7 @@ class State:
         self.tc = broker.client()
         self.dc = data.client()
         self.news: NewsWatcher | None = None
+        self.fed: FedWatcher | None = None
         self.lock = threading.Lock()
         self.cached: tuple[float, dict] | None = None
         self.spy: tuple[float, list] | None = None
@@ -169,6 +171,7 @@ class State:
             "watchlist": [{"symbol": s, **quotes.get(s, {})} for s in status.get("watchlist") or []],
             "scanner": scanner,
             "catalysts": self.news.view if self.news else None,
+            "fed": self.fed.view if self.fed else None,
             "engine": {**status, "stale": stale},
             "account": {
                 "equity": equity, "cash": float(account.cash), "start_equity": base_eq,
@@ -200,6 +203,8 @@ def serve(cfg: dict, host: str = "127.0.0.1", port: int = 4326) -> None:
     state = State(cfg, feed)
     state.news = NewsWatcher(cfg, data.client(), feed)
     state.news.start()
+    state.fed = FedWatcher(feed)
+    state.fed.start()
     page = (ROOT / "web" / "index.html").read_bytes()
 
     class Handler(BaseHTTPRequestHandler):

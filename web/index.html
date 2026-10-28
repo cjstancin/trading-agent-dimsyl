@@ -121,6 +121,16 @@ select { background: var(--panel2); color: var(--ink); border: 1px solid var(--l
 .scroll { overflow: auto; max-height: 360px; }
 #scanner-wrap { max-height: 420px; }
 #cat-wrap { max-height: 480px; }
+.fed { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.4fr); gap: 18px; padding: 12px 14px; }
+@media (max-width: 900px) { .fed { grid-template-columns: 1fr; } }
+.fed .big { font: 700 22px/1.2 "JetBrains Mono", monospace; color: var(--ink); }
+.fed .row { margin: 6px 0; color: var(--dim); } .fed .row b { color: var(--ink); }
+.fed .chg { margin: 6px 0; font-size: 12px; line-height: 1.45; } .fed .chg .old { color: var(--faint); text-decoration: line-through; }
+.fed .chg .new { color: var(--ink); } .fed .hint { color: var(--dim); font-size: 12px; margin-top: 8px; }
+.fed tr.match td { background: var(--blue-bg); }
+.lean { font: 700 11px/1 Inter, sans-serif; letter-spacing: .8px; padding: 4px 7px; border-radius: 3px; margin-left: 8px; color: #081018; }
+.lean.HAWKISH { background: var(--down); } .lean.DOVISH { background: var(--up); } .lean.NEUTRAL { background: var(--dim); }
+.lean.WAITING { background: var(--pm); }
 #cat td.hl { text-align: left; white-space: normal; min-width: 320px; max-width: 640px; }
 #cat td.hl a { color: var(--ink); text-decoration: none; } #cat td.hl a:hover { text-decoration: underline; }
 #cat .more { color: var(--faint); font-size: 11px; margin-left: 6px; }
@@ -253,6 +263,12 @@ details summary { cursor: pointer; color: var(--dim); padding: 10px 12px; font-w
       <div class="right cal-sum" id="cal-sum"></div>
     </div>
     <div class="cal" id="cal"></div>
+  </section>
+
+  <!-- Fed day (only on FOMC decision days) -->
+  <section class="c12 panel" id="fed-panel" hidden>
+    <div class="ph"><h2>FOMC</h2><span id="fed-badge"></span><div class="right dim" id="fed-note"></div></div>
+    <div class="pb fed" id="fed"></div>
   </section>
 
   <!-- row C -->
@@ -687,6 +703,39 @@ function drawCandles() {
     (offChart.length ? `<span class="dim">off-chart: ${offChart.map(x => `${x.k} ${x.v.toFixed(2)}`).join(" · ")}</span>` : "");
 }
 
+/* ---------- FOMC day ---------- */
+const GROUP_FOR = {HAWKISH: "hawkish lean", NEUTRAL: "neutral lean", DOVISH: "dovish lean"};
+function renderFed(s) {
+  const f = s.fed;
+  $("fed-panel").hidden = !f;
+  if (!f) return;
+  const out = f.status === "released";
+  $("fed-badge").innerHTML = `<span class="lean ${out ? f.lean_label : "WAITING"}">${out ? f.lean_label : "WAITING · 2:00 PM ET"}</span>`;
+  $("fed-note").textContent = out ? `statement seen ${f.seen_at} ET · press conference 2:30 · display only, the bot doesn't trade this` : "statement 2:00 PM ET · press conference 2:30 · this card fills in within seconds of release";
+  const spy = s.tape.find(q => q.symbol === "SPY");
+  const diss = (list) => list?.length ? list.map(d => `<div class="row"><b>${esc(d.names)}</b> preferred ${esc(d.preferred.replace(/^to /, ""))}</div>`).join("") : `<div class="row">No dissents.</div>`;
+  let left;
+  if (out) {
+    const mv = spy && f.spy_at_release ? (spy.last / f.spy_at_release - 1) * 100 : null;
+    left = `<div class="big">${esc((f.decision || "?").toUpperCase())} ${f.change_bp ? (f.change_bp > 0 ? "+" : "") + f.change_bp + "bp" : ""} · vote ${esc(f.vote || "?")}</div>` +
+      `<div class="row">Dissents: <b>${f.hawk} hawkish</b>, <b>${f.dove} dovish</b>${f.other ? `, ${f.other} other` : ""} (last meeting ${esc(f.prev_vote || "?")})</div>` + diss(f.dissents) +
+      `<div class="row">SPY since release: <b class="${cls(mv)}">${mv == null ? "—" : pct(mv)}</b> (${px(f.spy_at_release)} → ${px(spy?.last)}) · your levels 769.27 / 771.66</div>` +
+      `<div class="sect" style="margin-top:10px">Changed vs ${esc(f.prev_date || "last")} (${f.changed.length})</div>` +
+      (f.changed.slice(0, 8).map(c => `<div class="chg">${c.old ? `<div class="old">${esc(c.old)}</div>` : ""}${c.new ? `<div class="new">${esc(c.new)}</div>` : ""}</div>`).join("") || `<div class="row">Word for word the same.</div>`) +
+      `<div class="row"><a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer">Full statement</a></div>`;
+  } else {
+    left = `<div class="big">Decision at 2:00 PM ET</div><div class="row">Last meeting (${esc(f.prev_date || "?")}): vote <b>${esc(f.prev_vote || "?")}</b></div>` + diss(f.prev_dissents) +
+      `<div class="hint">Lean = change in the hawk-minus-dove dissent balance vs last meeting. The knee-jerk is decided by algorithms in milliseconds; history below says the first 5 minutes is a coin flip, and what follows the 2:30 press conference matters more.</div>`;
+  }
+  const h = f.history, match = out ? GROUP_FOR[f.lean_label] : null;
+  const cell = (g) => g.n ? `<span class="${cls(g.avg)}">${pct(g.avg)}</span> <span class="dim">${g.down}/${g.n}↓</span>` : "—";
+  const right = h ? `<div class="sect">What SPY did after past statements (${h.meetings.length} meetings since ${esc(h.meetings[0]?.date || "")})</div>` +
+    `<table class="tbl"><thead><tr><th class="l">WHEN</th><th>N</th><th>2:00→2:05</th><th>2:00→2:30</th><th>2:30→CLOSE</th><th>2:00→CLOSE</th></tr></thead><tbody>` +
+    Object.entries(h.groups).map(([k, g]) => `<tr class="${k === match ? "match" : ""}"><td class="l">${esc(k)}</td><td>${g.m5.n}</td><td>${cell(g.m5)}</td><td>${cell(g.m30)}</td><td>${cell(g.presser)}</td><td>${cell(g.day_after_2)}</td></tr>`).join("") +
+    `</tbody></table><div class="hint">avg % move, then how many of those days were down. Small samples: a lean, not a forecast.</div>` : `<div class="row">History not computed yet.</div>`;
+  $("fed").innerHTML = `<div>${left}</div><div>${right}</div>`;
+}
+
 /* ---------- news catalysts ---------- */
 let catView = "screen";
 const TIER = {binary: "BINARY", big: "BIG", milestone: "UPCOMING", other: "NEWS", info: "WHY"};
@@ -764,7 +813,7 @@ function applyLive() {
     if (key > last.t && h * 60 + mm < 16 * 60) bars.push({t: key, o: l.p, h: l.p, l: l.p, c: l.p, v: 0, vwap: last.vwap});
     else if (key === last.t) { last.c = l.p; last.h = Math.max(last.h, l.p); last.l = Math.min(last.l, l.p); }
   }
-  renderTop(S); renderTables(S); renderCatalysts(S); $("bal").textContent = money(a.equity);
+  renderTop(S); renderTables(S); renderCatalysts(S); renderFed(S); $("bal").textContent = money(a.equity);
   if (chartData) drawCandles();
 }
 
@@ -773,7 +822,7 @@ function render(s) {
   S = s;
   for (const p of s.positions) p.pnl0 = p.pnl;
   s.account.equity0 = s.account.equity; s.account.day_pnl0 = s.account.day_pnl;
-  renderTop(s); renderTiles(s); renderBalance(s); renderPerf(s); renderCalendar(s); renderTables(s); renderCatalysts(s); renderLearning(s);
+  renderTop(s); renderTiles(s); renderBalance(s); renderPerf(s); renderCalendar(s); renderTables(s); renderCatalysts(s); renderFed(s); renderLearning(s);
   const sel = $("chart-sym"), choices = symbolChoices(s);
   if (chartSym && !choices.includes(chartSym)) choices.push(chartSym);
   sel.innerHTML = choices.map(c => `<option>${esc(c)}</option>`).join("");
