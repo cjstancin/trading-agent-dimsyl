@@ -131,14 +131,14 @@ def snapshots(c, symbols: list[str]) -> dict[str, dict]:
             ref = day.get("c")
             out[sym] = {"last": float(last), "chg_pct": round((last / ref - 1) * 100, 2) if ref else None,
                         "gap_pct": round((last / ref - 1) * 100, 2) if ref else None, "high": None, "low": None,
-                        "premarket": True, "t": trade.get("t")}
+                        "premarket": True, "prev": ref, "t": trade.get("t")}
             continue
         prev = (snap.get("prevDailyBar") or {}).get("c")
         out[sym] = {
             "last": float(last),
             "chg_pct": round((last / prev - 1) * 100, 2) if prev else None,
             "gap_pct": round((day["o"] / prev - 1) * 100, 2) if prev and day.get("o") else None,
-            "high": day.get("h"), "low": day.get("l"), "premarket": False, "t": trade.get("t"),
+            "high": day.get("h"), "low": day.get("l"), "premarket": False, "prev": prev, "t": trade.get("t"),
         }
     return out
 
