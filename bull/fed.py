@@ -105,8 +105,8 @@ def parse(page: str) -> dict:
     rng = re.search(r"(?:at|to) (\d[\d/\-]*|\d/\d) to (\d[\d/\-]*) percent", text)
     if rng:
         upper = _frac(rng.group(2))
-    dec = re.search(r"decided to (raise|lower|maintain)[^.]*", text)
-    decision = dec.group(1) if dec else None
+    dec = re.search(r"decided to (raise|lower|maintain|keep|leave)[^.]*", text)
+    decision = {"keep": "maintain", "leave": "maintain"}.get(dec.group(1), dec.group(1)) if dec else None
     stated = _change_words(dec.group(0)) if dec else None
     dissents = []
     against = re.search(r"Voting against (?:this|the) (?:monetary policy )?action (?:was|were) (.*?)(?=Voting for|$)", text)
