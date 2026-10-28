@@ -1,4 +1,4 @@
-"""python -m bull engine | site | bakeoff [--days N] | experiment [--days N] | check"""
+"""python -m bull engine | site | bakeoff [--days N] | experiment [--days N] | fed-history | check"""
 from __future__ import annotations
 
 import argparse
@@ -32,6 +32,7 @@ def main() -> None:
     x = sub.add_parser("experiment")
     x.add_argument("--days", type=int, default=1000)
     sub.add_parser("check")
+    sub.add_parser("fed-history")
     args = ap.parse_args()
 
     load_env()
@@ -50,6 +51,9 @@ def main() -> None:
     elif args.cmd == "experiment":
         from .experiment import print_table, run
         print_table(run(cfg, args.days))
+    elif args.cmd == "fed-history":
+        from .fed import history, print_history
+        print_history(history())
     elif args.cmd == "check":
         from . import broker
         tc = broker.client()
