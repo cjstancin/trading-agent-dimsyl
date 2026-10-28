@@ -87,7 +87,7 @@ def _paragraphs(page: str) -> list[str]:
 
 def _change_words(text: str, default: float = 0.25) -> float | None:
     """'raise ... by 1/2 percentage point' -> +0.5, 'lower' -> -x, 'maintain'/'no change' -> 0."""
-    by = re.search(r"by (\d[\d/\-]*) percentage point", text)
+    by = re.search(r"by (\d[\d/.\-]*\d|\d) percentage point", text)
     size = _frac(by.group(1)) if by else default
     if re.search(r"\braise\b|\bincrease\b", text):
         return size
@@ -177,6 +177,8 @@ def history() -> dict:
         except Exception as exc:
             log.warning("statement %s: %s", d, exc)
             continue
+        if not cur["decision"]:
+            continue  # e.g. the 2025-08-22 framework statement: no rate decision
         s = score(cur, prev)
         cur.update(hawk=s["hawk"], dove=s["dove"])
         prev = cur
