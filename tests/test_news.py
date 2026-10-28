@@ -33,6 +33,11 @@ CASES = [
     ("Acme Bio Prices $50 Million Public Offering", ["ACME"], "big", "offering"),
     ("FDA Approves Acme's Drug For Rare Disease", ["ACME"], "binary", "FDA"),
     ("Acme To Report Third Quarter Results On November 5", ["ACME"], "milestone", "earnings date"),
+    # false positives seen in the first live run
+    ("Boston Scientific Exec Says Expects Top-Line Pressure To Persist Into 2027", ["BSX"], "other", "news"),
+    ("Girard Sharp LLP Investigates Securities Claims Following Boeing-Spirit AeroSystems Deal", ["BA"], "noise", "roundup"),
+    ("Securities Fraud Class Action Lawsuit Filed Against Compass, Inc.", ["COMP"], "noise", "roundup"),
+    ("Lloyds Banking Group Expands Agentic AI Fraud Support", ["LYG"], "other", "news"),
 ]
 
 
@@ -41,6 +46,14 @@ class ClassifierTests(unittest.TestCase):
         for headline, syms, tier, tag in CASES:
             with self.subTest(headline=headline[:60]):
                 self.assertEqual(classify(headline, syms), (tier, tag))
+
+    def test_volume_pace(self):
+        from bull.news import volume_pace
+        close = datetime(2026, 10, 28, 16, 30, tzinfo=ET)  # full day in (SIP is 15 min behind)
+        self.assertEqual(volume_pace(20e6, 10e6, close), 2.0)
+        hour_in = datetime(2026, 10, 28, 10, 46, tzinfo=ET)  # an hour of trading: ~a third of a day
+        self.assertAlmostEqual(volume_pace(10e6, 10e6, hour_in), 3.1, places=1)
+        self.assertIsNone(volume_pace(None, 10e6, close))
 
     def test_window_covers_prior_after_hours(self):
         wed = datetime(2026, 10, 28, 10, 0, tzinfo=ET)

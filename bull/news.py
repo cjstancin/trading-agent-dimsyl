@@ -7,11 +7,13 @@ Layer 1, the headline (keyword rules, first match wins):
   milestone  something scheduled, not a result yet: trial event counts, readout or earnings dates.
              Volatility comes later (SLS 2026-10-28 fell 18% on its 80th-event "milestone").
   other      everything else; info = "why is X moving" explainers; noise = roundups, transcripts.
-Layer 2, the reaction: live change and gap (IEX), full-market volume vs the 20-day average, and
-market cap, which also screen the list down to stocks worth watching ([catalysts] in config.toml).
+Layer 2, the reaction: live change and gap (IEX), today's full-market volume and its pace vs a
+normal day, and market cap, which also screen the list down to stocks worth watching ([catalysts]
+in config.toml). Fresh catalysts show before the market reacts; older ones only if it did.
 
-Sources: Alpaca's news API (Benzinga, free with the data plan) polled every few seconds, and the
-public Nasdaq screener (market cap, sector, consolidated volume for every listed stock) every 5 min.
+Sources: Alpaca's news API (Benzinga, free with the data plan) every poll; today's volume from SIP
+daily bars (free at a 15-minute delay) every minute; the public Nasdaq screener (market cap, sector,
+name for every listed stock; its own volume is yesterday's) every 5 minutes.
 """
 from __future__ import annotations
 
@@ -35,12 +37,17 @@ NASDAQ_URL = "https://api.nasdaq.com/api/screener/stocks?tableonly=true&download
 BROWSER_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 WEIGHT = {"binary": 3.0, "big": 2.0, "milestone": 1.5, "other": 1.0, "info": 0.6}
 MAX_SYMBOLS_PER_ARTICLE = 3  # more than this is a roundup ("12 stocks moving premarket")
+FRESH = timedelta(hours=2)   # a catalyst this new is screened in even before the stock reacts
+SIP_DELAY = timedelta(minutes=16)
 SYMBOL_RE = re.compile(r"^[A-Z]{1,5}(\.[A-Z])?$")
 
 _R = [
     ("noise", "roundup", r"\bstocks? moving\b|\bmovers\b|\bhere are\b|\btop \d+\b|analyst forecasts|stocks to watch"
                          r"|call transcript|\bparticipat\w* in\b.*\bconference|investor conferences?|unusual options"
-                         r"|options activity|\bwhale\b|short interest|p/e ratio|\ba look at\b|price over earnings"),
+                         r"|options activity|\bwhale\b|short interest|p/e ratio|\ba look at\b|price over earnings"
+                         r"|class action|securities (claims|litigation|fraud)|investigates? .*claims|lead plaintiff"
+                         r"|shareholder (alert|rights|investigation)|reminds (investors|shareholders)|\bLLP\b|law firm"
+                         r"|deadline (alert|reminder)|investor alert"),
     ("binary", "halt", r"trading halt|\bhalted\b|halt news pending"),
     ("milestone", "trial milestone", r"\b\d+(st|nd|rd|th) event\b|events? (milestone|threshold)"
                                      r"|(completes?|completed) (patient )?enrollment|enrollment complet"
@@ -53,12 +60,13 @@ _R = [
     ("binary", "trial result", r"\b(phase|ph\.?) ?(1|2|3|i{1,3}|1/2|2/3|2b|3b)\b.*\b(results?|data|met|meets|miss\w*|fail\w*"
                                r"|endpoint|topline|top-line|discontinu\w*|halt\w*|stop\w*|terminat\w*|positive|negative)"
                                r"|\b(discontinu\w*|terminat\w*|stops?|halts?)\b.*\b(phase|trial|study)\b"
-                               r"|\b(topline|top-line)\b|primary endpoint"),
+                               r"|\b(topline|top-line) (results?|data|findings|readout)\b|primary endpoint"),
     ("binary", "M&A", r"\bto acquire\b|\bacquires\b|\bacquisition of\b|\bmerger\b|\bto merge\b|\bbuyout\b|\btakeover\b"
                       r"|tender offer|offers? to buy|\bbid for\b|cash bid|tak(e|es|en|ing) private|go(es|ing)? private"
                       r"|definitive agreement|strategic alternatives|explor\w* (a )?sale"),
     ("binary", "distress", r"bankrupt|chapter 11|\bdelist|going concern|short (seller|report)|hindenburg|muddy waters"
-                           r"|\bsec (probe|investigation|charges)|\bsubpoena|accounting irregularit|\brestate|\bfraud\b"
+                           r"|\bsec (probe|investigation|charges)|\bsubpoena|accounting irregularit|\brestate"
+                           r"|fraud (charges?|allegations?|probe)|(accused of|charged with) fraud"
                            r"|default(s|ed)? on"),
     ("big", "offering", r"public offering|registered direct|private placement|\bATM\b|at-the-market|\bprices?\b.*\boffering"
                         r"|\bpriced\b.*\boffering|\bdilut|convertible (senior )?notes|\bshelf\b|warrant (exercise|inducement)"),
@@ -101,6 +109,19 @@ def window_start(now: datetime) -> datetime:
     return datetime.combine(d, dtime(16), ET)
 
 
+def volume_pace(today_vol: float | None, avg_vol: float | None, now: datetime) -> float | None:
+    """Today's volume vs what a normal day has traded by this time (SIP is 15 min behind).
+
+    Volume is front-loaded, so the expected share of the day is (elapsed/390) ** 0.6: about a third
+    after the first hour. Before the open it compares premarket volume to a sixth of a day.
+    """
+    if not today_vol or not avg_vol:
+        return None
+    t = now - SIP_DELAY
+    elapsed = min(max((t.hour * 60 + t.minute) - (9 * 60 + 30), 0), 390)
+    return round(today_vol / (avg_vol * max(elapsed / 390, 0.05) ** 0.6), 1)
+
+
 def _num(x) -> float | None:
     try:
         return float(str(x).replace("$", "").replace(",", ""))
@@ -118,6 +139,8 @@ class NewsWatcher:
         self.listed: dict[str, dict] = {}
         self.listed_at = 0.0
         self.avg_vol: dict[str, tuple[date, float | None]] = {}
+        self.today_vol: dict[str, float] = {}
+        self.today_vol_at = 0.0
         self.view: dict | None = None
 
     def start(self) -> None:
@@ -158,10 +181,18 @@ class NewsWatcher:
         for r in rows:
             cap, price = _num(r.get("marketCap")), _num(r.get("lastsale"))
             listed[r["symbol"].replace("/", ".")] = {
-                "name": r.get("name"), "sector": r.get("sector") or None, "volume": _num(r.get("volume")),
+                "name": r.get("name"), "sector": r.get("sector") or None,
                 "shares": cap / price if cap and price else None,
             }
         self.listed = listed
+
+    def _today_volumes(self, symbols: list[str]) -> None:
+        if time.time() - self.today_vol_at < 60:
+            return
+        self.today_vol_at = time.time()
+        today = datetime.now(ET).date()
+        bars = data.daily_bars(self.dc, symbols, today, today + timedelta(days=1))
+        self.today_vol = {s: b[-1].v for s, b in bars.items() if b and b[-1].t.date() == today}
 
     def _avg_volumes(self, symbols: list[str]) -> None:
         today = datetime.now(ET).date()
@@ -213,20 +244,22 @@ class NewsWatcher:
                       >= r["min_market_cap"]]
         try:
             self._avg_volumes(big_enough)
+            self._today_volumes(syms)
         except Exception as exc:
-            log.warning("average volumes failed: %s", exc)
+            log.warning("volumes failed: %s", exc)
 
         rows = []
         for s, its in by_sym.items():
             its = sorted(its, key=lambda x: (WEIGHT[x["tier"]], x["dt"]), reverse=True)
             q, li = quotes.get(s, {}), self.listed.get(s, {})
             cap = li["shares"] * q["last"] if li.get("shares") and q.get("last") else None
-            vol, avg = li.get("volume"), self.avg_vol.get(s, (None, None))[1]
-            rvol = round(vol / avg, 1) if vol and avg else None
+            vol, avg = self.today_vol.get(s), self.avg_vol.get(s, (None, None))[1]
+            rvol = volume_pace(vol, avg, now)
             chg = q.get("chg_pct")
             moving = (chg is not None and abs(chg) >= r["min_move_pct"]) or (rvol or 0) >= 2
             best = its[0]
             liquid = max(vol or 0, avg or 0) >= r["min_volume"]
+            fresh = now - best["dt"] < FRESH
             rows.append({
                 "symbol": s, "name": li.get("name"), "sector": li.get("sector"),
                 "last": q.get("last"), "prev": q.get("prev"), "chg_pct": chg, "gap_pct": q.get("gap_pct"),
@@ -237,7 +270,7 @@ class NewsWatcher:
                           "headline": x["headline"], "url": x["url"]} for x in its[1:6]],
                 "count": len(its), "moving": moving,
                 "screen": (cap is None or cap >= r["min_market_cap"]) and liquid
-                          and (best["tier"] in ("binary", "big", "milestone") or moving),
+                          and (moving or best["tier"] == "milestone" or (fresh and best["tier"] in ("binary", "big"))),
                 "score": round(WEIGHT[best["tier"]] * (1 + abs(chg or 0) / 5) * (1 + min(rvol or 0, 5) / 5), 3),
             })
         rows.sort(key=lambda x: x["score"], reverse=True)

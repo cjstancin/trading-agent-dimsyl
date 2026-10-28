@@ -703,7 +703,7 @@ function renderCatalysts(s) {
   const rows = c.rows.filter(r => catView === "all" || r.screen);
   $("cat-note").textContent = `${c.rows.length} stocks with news since ${etStamp(c.since)} ET · screened: $${big(c.rules.min_market_cap)}+ cap, ${big(c.rules.min_volume)}+ volume, real catalyst or moving ${c.rules.min_move_pct}%+ · Benzinga via Alpaca`;
   $("cat").innerHTML = rows.length
-    ? `<thead><tr><th>TIME</th><th class="l">SYM</th><th class="l">TYPE</th><th class="l">HEADLINE</th><th>LAST</th><th>CHG %</th><th>GAP %</th><th>VOL</th><th>× AVG</th><th>CAP</th><th class="l">SECTOR</th></tr></thead><tbody>` +
+    ? `<thead><tr><th>TIME</th><th class="l">SYM</th><th class="l">TYPE</th><th class="l">HEADLINE</th><th>LAST</th><th>CHG %</th><th>GAP %</th><th title="Today's volume across all exchanges, 15 minutes behind">VOL</th><th title="Today's volume vs what a normal day has traded by this time">PACE</th><th>CAP</th><th class="l">SECTOR</th></tr></thead><tbody>` +
       rows.map(r => {
         const more = r.more.map(m => `${etStamp(m.t)} [${TIER[m.tier]} · ${m.tag}] ${m.headline}`).join("\n");
         return `<tr class="click${r.symbol === chartSym ? " sel" : ""}" data-sym="${esc(r.symbol)}" title="${esc(r.name || "")}"><td>${esc(etStamp(r.t))}</td><td class="l"><b>${esc(r.symbol)}</b></td>` +
