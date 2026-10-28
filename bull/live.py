@@ -2,7 +2,7 @@
 
 The free feed allows one market-data connection and 30 symbols, so the site owns the stream (the
 engine doesn't use one) and subscribes to what matters most right now: the tape and open positions,
-then the charted symbol, then the bot's watchlist. Everything else stays on the snapshot poll, and
+then the charted symbol, then the top news movers, then the bot's watchlist. Everything else stays on the snapshot poll, and
 if the stream is down the page simply keeps polling.
 """
 from __future__ import annotations
@@ -31,6 +31,7 @@ class LiveFeed:
         self.last: dict[str, dict] = {}
         self.first: list[str] = []
         self.rest: list[str] = []
+        self.extra: list[str] = []
         self.charts: dict[str, float] = {}
         self.stream: StockDataStream | None = None
         self.subscribed: set[str] = set()
@@ -40,6 +41,10 @@ class LiveFeed:
         """first: tape + open positions (always streamed); rest: watchlist, streamed if room."""
         self.first, self.rest = list(first), list(rest)
 
+    def set_extra(self, symbols: list[str]) -> None:
+        """Top news movers (news.py): streamed after the chart, ahead of the watchlist."""
+        self.extra = list(symbols)
+
     def note_chart(self, symbol: str) -> None:
         self.charts[symbol] = time.time()
 
@@ -47,7 +52,7 @@ class LiveFeed:
         now = time.time()
         charts = [s for s, t in sorted(self.charts.items(), key=lambda x: -x[1]) if now - t < CHART_TTL_S]
         out: list[str] = []
-        for s in self.first + charts + self.rest:
+        for s in self.first + charts + self.extra + self.rest:
             if s not in out:
                 out.append(s)
         return out[:MAX_SYMBOLS]

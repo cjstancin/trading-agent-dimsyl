@@ -27,6 +27,12 @@ min_gap_pct = 2.0
 min_price = 5.0
 min_dollar_volume = 50_000_000
 
+[catalysts]                  # news panel on the site (display only: the bot never trades news)
+min_market_cap = 500_000_000
+min_volume = 10_000_000      # today's volume or the 20-day average, whichever is higher
+min_move_pct = 3.0           # "moving": this far from yesterday's close, or 2x normal volume
+poll_seconds = 15
+
 [strategies]
 # "bakeoff" = trade whatever passed the latest bake-off. Or list variant names.
 enabled = "bakeoff"
