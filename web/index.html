@@ -120,6 +120,14 @@ select { background: var(--panel2); color: var(--ink); border: 1px solid var(--l
 .tbl tr.sel td { background: var(--blue-bg) !important; }
 .scroll { overflow: auto; max-height: 360px; }
 #scanner-wrap { max-height: 420px; }
+#cat-wrap { max-height: 480px; }
+#cat td.hl { text-align: left; white-space: normal; min-width: 320px; max-width: 640px; }
+#cat td.hl a { color: var(--ink); text-decoration: none; } #cat td.hl a:hover { text-decoration: underline; }
+#cat .more { color: var(--faint); font-size: 11px; margin-left: 6px; }
+.tier { font: 700 10px/1 Inter, sans-serif; letter-spacing: .6px; padding: 3px 5px; border-radius: 3px; white-space: nowrap; }
+.tier.binary { color: #081018; background: var(--down); } .tier.big { color: #081018; background: #f0a030; }
+.tier.milestone { color: #081018; background: var(--pm); } .tier.other { color: var(--dim); border: 1px solid var(--line); }
+.tier.info { color: var(--faint); border: 1px dashed var(--line); }
 .tri { font-size: 10px; }
 .yes { color: var(--up); font-weight: 700; } .no { color: var(--faint); }
 .strat { padding: 10px 12px; border-top: 1px solid var(--line); line-height: 1.5; }
@@ -262,6 +270,14 @@ details summary { cursor: pointer; color: var(--dim); padding: 10px 12px; font-w
     <div class="ph"><h2>Open now</h2></div>
     <div id="positions"></div>
     <div class="strat" id="strategy"></div>
+  </section>
+
+  <!-- news catalysts -->
+  <section class="c12 panel">
+    <div class="ph"><h2>Catalysts</h2>
+      <div class="seg" id="cat-seg"><button data-v="screen" class="on">Screened</button><button data-v="all">All news</button></div>
+      <div class="right dim" id="cat-note"></div></div>
+    <div class="scroll" id="cat-wrap"><table class="tbl" id="cat"></table></div>
   </section>
 
   <!-- filter test + learning -->
@@ -671,6 +687,39 @@ function drawCandles() {
     (offChart.length ? `<span class="dim">off-chart: ${offChart.map(x => `${x.k} ${x.v.toFixed(2)}`).join(" · ")}</span>` : "");
 }
 
+/* ---------- news catalysts ---------- */
+let catView = "screen";
+const TIER = {binary: "BINARY", big: "BIG", milestone: "UPCOMING", other: "NEWS", info: "WHY"};
+const big = (v) => v == null ? "—" : v >= 1e12 ? (v / 1e12).toFixed(1) + "T" : v >= 1e9 ? (v / 1e9).toFixed(1) + "B" : v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : v >= 1e3 ? (v / 1e3).toFixed(0) + "K" : String(Math.round(v));
+const etStamp = (iso) => {
+  const d = new Date(iso), o = {timeZone: "America/New_York"};
+  const t = d.toLocaleTimeString("en-US", {...o, hour12: false, hour: "2-digit", minute: "2-digit"});
+  const day = d.toLocaleDateString("en-US", {...o, weekday: "short"});
+  return day === new Date().toLocaleDateString("en-US", {...o, weekday: "short"}) ? t : day + " " + t;
+};
+function renderCatalysts(s) {
+  const c = s.catalysts;
+  if (!c) { $("cat").innerHTML = `<tbody><tr><td class="empty">News feed starting…</td></tr></tbody>`; return; }
+  const rows = c.rows.filter(r => catView === "all" || r.screen);
+  $("cat-note").textContent = `${c.rows.length} stocks with news since ${etStamp(c.since)} ET · screened: $${big(c.rules.min_market_cap)}+ cap, ${big(c.rules.min_volume)}+ volume, real catalyst or moving ${c.rules.min_move_pct}%+ · Benzinga via Alpaca`;
+  $("cat").innerHTML = rows.length
+    ? `<thead><tr><th>TIME</th><th class="l">SYM</th><th class="l">TYPE</th><th class="l">HEADLINE</th><th>LAST</th><th>CHG %</th><th>GAP %</th><th>VOL</th><th>× AVG</th><th>CAP</th><th class="l">SECTOR</th></tr></thead><tbody>` +
+      rows.map(r => {
+        const more = r.more.map(m => `${etStamp(m.t)} [${TIER[m.tier]} · ${m.tag}] ${m.headline}`).join("\n");
+        return `<tr class="click${r.symbol === chartSym ? " sel" : ""}" data-sym="${esc(r.symbol)}" title="${esc(r.name || "")}"><td>${esc(etStamp(r.t))}</td><td class="l"><b>${esc(r.symbol)}</b></td>` +
+          `<td class="l"><span class="tier ${r.tier}">${TIER[r.tier]}</span> <span class="dim">${esc(r.tag)}</span></td>` +
+          `<td class="hl"><a href="${esc(/^https?:\/\//.test(r.url || "") ? r.url : "#")}" target="_blank" rel="noopener noreferrer">${esc(r.headline)}</a>${r.count > 1 ? `<span class="more" title="${esc(more)}">+${r.count - 1} more</span>` : ""}</td>` +
+          `<td>${px(r.last)}</td><td class="${cls(r.chg_pct)}">${pct(r.chg_pct)}</td><td class="${cls(r.gap_pct)}">${pct(r.gap_pct)}${r.premarket ? '<span class="pmtag">PM</span>' : ""}</td>` +
+          `<td>${big(r.volume)}</td><td class="${(r.rvol || 0) >= 2 ? "up" : ""}">${r.rvol == null ? "—" : r.rvol.toFixed(1) + "×"}</td><td>${big(r.cap)}</td><td class="l dim">${esc(r.sector || "")}</td></tr>`;
+      }).join("") + "</tbody>"
+    : `<tbody><tr><td class="empty">${catView === "screen" ? "No screened catalysts yet. Try All news." : "No news yet."}</td></tr></tbody>`;
+  document.querySelectorAll("#cat tr.click").forEach(tr => tr.onclick = (ev) => { if (!ev.target.closest("a")) selectSymbol(tr.dataset.sym); });
+}
+document.querySelectorAll("#cat-seg button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#cat-seg button").forEach(x => x.classList.toggle("on", x === b));
+  catView = b.dataset.v; if (S) renderCatalysts(S);
+});
+
 /* ---------- live prices (server-sent events) ---------- */
 const LIVE = {};
 let liveOn = false, liveSyms = new Set(), liveQueued = false;
@@ -697,6 +746,7 @@ function patchQuote(q) {
 function applyLive() {
   if (!S) return;
   S.tape.forEach(patchQuote); (S.scanner || []).forEach(patchQuote); S.watchlist.forEach(patchQuote);
+  (S.catalysts?.rows || []).forEach(patchQuote);
   let delta = 0;
   for (const p of S.positions) {
     const l = liveFor(p.symbol);
@@ -714,7 +764,7 @@ function applyLive() {
     if (key > last.t && h * 60 + mm < 16 * 60) bars.push({t: key, o: l.p, h: l.p, l: l.p, c: l.p, v: 0, vwap: last.vwap});
     else if (key === last.t) { last.c = l.p; last.h = Math.max(last.h, l.p); last.l = Math.min(last.l, l.p); }
   }
-  renderTop(S); renderTables(S); $("bal").textContent = money(a.equity);
+  renderTop(S); renderTables(S); renderCatalysts(S); $("bal").textContent = money(a.equity);
   if (chartData) drawCandles();
 }
 
@@ -723,7 +773,7 @@ function render(s) {
   S = s;
   for (const p of s.positions) p.pnl0 = p.pnl;
   s.account.equity0 = s.account.equity; s.account.day_pnl0 = s.account.day_pnl;
-  renderTop(s); renderTiles(s); renderBalance(s); renderPerf(s); renderCalendar(s); renderTables(s); renderLearning(s);
+  renderTop(s); renderTiles(s); renderBalance(s); renderPerf(s); renderCalendar(s); renderTables(s); renderCatalysts(s); renderLearning(s);
   const sel = $("chart-sym"), choices = symbolChoices(s);
   if (chartSym && !choices.includes(chartSym)) choices.push(chartSym);
   sel.innerHTML = choices.map(c => `<option>${esc(c)}</option>`).join("");
