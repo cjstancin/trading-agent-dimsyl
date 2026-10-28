@@ -33,6 +33,7 @@ CASES = [
     ("Acme Bio Prices $50 Million Public Offering", ["ACME"], "big", "offering"),
     ("FDA Approves Acme's Drug For Rare Disease", ["ACME"], "binary", "FDA"),
     ("Acme To Report Third Quarter Results On November 5", ["ACME"], "milestone", "earnings date"),
+    ("Genmab A/S Announces Data From Its Phase 3 LiGeR-HN1 Study Of Petosemtamab", ["GMAB"], "binary", "trial result"),
     # false positives seen in the first live run
     ("Boston Scientific Exec Says Expects Top-Line Pressure To Persist Into 2027", ["BSX"], "other", "news"),
     ("Girard Sharp LLP Investigates Securities Claims Following Boeing-Spirit AeroSystems Deal", ["BA"], "noise", "roundup"),

@@ -59,7 +59,7 @@ _R = [
                       r"|breakthrough therapy|fast track designation|clinical hold"),
     ("binary", "trial result", r"\b(phase|ph\.?) ?(1|2|3|i{1,3}|1/2|2/3|2b|3b)\b.*\b(results?|data|met|meets|miss\w*|fail\w*"
                                r"|endpoint|topline|top-line|discontinu\w*|halt\w*|stop\w*|terminat\w*|positive|negative)"
-                               r"|\b(discontinu\w*|terminat\w*|stops?|halts?)\b.*\b(phase|trial|study)\b"
+                               r"|\b(discontinu\w*|terminat\w*|stops?|halts?|data|results?)\b.*\b(phase|trial|study)\b"
                                r"|\b(topline|top-line) (results?|data|findings|readout)\b|primary endpoint"),
     ("binary", "M&A", r"\bto acquire\b|\bacquires\b|\bacquisition of\b|\bmerger\b|\bto merge\b|\bbuyout\b|\btakeover\b"
                       r"|tender offer|offers? to buy|\bbid for\b|cash bid|tak(e|es|en|ing) private|go(es|ing)? private"
