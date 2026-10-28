@@ -1,4 +1,8 @@
-"""The one-page site: a tiny read-only HTTP server. Numbers come straight from Alpaca."""
+"""The one-page site: a tiny read-only HTTP server. Numbers come straight from Alpaca.
+
+State is polled (cached CACHE_S seconds, shared by every viewer); prices also stream live over
+/api/live (server-sent events, see live.py) so the tape, scanner, positions and chart move tick by tick.
+"""
 from __future__ import annotations
 
 import json
@@ -14,17 +18,19 @@ from alpaca.trading.enums import QueryOrderStatus
 from alpaca.trading.requests import GetOrdersRequest, GetPortfolioHistoryRequest
 
 from . import broker, data, journal
+from .live import LiveFeed
 from .config import ET, ROOT, runtime_dir, universe, variants
 from .trades import round_trips, summarize
 
 log = logging.getLogger("bull.site")
-CACHE_S = 10
-BAR_CACHE_S = 15
+CACHE_S = 4
+BAR_CACHE_S = 8
 
 
 class State:
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, feed: LiveFeed | None = None):
         self.cfg = cfg
+        self.feed = feed
         self.tc = broker.client()
         self.dc = data.client()
         self.lock = threading.Lock()
@@ -128,6 +134,8 @@ class State:
         tape = ["SPY", "QQQ", "IWM", "DIA"]
         watch = set(status.get("watchlist") or [])
         held = {p.symbol for p in positions}
+        if self.feed:
+            self.feed.set_priority(tape + sorted(held), status.get("watchlist") or [])
         try:  # one request covers the tape and the whole universe scanner
             quotes = data.snapshots(self.dc, sorted(set(tape) | set(universe()) | watch | held))
         except Exception as exc:  # quotes are decoration; never fail the page over them
@@ -184,7 +192,9 @@ class State:
 
 
 def serve(cfg: dict, host: str = "127.0.0.1", port: int = 4326) -> None:
-    state = State(cfg)
+    feed = LiveFeed()
+    feed.start()
+    state = State(cfg, feed)
     page = (ROOT / "web" / "index.html").read_bytes()
 
     class Handler(BaseHTTPRequestHandler):
@@ -203,6 +213,7 @@ def serve(cfg: dict, host: str = "127.0.0.1", port: int = 4326) -> None:
                 tf = (q.get("tf") or ["5"])[0]
                 if not symbol.isalnum() or len(symbol) > 6 or tf not in ("1", "5"):
                     return self._send(400, b'{"error":"bad request"}', "application/json")
+                feed.note_chart(symbol.upper())
                 try:
                     return self._send(200, json.dumps(state.bars(symbol, int(tf))).encode(), "application/json")
                 except Exception as exc:
@@ -216,10 +227,30 @@ def serve(cfg: dict, host: str = "127.0.0.1", port: int = 4326) -> None:
                 except Exception as exc:
                     log.exception("state build failed")
                     self._send(503, json.dumps({"error": str(exc)[:300]}).encode(), "application/json")
+            elif self.path == "/api/live":
+                self._live()
             elif self.path == "/health":
                 self._send(200, b'{"ok":true}', "application/json")
             else:
                 self._send(404, b"not found", "text/plain")
+
+        def _live(self) -> None:
+            """Server-sent events: changed prices as they trade, at most 4 pushes a second."""
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+            since = 0
+            try:
+                while True:
+                    since, quotes = feed.wait(since, 15)  # empty after 15s = heartbeat
+                    msg = {"q": quotes, "on": feed.on(), "syms": sorted(feed.subscribed)}
+                    self.wfile.write(b"data: " + json.dumps(msg).encode() + b"\n\n")
+                    self.wfile.flush()
+                    time.sleep(0.25)
+            except OSError:  # viewer closed the page
+                return
 
         def log_message(self, *args):
             pass

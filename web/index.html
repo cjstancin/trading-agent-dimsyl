@@ -492,7 +492,7 @@ function renderTables(s) {
   const traded = new Set(s.today_trades.map(t => t.symbol));
   const sc = s.scanner || [];
   const pm = sc.some(q => q.premarket);
-  $("scan-note").textContent = sc.length ? `${sc.length} symbols · IEX · ${pm ? "premarket gaps vs yesterday's close" : "live"} · ★ bot watchlist` : "";
+  $("scan-note").textContent = sc.length ? `${sc.length} symbols · IEX · ${pm ? "premarket gaps vs yesterday's close" : liveOn ? `${liveSyms.size} streaming tick-by-tick, rest every 5s` : "every 5s"} · ★ bot watchlist` : "";
   const val = (q, k) => k === "symbol" ? q.symbol : (k === "gap_pct" || k === "chg_pct") ? Math.abs(q[k] ?? 0) : (q[k] ?? -1e9);
   const sorted = sc.slice().sort((a, b) => scanSort.dir * (scanSort.key === "symbol" ? a.symbol.localeCompare(b.symbol) : val(b, scanSort.key) - val(a, scanSort.key)));
   const th = (k, label) => `<th class="sort${scanSort.key === k ? " sorted" : ""}" data-k="${k}">${label}${scanSort.key === k ? (scanSort.dir > 0 ? " ▼" : " ▲") : ""}</th>`;
@@ -666,18 +666,69 @@ function drawCandles() {
   svg.innerHTML = g;
   const chg = (last.c / bars[0].o - 1) * 100;
   $("chart-live").hidden = !chartData.live;
+  $("chart-live").textContent = liveFor(chartData.symbol) ? "LIVE" : "LIVE · 10s";
   $("ohlc").innerHTML = `<span class="sym">${esc(chartData.symbol)} · ${chartData.minutes || chartTf}</span><span>O<span class="${cls(chg)}"> ${px(bars[0].o)}</span></span><span>H<span class="${cls(chg)}"> ${px(Math.max(...bars.map(b => b.h)))}</span></span><span>L<span class="${cls(chg)}"> ${px(Math.min(...bars.map(b => b.l)))}</span></span><span>C<span class="${cls(chg)}"> ${px(last.c)} ${pct(chg)}</span></span><span>VWAP <span style="color:var(--vwap)">${px(last.vwap)}</span></span>` +
     (offChart.length ? `<span class="dim">off-chart: ${offChart.map(x => `${x.k} ${x.v.toFixed(2)}`).join(" · ")}</span>` : "");
+}
+
+/* ---------- live prices (server-sent events) ---------- */
+const LIVE = {};
+let liveOn = false, liveSyms = new Set(), liveQueued = false;
+function startLive() {
+  if (!window.EventSource) return;
+  const es = new EventSource("api/live");
+  es.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    liveOn = m.on; liveSyms = new Set(m.syms || []);
+    Object.assign(LIVE, m.q);
+    if (!liveQueued) { liveQueued = true; requestAnimationFrame(() => { liveQueued = false; applyLive(); }); }
+  };
+  es.onerror = () => { liveOn = false; };  // EventSource reconnects by itself; the 5s poll carries on meanwhile
+}
+const liveFor = (sym) => liveOn && liveSyms.has(sym) ? LIVE[sym] : null;
+function patchQuote(q) {
+  const l = liveFor(q.symbol);
+  if (!l) return;
+  q.last = l.p;
+  if (q.prev) q.chg_pct = (l.p / q.prev - 1) * 100;
+  if (q.premarket) q.gap_pct = q.chg_pct;
+  else if (q.high != null) { q.high = Math.max(q.high, l.p); q.low = Math.min(q.low, l.p); }
+}
+function applyLive() {
+  if (!S) return;
+  S.tape.forEach(patchQuote); (S.scanner || []).forEach(patchQuote); S.watchlist.forEach(patchQuote);
+  let delta = 0;
+  for (const p of S.positions) {
+    const l = liveFor(p.symbol);
+    if (l) { p.price = l.p; p.pnl = (l.p - p.entry) * p.qty * (p.side === "long" ? 1 : -1); }
+    delta += p.pnl - p.pnl0;
+  }
+  const a = S.account;
+  a.equity = a.equity0 + delta; a.day_pnl = a.day_pnl0 + delta;
+  a.since_start_pct = (a.equity / a.start_equity - 1) * 100;
+  const l = chartData?.live && chartData.bars?.length ? liveFor(chartData.symbol) : null;
+  if (l) {  // move the forming candle, or open the next one when the clock rolls over
+    const bars = chartData.bars, last = bars.at(-1), step = chartData.minutes || chartTf;
+    const [h, m] = l.t.split(":").map(Number), mm = m - m % step;
+    const key = `${String(h).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    if (key > last.t && h * 60 + mm < 16 * 60) bars.push({t: key, o: l.p, h: l.p, l: l.p, c: l.p, v: 0, vwap: last.vwap});
+    else if (key === last.t) { last.c = l.p; last.h = Math.max(last.h, l.p); last.l = Math.min(last.l, l.p); }
+  }
+  renderTop(S); renderTables(S); $("bal").textContent = money(a.equity);
+  if (chartData) drawCandles();
 }
 
 /* ---------- load ---------- */
 function render(s) {
   S = s;
+  for (const p of s.positions) p.pnl0 = p.pnl;
+  s.account.equity0 = s.account.equity; s.account.day_pnl0 = s.account.day_pnl;
   renderTop(s); renderTiles(s); renderBalance(s); renderPerf(s); renderCalendar(s); renderTables(s); renderLearning(s);
   const sel = $("chart-sym"), choices = symbolChoices(s);
   if (chartSym && !choices.includes(chartSym)) choices.push(chartSym);
   sel.innerHTML = choices.map(c => `<option>${esc(c)}</option>`).join("");
   if (!chartSym) selectSymbol(choices[0]); else sel.value = chartSym;
+  if (liveOn) applyLive();  // a poll can be a few seconds older than the stream
 }
 async function load() {
   try {
@@ -706,8 +757,9 @@ document.querySelectorAll("#tf-seg button").forEach(b => b.onclick = () => {
   document.querySelectorAll("#tf-seg button").forEach(x => x.classList.toggle("on", x === b));
   chartTf = +b.dataset.tf; if (chartSym) selectSymbol(chartSym);
 });
-load(); setInterval(load, 10000);
-setInterval(() => { if (chartSym && !document.hidden) selectSymbol(chartSym); }, 15000);
+load(); setInterval(load, 5000);
+startLive();
+setInterval(() => { if (chartSym && !document.hidden) selectSymbol(chartSym); }, 10000);
 </script>
 </body>
 </html>

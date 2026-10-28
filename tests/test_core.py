@@ -246,6 +246,30 @@ class LiveChartTests(unittest.TestCase):
         q = data.snapshots(live, ["X"])["X"]
         self.assertFalse(q["premarket"])
         self.assertEqual((q["gap_pct"], q["chg_pct"], q["high"]), (4.0, 8.0, 10.9))
+        self.assertEqual(q["prev"], 10.0)  # the page recomputes change % from live prices
+
+
+class LiveFeedTests(unittest.TestCase):
+    def test_priority_and_cap(self):
+        from bull.live import MAX_SYMBOLS, LiveFeed
+        f = LiveFeed()
+        f.set_priority(["SPY", "QQQ", "MU"], [f"W{i}" for i in range(40)])
+        f.note_chart("TSLA")
+        d = f.desired()
+        self.assertEqual(d[:4], ["SPY", "QQQ", "MU", "TSLA"])  # tape + held, then the chart, then watchlist
+        self.assertEqual(len(d), MAX_SYMBOLS)
+
+    def test_wait_returns_only_changes(self):
+        from bull.live import LiveFeed
+        f = LiveFeed()
+        f.record("SPY", 770.1)
+        v, q = f.wait(0, 0.01)
+        self.assertEqual(list(q), ["SPY"])
+        f.record("QQQ", 721.0)
+        v2, q2 = f.wait(v, 0.01)
+        self.assertEqual((list(q2), q2["QQQ"]["p"]), (["QQQ"], 721.0))
+        v3, q3 = f.wait(v2, 0.01)  # nothing new: heartbeat
+        self.assertEqual((v3, q3), (v2, {}))
 
 
 class RiskTests(unittest.TestCase):
