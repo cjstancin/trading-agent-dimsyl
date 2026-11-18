@@ -108,6 +108,21 @@ select { background: var(--panel2); color: var(--ink); border: 1px solid var(--l
 .day.total { border: 1px solid var(--line2); }
 .day.total.win { border-color: var(--blue); } .day.total.loss { border-color: var(--down); }
 .day.win .p { color: #8bb8ff; } .day.loss .p { color: #ff8a8b; }
+button.day { color: var(--ink); cursor: pointer; min-width: 0; }
+button.day:hover, button.day:focus-visible, button.day[aria-expanded="true"] { border-color: var(--blue); }
+button.day:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.day-preview { display: none; position: absolute; z-index: 4; top: 100%; left: 50%; transform: translateX(-50%); width: 190px; padding: 7px 9px; background: var(--panel); border: 1px solid var(--line2); border-radius: 4px; box-shadow: 0 4px 14px #0008; text-align: left; font: 11px/1.5 var(--mono); pointer-events: none; }
+.day-preview.start { left: 0; transform: none; }
+.day-preview.end { left: auto; right: 0; transform: none; }
+.day-preview span { display: flex; justify-content: space-between; gap: 6px; }
+button.day:focus-visible .day-preview { display: block; }
+@media (hover: hover) { button.day:hover .day-preview { display: block; } }
+.cal-detail { border-top: 1px solid var(--line); }
+.cal-detail .ph { flex-wrap: wrap; }
+@media (max-width: 500px) {
+  .cal-head { flex-wrap: wrap; }
+  .cal-head .cal-sum { flex: 1 0 100%; justify-content: space-between; }
+}
 
 /* tables */
 .tbl { width: 100%; border-collapse: collapse; font: 12.5px var(--mono); font-variant-numeric: tabular-nums; }
@@ -256,13 +271,14 @@ details summary { cursor: pointer; color: var(--dim); padding: 10px 12px; font-w
   </section>
 
   <section class="c9 panel">
-    <div class="ph">
+    <div class="ph cal-head">
       <div class="seg"><button id="cal-prev" aria-label="Previous month">‹</button></div>
       <h2 id="cal-title" style="color:var(--ink);font-size:14px;letter-spacing:.5px;min-width:130px;text-align:center"></h2>
       <div class="seg"><button id="cal-next" aria-label="Next month">›</button></div>
       <div class="right cal-sum" id="cal-sum"></div>
     </div>
     <div class="cal" id="cal"></div>
+    <div class="cal-detail" id="cal-detail" role="region" aria-labelledby="cal-detail-title" hidden></div>
   </section>
 
   <!-- Fed day (only on FOMC decision days) -->
@@ -333,6 +349,7 @@ const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v
 const reasonText = {target: "target", stop: "stop", close: "close", open: "open"};
 
 let S = null, balView = "all", calMonth = null, chartSym = null, chartData = null, chartTf = 5;
+let calDay = null, calendarMarkup = "", calendarDetailMarkup = "";
 let scanSort = {key: "gap_pct", dir: 1};
 
 /* ---------- derived stats ---------- */
@@ -486,8 +503,42 @@ function renderPerf(s) {
 }
 
 /* ---------- calendar ---------- */
+function calendarEmpty(s, key) {
+  if (key < s.account.start_date) return "Before Bull’s paper launch.";
+  if (key > s.now.slice(0, 10)) return "Upcoming date.";
+  const weekday = new Date(`${key}T12:00:00`).getDay();
+  if (weekday === 0 || weekday === 6) return "Market closed for the weekend.";
+  return key === s.now.slice(0, 10) ? "No Bull fills yet today." : "No Bull fills recorded.";
+}
+
+function renderCalendarDetail(s) {
+  const detail = $("cal-detail");
+  detail.hidden = !calDay;
+  for (const button of $("cal").querySelectorAll("button.day")) {
+    button.setAttribute("aria-expanded", String(button.dataset.day === calDay));
+  }
+  if (!calDay) return;
+
+  const trades = s.trades.filter(t => t.t_entry.slice(0, 10) === calDay);
+  const day = new Date(`${calDay}T12:00:00`).toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric", year: "numeric"});
+  const fill = (t, price) => t ? `${esc(t.slice(11, 16))} · ${money(price)}` : "—";
+  const pnl = trades.reduce((sum, t) => sum + (t.pnl ?? 0), 0);
+  let html = `<div class="ph"><h2 id="cal-detail-title">${esc(day)}</h2>`;
+  if (trades.length) html += `<span class="right dim">${trades.length} ${trades.length === 1 ? "trade" : "trades"} · Realized <b class="num ${cls(pnl)}">${money(pnl, true)}</b></span>`;
+  html += "</div>";
+  html += trades.length
+    ? `<div class="scroll"><table class="tbl"><thead><tr><th>SYMBOL</th><th>SIDE</th><th>SHARES</th><th>ENTRY (ET)</th><th>EXIT (ET)</th><th>EXIT REASON</th><th>FILL P&amp;L</th></tr></thead><tbody>` +
+      trades.map(t => `<tr><td>${esc(t.symbol)}</td><td>${esc(t.side)}</td><td>${esc(t.qty)}</td><td>${fill(t.t_entry, t.entry)}</td><td>${fill(t.t_exit, t.exit)}</td><td>${t.reason === "close" ? "Market close-out" : esc(reasonText[t.reason] ?? t.reason)}</td><td class="${cls(t.pnl)}">${money(t.pnl, true)}</td></tr>`).join("") + "</tbody></table></div>"
+    : `<div class="empty">${calendarEmpty(s, calDay)}</div>`;
+  if (html !== calendarDetailMarkup) {
+    detail.innerHTML = html;
+    calendarDetailMarkup = html;
+  }
+}
+
 function renderCalendar(s) {
   const byDay = daily(s);
+  const tradesByDay = Object.groupBy(s.trades, t => t.t_entry.slice(0, 10));
   if (!calMonth) calMonth = s.now.slice(0, 7);
   const [Y, M] = calMonth.split("-").map(Number);
   $("cal-title").textContent = new Date(Y, M - 1, 1).toLocaleString(undefined, {month: "long", year: "numeric"});
@@ -505,18 +556,32 @@ function renderCalendar(s) {
       const inM = d.getMonth() === M - 1;
       const r = byDay[key];
       if (!inM) { html += `<div class="day out"><span class="p">${d.getDate()}</span></div>`; continue; }
+      const trades = tradesByDay[key] ?? [];
+      const preview = trades.length
+        ? trades.map(t => `<span>${esc(t.symbol)} ${esc(t.t_entry.slice(11, 16))}<b class="${cls(t.pnl)}">${t.pnl == null ? "Open" : money(t.pnl, true)}</b></span>`).join("")
+        : calendarEmpty(s, key);
+      const label = `${d.toLocaleDateString(undefined, {month: "long", day: "numeric", year: "numeric"})}, ${trades.length} ${trades.length === 1 ? "trade" : "trades"}`;
+      let cellClass = "day", cell = `<span class="p dim">${d.getDate()}</span>`;
       if (r && (r.trades || Math.abs(r.pnl) > 0.004)) {
         wPnl += r.pnl; wPct *= 1 + r.pct / 100; wAny = true;
         mTrades += r.trades; mWins += r.wins; mPnl += r.pnl; mPct *= 1 + r.pct / 100;
-        html += `<div class="day ${r.pnl >= 0 ? "win" : "loss"}${key === today ? " today" : ""}" title="${r.trades} trades, ${r.wins} wins"><span class="d">${d.getDate()}</span><span class="p">${r.pnl >= 0 ? "" : "-"}${Math.abs(r.pnl).toFixed(2)}</span><span class="q">${pct(r.pct)}</span></div>`;
-      } else {
-        html += `<div class="day${key === today ? " today" : ""}"><span class="p dim">${d.getDate()}</span></div>`;
+        cellClass += r.pnl >= 0 ? " win" : " loss";
+        cell = `<span class="d">${d.getDate()}</span><span class="p">${r.pnl >= 0 ? "" : "-"}${Math.abs(r.pnl).toFixed(2)}</span><span class="q">${pct(r.pct)}</span>`;
       }
+      if (key === today) cellClass += " today";
+      const align = i < 2 ? " start" : i > 4 ? " end" : "";
+      html += `<button type="button" class="${cellClass}" data-day="${key}" aria-label="${esc(label)}" aria-controls="cal-detail">${cell}<span class="day-preview${align}" aria-hidden="true">${preview}</span></button>`;
     }
     html += wAny ? `<div class="day total ${wPnl >= 0 ? "win" : "loss"}"><span class="p">${money(wPnl, true)}</span><span class="q">${pct((wPct - 1) * 100)}</span></div>` : `<div class="day total"><span class="p dim">—</span></div>`;
   }
-  $("cal").innerHTML = html;
+  if (html !== calendarMarkup) {
+    const focusedDay = document.activeElement?.dataset.day;
+    $("cal").innerHTML = html;
+    calendarMarkup = html;
+    if (focusedDay) $("cal").querySelector(`[data-day="${focusedDay}"]`)?.focus({preventScroll: true});
+  }
   $("cal-sum").innerHTML = `<div>Trades<b>${mTrades}</b></div><div>Wins<b>${mWins}</b></div><div>Profit<b class="${cls(mPnl)}">${money(mPnl, true)}</b></div><div>Percent<b class="${cls(mPct - 1)}">${pct((mPct - 1) * 100)}</b></div>`;
+  renderCalendarDetail(s);
 }
 
 /* ---------- scanner / log / positions / strategy ---------- */
@@ -848,8 +913,21 @@ document.querySelectorAll("#bal-seg button").forEach(b => b.onclick = () => {
   document.querySelectorAll("#bal-seg button").forEach(x => x.classList.toggle("on", x === b));
   balView = b.dataset.v; if (S) renderBalance(S);
 });
-const shiftMonth = (d) => { const [y, m] = calMonth.split("-").map(Number); const t = new Date(y, m - 1 + d, 1); calMonth = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`; if (S) renderCalendar(S); };
+const shiftMonth = (d) => {
+  if (!S) return;
+  const [y, m] = calMonth.split("-").map(Number);
+  const t = new Date(y, m - 1 + d, 1);
+  calMonth = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}`;
+  calDay = null;
+  renderCalendar(S);
+};
 $("cal-prev").onclick = () => shiftMonth(-1); $("cal-next").onclick = () => shiftMonth(1);
+$("cal").onclick = (e) => {
+  const button = e.target.closest("button.day");
+  if (!button || !S) return;
+  calDay = calDay === button.dataset.day ? null : button.dataset.day;
+  renderCalendarDetail(S);
+};
 let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (S) { renderBalance(S); drawCandles(); } }, 120); });
 tick(); setInterval(tick, 1000);
 document.querySelectorAll("#tf-seg button").forEach(b => b.onclick = () => {
