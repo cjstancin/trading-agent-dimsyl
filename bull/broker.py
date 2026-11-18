@@ -92,8 +92,43 @@ def _is_live(status) -> bool:
     return _status(status) in ("new", "accepted", "held", "partially_filled", "pending_new", "accepted_for_bidding")
 
 
-def flatten(tc: TradingClient) -> None:
-    tc.close_all_positions(cancel_orders=True)
+def open_orders(tc: TradingClient) -> list:
+    return tc.get_orders(GetOrdersRequest(status=QueryOrderStatus.OPEN, limit=500, nested=False))
+
+
+def flatten(tc: TradingClient) -> tuple[list, list, list[dict]]:
+    """Advance liquidation from fresh broker state without submitting duplicate closes."""
+    orders = open_orders(tc)
+    positions = tc.get_all_positions()
+    held = {p.symbol: p for p in positions}
+    busy = {o.symbol for o in orders}
+    actions = []
+    for order in orders:
+        pos = held.get(order.symbol)
+        closing_side = "sell" if pos and _status(pos.side) == "long" else "buy"
+        if (pos and _status(order.type) == "market" and _status(order.side) == closing_side
+                and not parse_coid(order.client_order_id)):
+            continue  # a close already has the shares; wait even if it is only partially filled
+        if _status(order.status) == "pending_cancel":
+            continue
+        result = {"symbol": order.symbol, "action": "cancel", "order": str(order.id)}
+        try:
+            tc.cancel_order_by_id(order.id)
+            result["status"] = "requested"
+        except Exception as exc:
+            result.update(status="error", error=str(exc)[:300])
+        actions.append(result)
+    for pos in positions:
+        if pos.symbol in busy:
+            continue  # cancellation and release of reserved shares are asynchronous
+        result = {"symbol": pos.symbol, "action": "close"}
+        try:
+            order = tc.close_position(pos.symbol)
+            result.update(status=_status(order.status), order=str(order.id))
+        except Exception as exc:
+            result.update(status="error", error=str(exc)[:300])
+        actions.append(result)
+    return positions, orders, actions
 
 
 def close_symbol(tc: TradingClient, symbol: str, day: date) -> None:

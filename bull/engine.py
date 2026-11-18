@@ -75,15 +75,14 @@ class Engine:
         self.active: list[dict] = []
         self.active_why = ""
         self.last_eval: dict[str, datetime] = {}
-        self.flattened = False
         self.loss_pinged = False
         self.failures = 0
         self.status: dict = {}
         self.extra: dict[str, dict] = {}
         self.spy_prev: float | None = None
+        self.pending_recorded = False
         self.shadow_vs = shadow_variants(cfg)
         self.shadows: list[dict] = []
-        self.journaled = False
 
     # ---- status the site reads -------------------------------------------------------------
     def write_status(self, state: str, message: str, **extra) -> None:
@@ -130,9 +129,8 @@ class Engine:
                       for s in self.watch}
         self.active, self.active_why = active_variants(self.cfg)
         self.shadows = journal.load_shadows(today)
-        self.journaled = today.isoformat() in journal.journaled_days()
+        self.pending_recorded = False
         self.last_eval.clear()
-        self.flattened = False
         self.loss_pinged = False
         append_event("day_start", watchlist=self.watch, strategies=[v["name"] for v in self.active],
                      why=self.active_why)
@@ -145,38 +143,38 @@ class Engine:
         """Run one cycle; return seconds to sleep."""
         clock = self.tc.get_clock()
         now = datetime.now(ET)
+        today = now.date()
         if not clock.is_open:
-            if self.day and not self.journaled:  # engine missed the 15:52 window; journal the day now
-                self.close_journal(self.day, self.tc.get_account())
+            pending = [day for day in journal.pending_days() if day <= today]
+            if pending:
+                positions = self.tc.get_all_positions()
+                if positions:
+                    notify.ping("overnight", "paper positions still open after the close",
+                                ", ".join(p.symbol for p in positions), "urgent")
+                elif not broker.open_orders(self.tc):
+                    for day in pending:
+                        self.close_journal(day)
             self.day = None
             nxt = clock.next_open.astimezone(ET)
             self.write_status("closed", f"Market closed. Next open {nxt:%a %b %d %H:%M} ET.")
-            return min(max((nxt - now).total_seconds() - 120, 30), 1800)
+            return min(max((nxt - now).total_seconds() - 120, 30), 60 if pending else 1800)
 
-        today = now.date()
         risk = self.cfg["risk"]
+        market_close = clock.next_close.astimezone(ET)
+        flatten_at = min(datetime.combine(today, hhmm(risk["flatten_at"]), ET), market_close - timedelta(minutes=10))
+        if now >= flatten_at:
+            return self.close_tick(now, flatten_at, market_close)
+
         if self.day != today:
             if now.time() < hhmm("09:31") or not self.start_day(today):
                 self.write_status("waiting", "Waiting for the first minute of trading.")
                 return 20
 
         account = self.tc.get_account()
+        if not self.pending_recorded:
+            self.remember_session(today, account, flatten_at, market_close, self.shadows, self.spy_prev)
+            self.pending_recorded = True
         positions = self.tc.get_all_positions()
-
-        if now.time() >= hhmm(risk["flatten_at"]):
-            if positions and not self.flattened:
-                broker.flatten(self.tc)
-                append_event("flatten", symbols=[p.symbol for p in positions])
-            self.flattened = True
-            if not self.journaled and now.time() >= hhmm("15:52"):
-                self.close_journal(today, account)
-            left = self.tc.get_all_positions()
-            if left and now.time() >= hhmm("15:57"):
-                notify.ping("flatten", "positions still open near the close",
-                            ", ".join(p.symbol for p in left), "urgent", every_s=600)
-                broker.flatten(self.tc)
-            self.write_status("done", "Flat for the day.", **self._numbers(account, positions))
-            return 60
 
         for sym in broker.unprotected(self.tc, positions, today):
             broker.close_symbol(self.tc, sym, today)
@@ -248,6 +246,39 @@ class Engine:
         return max(5.0, 65 - datetime.now(ET).second)  # just after the next minute bar closes
 
     # ---- shadow tracking + journal -----------------------------------------------------------
+    def close_tick(self, now: datetime, flatten_at: datetime, market_close: datetime) -> float:
+        today = now.date()
+        positions, orders, actions = broker.flatten(self.tc)
+        for action in actions:
+            append_event("flatten", **action)
+            log.info("flatten %s %s: %s", action["action"], action["symbol"], action.get("error", action["status"]))
+        account = self.tc.get_account()
+        recorded = today.isoformat() in journal.journaled_days()
+        if not recorded and not journal.pending_day(today):
+            self.remember_session(today, account, flatten_at, market_close, journal.load_shadows(today),
+                                  self.spy_prev if self.day == today else None)
+        ready = now >= flatten_at + timedelta(minutes=2)
+        if positions or orders:
+            symbols = sorted({p.symbol for p in positions} | {o.symbol for o in orders})
+            if ready:
+                notify.ping(f"flatten-{today}", "paper close-out still pending", ", ".join(symbols), "urgent")
+            self.write_status("flattening", f"Closing or canceling: {', '.join(symbols)}.",
+                              **self._numbers(account, positions))
+            return 5
+        if not recorded and ready and not self.close_journal(today):
+            self.write_status("done", "Flat for the day. Waiting for broker fills to reconcile.",
+                              **self._numbers(account, positions))
+            return 15
+        self.write_status("done", "Flat for the day.", **self._numbers(account, positions))
+        return 60
+
+    @staticmethod
+    def remember_session(day: date, account, flatten_at: datetime, market_close: datetime,
+                         shadows: list[dict], spy_prev: float | None) -> None:
+        journal.save_shadows(day, shadows, {"equity": float(account.last_equity or account.equity),
+                                           "spy_prev": spy_prev, "flatten_at": flatten_at.strftime("%H:%M"),
+                                           "market_close": market_close.strftime("%H:%M")})
+
     def record_shadows(self, ctx: DayContext, k: int, spy_chg: float | None) -> None:
         """Note what each pre-registered filter variant WOULD do. Never trades; resolved at the close."""
         seen = {(s["variant"], s["symbol"]) for s in self.shadows}
@@ -264,25 +295,36 @@ class Engine:
         if added:
             journal.save_shadows(ctx.bars[0].t.date(), self.shadows)
 
-    def close_journal(self, today: date, account) -> None:
+    def close_journal(self, today: date) -> bool:
         try:
+            if today.isoformat() in journal.journaled_days():
+                journal.finish_day(today)  # restart after the CSV commit but before pending cleanup
+                return True
+            session = journal.pending_day(today)
             vmap = {v["name"]: v["strategy"] for v in variants(self.cfg) + self.shadow_vs}
             trips = [t for t in round_trips(broker.todays_orders(self.tc, today), vmap)
                      if t["t_entry"].startswith(today.isoformat())]
+            if any(t["exit"] is None for t in trips):
+                log.warning("journal waiting for unpaired broker fills from %s", today)
+                return False
             entries = [e for e in read_events(today) if e.get("kind") == "entry"]
-            syms = sorted({t["symbol"] for t in trips} | {s["symbol"] for s in self.shadows} | {"SPY"})
+            shadows = session["signals"]
+            syms = sorted({t["symbol"] for t in trips} | {s["symbol"] for s in shadows} | {"SPY"})
             bars = data.today_minute_bars(self.dc, syms, today)
+            bars = {sym: [b for b in rows if b.t.time() < hhmm(session["market_close"])] for sym, rows in bars.items()}
             spy = bars.get("SPY") or []
-            spy_day = (spy[-1].c / self.spy_prev - 1) * 100 if spy and self.spy_prev else None
-            n = journal.close_day(today, trips, entries, self.shadows, bars, spy_day,
-                                  float(account.last_equity or account.equity), self.cfg)
+            spy_prev = session["spy_prev"]
+            spy_day = (spy[-1].c / spy_prev - 1) * 100 if spy and spy_prev else None
+            cfg = {**self.cfg, "risk": {**self.cfg["risk"], "flatten_at": session["flatten_at"]}}
+            n = journal.close_day(today, trips, entries, shadows, bars, spy_day, session["equity"], cfg)
+            journal.finish_day(today)
             journal.prune_events()
-            append_event("journal", rows=n, real=len(trips), shadow=len(self.shadows))
+            append_event("journal", rows=n, real=len(trips), shadow=len(shadows))
             log.info("journaled %d rows for %s", n, today)
         except Exception:
             log.exception("journal close failed; will retry next tick")
-            return
-        self.journaled = True
+            return False
+        return True
 
     @staticmethod
     def _numbers(account, positions) -> dict:

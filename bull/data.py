@@ -61,8 +61,9 @@ def _fetch(c: StockHistoricalDataClient, symbols, timeframe, start, end, feed) -
 def today_minute_bars(c, symbols: list[str], day: date) -> dict[str, list[Bar]]:
     """Live: today's regular-session 1-min bars so far, IEX feed (one request for all symbols)."""
     start = datetime.combine(day, OPEN, ET)
-    bars = _fetch(c, symbols, TimeFrame.Minute, start, None, DataFeed.IEX)
-    return {s: _session(b) for s, b in bars.items()}
+    end = datetime.combine(day, CLOSE, ET) if day < datetime.now(ET).date() else None
+    bars = _fetch(c, symbols, TimeFrame.Minute, start, end, DataFeed.IEX)
+    return {s: [b for b in _session(rows) if b.t.date() == day] for s, rows in bars.items()}
 
 
 def daily_bars(c, symbols: list[str], start: date, end: date) -> dict[str, list[Bar]]:
