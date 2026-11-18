@@ -21,7 +21,7 @@ log = logging.getLogger("bull.journal")
 
 FIELDS = ["date", "kind", "variant", "symbol", "side", "t_entry", "entry", "stop", "target", "qty",
           "t_exit", "exit", "reason", "pnl", "r", "gap_pct", "rvol", "atr_pct", "stop_pct", "minute",
-          "spy_chg", "mae_r", "mfe_r", "loss_type"]
+          "spy_chg", "mae_r", "mfe_r", "loss_type", "features_source"]
 FEATURES = ["gap_pct", "rvol", "atr_pct", "stop_pct", "minute", "spy_chg"]
 
 
@@ -79,28 +79,54 @@ def _row(day: date, kind: str, variant: str, symbol: str, side: str, t_entry, en
     return row
 
 
-def journaled_days() -> set[str]:
+def _read_rows() -> list[dict]:
     try:
         with open(path(), newline="", encoding="utf-8") as f:
-            return {r["date"] for r in csv.DictReader(f)}
-    except OSError:
-        return set()
+            return list(csv.DictReader(f))
+    except FileNotFoundError:
+        return []
+
+
+def journaled_days() -> set[str]:
+    return {r["date"] for r in _read_rows()}
+
+
+def _write_rows(rows: list[dict]) -> None:
+    tmp = path().with_suffix(".csv.tmp")
+    with open(tmp, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDS)
+        w.writeheader()
+        w.writerows(rows)
+    tmp.replace(path())
+
+
+def _real_rows(day: date, trips: list[dict], entry_events: list[dict], bars: dict[str, list[Bar]],
+               spy_day_chg: float | None, shadow_features: dict | None = None) -> list[dict]:
+    if any(t["exit"] is None for t in trips):
+        raise ValueError(f"{day}: broker still has unpaired entry fills")
+    feats = {(e.get("variant"), e.get("symbol")): e.get("features") or {} for e in entry_events}
+    rows = []
+    for t in trips:
+        key = (t["variant"], t["symbol"])
+        features = feats.get(key) or {}
+        source = "entry event" if features else ""
+        if not features and key in (shadow_features or {}):
+            features = shadow_features[key]
+            source = "matching shadow signal"
+        row = _row(day, "real", t["variant"], t["symbol"], t["side"], t["t_entry"], t["entry"],
+                   t["stop"] or t["entry"], t["target"], t["qty"], t["t_exit"], t["exit"],
+                   t["reason"], t["pnl"], features, bars.get(t["symbol"], []), spy_day_chg)
+        rows.append({**row, "features_source": source})
+    return rows
 
 
 def close_day(day: date, trips: list[dict], entry_events: list[dict], shadows: list[dict],
               bars: dict[str, list[Bar]], spy_day_chg: float | None, equity: float, cfg: dict) -> int:
-    """Append today's real trades and resolved shadow signals. Idempotent per day."""
-    if day.isoformat() in journaled_days():
+    """Commit a whole session once all of its broker round trips are closed."""
+    existing = _read_rows()
+    if any(r["date"] == day.isoformat() for r in existing):
         return 0
-    feats = {(e.get("variant"), e.get("symbol")): e.get("features") or {} for e in entry_events}
-    rows = []
-    for t in trips:
-        if t["exit"] is None:
-            continue
-        rows.append(_row(day, "real", t["variant"], t["symbol"], t["side"], t["t_entry"], t["entry"],
-                         t["stop"] or t["entry"], t["target"], int(t["qty"]), t["t_exit"], t["exit"],
-                         t["reason"], t["pnl"], feats.get((t["variant"], t["symbol"]), {}),
-                         bars.get(t["symbol"], []), spy_day_chg))
+    rows = _real_rows(day, trips, entry_events, bars, spy_day_chg)
     for s in shadows:
         sym_bars = bars.get(s["symbol"], [])
         t_sig = datetime.fromisoformat(s["t"])
@@ -121,14 +147,30 @@ def close_day(day: date, trips: list[dict], entry_events: list[dict], shadows: l
                          sym_bars, spy_day_chg))
     if not rows:  # still mark the day so we don't redo it; a row with only a date is cheap
         rows.append({"date": day.isoformat(), "kind": "none"})
-    new = not path().exists()
-    with open(path(), "a", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=FIELDS)
-        if new:
-            w.writeheader()
-        for r in rows:
-            w.writerow(r)
+    _write_rows(existing + rows)
     return sum(1 for r in rows if r.get("kind") != "none")
+
+
+def reconcile_day(day: date, trips: list[dict], entry_events: list[dict],
+                  bars: dict[str, list[Bar]], spy_day_chg: float | None) -> list[dict]:
+    """Fill holes in a legacy session from the broker, preserving existing real and shadow rows.
+
+    Run with the engine stopped so the journal has a single writer.
+    """
+    existing = _read_rows()
+    day_rows = [r for r in existing if r["date"] == day.isoformat()]
+    shadow_features = {(r["variant"], r["symbol"]): {key: r[key] for key in FEATURES}
+                       for r in day_rows if r["kind"] == "shadow"}
+    def key(row):
+        return row["variant"], row["symbol"], row["side"], row["t_entry"]
+
+    known = {key(r) for r in day_rows if r["kind"] == "real"}
+    missing = [r for r in _real_rows(day, trips, entry_events, bars, spy_day_chg, shadow_features)
+               if key(r) not in known]
+    if missing:
+        existing = [r for r in existing if not (r["date"] == day.isoformat() and r["kind"] == "none")]
+        _write_rows(sorted(existing + missing, key=lambda r: (r["date"], r.get("t_entry") or "")))
+    return missing
 
 
 def _bucket(v, edges):
@@ -193,12 +235,38 @@ def summary() -> dict:
     }
 
 
-def save_shadows(day: date, shadows: list[dict]) -> None:
-    (runtime_dir() / "shadow-today.json").write_text(json.dumps({"day": day.isoformat(), "signals": shadows}),
-                                                    encoding="utf-8")
+def _pending_path(day: date):
+    return runtime_dir() / "journal-pending" / f"{day.isoformat()}.json"
+
+
+def pending_days() -> list[date]:
+    return [date.fromisoformat(p.stem) for p in sorted((runtime_dir() / "journal-pending").glob("????-??-??.json"))]
+
+
+def pending_day(day: date) -> dict:
+    try:
+        return json.loads(_pending_path(day).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+
+
+def finish_day(day: date) -> None:
+    _pending_path(day).unlink(missing_ok=True)
+
+
+def save_shadows(day: date, shadows: list[dict], context: dict | None = None) -> None:
+    p = _pending_path(day)
+    p.parent.mkdir(exist_ok=True)
+    tmp = p.with_suffix(".tmp")
+    session = pending_day(day) if context is None else context
+    tmp.write_text(json.dumps({**session, "signals": shadows}), encoding="utf-8")
+    tmp.replace(p)
 
 
 def load_shadows(day: date) -> list[dict]:
+    pending = pending_day(day)
+    if pending:
+        return pending["signals"]
     try:
         blob = json.loads((runtime_dir() / "shadow-today.json").read_text(encoding="utf-8"))
         return blob["signals"] if blob.get("day") == day.isoformat() else []

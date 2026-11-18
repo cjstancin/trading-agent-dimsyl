@@ -74,8 +74,26 @@ class JournalTests(unittest.TestCase):
 
     def test_shadow_persistence(self):
         self.j.save_shadows(DAY, [{"variant": "v"}])
+        self.j.save_shadows(DAY + timedelta(days=1), [])
         self.assertEqual(self.j.load_shadows(DAY), [{"variant": "v"}])
         self.assertEqual(self.j.load_shadows(DAY + timedelta(days=1)), [])
+        self.assertEqual(self.j.pending_days(), [DAY, DAY + timedelta(days=1)])
+
+    def test_backfill_preserves_legacy_shadow_and_is_idempotent(self):
+        fields = self.j.FIELDS[:-1]
+        with self.j.path().open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            writer.writeheader()
+            writer.writerow({"date": DAY.isoformat(), "kind": "shadow", "variant": "gap_early",
+                             "symbol": "AAA", "pnl": 2, "r": 0.5, "rvol": 2.1})
+        trip = {"symbol": "AAA", "side": "long", "qty": 2, "variant": "gap_early", "entry": 101.0,
+                "exit": 103.0, "reason": "close", "pnl": 4.0, "stop": 99.0, "target": 105.0,
+                "t_entry": t(9, 36).isoformat(), "t_exit": t(15, 57).isoformat()}
+        row, = self.j.reconcile_day(DAY, [trip], [], {}, None)
+        self.assertEqual((row["pnl"], row["rvol"], row["features_source"]), (4.0, "2.1", "matching shadow signal"))
+        self.assertEqual(self.j.reconcile_day(DAY, [trip], [], {}, None), [])
+        self.assertEqual(self.j.summary()["shadow"]["gap_early"]["net"], 2.0)
+        self.assertEqual(self.j.summary()["real"]["net"], 4.0)
 
 
 if __name__ == "__main__":

@@ -332,8 +332,10 @@ class WatchlistTests(unittest.TestCase):
 class TradeDisplayTests(unittest.TestCase):
     def test_round_trip_pairs_legs_and_flatten(self):
         f = lambda h, m: t(h, m)
-        stop_leg = NS(status="filled", type="stop", filled_avg_price="99.0", filled_at=f(10, 30), stop_price="99.0", limit_price=None)
-        tp_leg = NS(status="canceled", type="limit", filled_avg_price=None, filled_at=None, stop_price=None, limit_price="102.0")
+        stop_leg = NS(id="stop", status="filled", type="stop", filled_qty="10", filled_avg_price="99.0",
+                      filled_at=f(10, 30), stop_price="99.0", limit_price=None)
+        tp_leg = NS(id="target", status="canceled", type="limit", filled_qty="0", filled_avg_price=None,
+                    filled_at=None, stop_price=None, limit_price="102.0")
         a = NS(id="1", status="filled", side="buy", symbol="AAA", client_order_id="v3-vwap_long_2r-AAA-20261020-1000",
                filled_qty="10", filled_avg_price="100.0", filled_at=f(10, 1), legs=[tp_leg, stop_leg])
         b = NS(id="2", status="filled", side="sell", symbol="BBB", client_order_id="v3-orb15_long_2r-BBB-20261020-1000",
