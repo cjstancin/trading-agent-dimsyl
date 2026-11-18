@@ -1,7 +1,7 @@
 import os
 import random
 import unittest
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace as NS
 
 from bull import broker
@@ -232,8 +232,10 @@ class LiveChartTests(unittest.TestCase):
     def test_snapshot_premarket_gap(self):
         from bull import data
         today = datetime.now(ET).date()
-        yday = (today - timedelta(days=1)).isoformat() + "T04:00:00Z"
-        tday = today.isoformat() + "T04:00:00Z"
+        yday, tday = (
+            datetime.combine(day, datetime.min.time(), ET).astimezone(timezone.utc).isoformat()
+            for day in (today - timedelta(days=1), today)
+        )
         class C:
             def __init__(self, raw): self.raw = raw
             def get_stock_snapshot(self, req): return self.raw
